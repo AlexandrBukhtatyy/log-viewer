@@ -23,3 +23,6 @@ dev-dist
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code: личные оверрайды настроек (settings.json и hooks/ коммитятся)
+.claude/settings.local.json

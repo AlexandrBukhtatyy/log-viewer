@@ -7,6 +7,7 @@ PWA для просмотра логов. React + TypeScript, собираетс
 
 - Node.js 20+ (репозиторий разрабатывался на 24)
 - pnpm (можно поднять через `corepack enable pnpm`)
+- [jq](https://jqlang.org/) — нужен для Stop-hook'а Claude Code, который напоминает фиксировать архитектурные решения как ADR (см. [docs/adr/](docs/adr/)). Установка: `brew install jq` (macOS) / `apt install jq` (Debian/Ubuntu). Без `jq` хук молчит и не мешает работе, но ADR-напоминалка перестаёт срабатывать.
 
 ## Команды
 
@@ -32,3 +33,5 @@ pnpm lint         # ESLint
 - [src/](src/) — исходники приложения
 - [public/](public/) — статические ассеты, копируются в корень `dist/`
 - [scripts/](scripts/) — служебные скрипты (генерация иконок)
+- [docs/](docs/) — документация проекта, в т.ч. [docs/adr/](docs/adr/) — Architecture Decision Records
+- [.claude/](.claude/) — конфиг Claude Code: команда `/adr` для создания ADR и Stop-hook ADR-напоминалки

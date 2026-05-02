@@ -12,6 +12,7 @@ Service worker и Web App Manifest генерируются `vite-plugin-pwa` (W
 
 - **Package manager:** pnpm (требуется). Если не установлен: `corepack enable pnpm`.
 - **Node:** 20+ (разрабатывался на 24).
+- **jq:** нужен для Stop-hook'а ADR-напоминалки ([.claude/hooks/adr-reminder.sh](.claude/hooks/adr-reminder.sh)). Если не установлен — `brew install jq`. Без `jq` хук просто молчит, ADR-практика остаётся в силе через `/adr` и политику ниже.
 
 ## Команды
 
@@ -40,6 +41,35 @@ TypeScript:
 - Project references: [tsconfig.json](tsconfig.json) → [tsconfig.app.json](tsconfig.app.json) (src) + [tsconfig.node.json](tsconfig.node.json) (vite.config). Типы PWA подключены через `"types": ["vite/client", "vite-plugin-pwa/client"]` в `tsconfig.app.json`.
 
 ESLint: flat config ([eslint.config.js](eslint.config.js)), `dist` в globalIgnores.
+
+## Architecture Decision Records
+
+Все нетривиальные архитектурные решения фиксируются как ADR в [docs/adr/](docs/adr/). Полный гайд для разработчиков — в [docs/adr/README.md](docs/adr/README.md).
+
+**Когда фиксировать:**
+- Выбор библиотеки/фреймворка (state, routing, parsing, storage).
+- Выбор/смена архитектурного паттерна (Web Worker для парсинга, virtual scrolling, схема IndexedDB и т.п.).
+- Отказ от очевидного решения с обоснованием.
+- Контракт между модулями, на который будем ссылаться.
+- Любое решение, на которое будем ссылаться через 3+ месяца.
+
+**Что НЕ фиксировать:** рутинные правки кода, стилевые рефакторинги, багфиксы, semver-обновления зависимостей.
+
+**Как:**
+- Слэш-команда `/adr <короткое описание>` — создаст следующий по номеру файл `docs/adr/NNNN-<slug>.md` из контекста разговора и обновит индекс в `docs/adr/README.md`.
+- Вручную: скопировать [docs/adr/0000-template.md](docs/adr/0000-template.md), назвать `NNNN-<kebab-slug>.md`, не забыть дописать запись в секцию `## Index` файла [docs/adr/README.md](docs/adr/README.md).
+- Статус по умолчанию — `proposed`.
+
+**При сомнении — создавать.** Лишний ADR дешевле потерянного решения.
+
+Stop-hook ([.claude/hooks/adr-reminder.sh](.claude/hooks/adr-reminder.sh)) напомнит, если в ответе модели похоже принято архитектурное решение, но `docs/adr/` в этой сессии не обновлялся.
+
+## Documentation
+
+- Вся документация живёт в [docs/](docs/) и markdown-файлах в корне (`README.md`, `CLAUDE.md`, ADR).
+- **Диаграммы — только Mermaid**, в fenced-блоке ` ```mermaid ... ``` `. Никаких PNG/SVG-схем, никакого ASCII-арта. Mermaid рендерится на GitHub и в IDE-превью, версионируется как текст, ревьюится в diff'е.
+- Если в ответе пользователю или в PR-описании уместна диаграмма — тоже Mermaid.
+- Растровые ассеты (скриншоты UI, фото) допустимы в `docs/assets/`.
 
 ## Подводные камни
 
