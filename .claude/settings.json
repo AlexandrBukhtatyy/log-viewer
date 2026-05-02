@@ -1,5 +1,16 @@
 {
+  "alwaysThinkingEnabled": true,
+  "attribution": {
+    "commit": "Co-Authored-By: Claude <noreply@anthropic.com>",
+    "pr": ""
+  },
+  "autoUpdatesChannel": "stable",
+  "cleanupPeriodDays": 14,
   "enableAllProjectMcpServers": true,
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80",
+    "ENABLE_TOOL_SEARCH": "auto:5"
+  },
   "hooks": {
     "Stop": [
       {
@@ -13,14 +24,22 @@
       }
     ]
   },
+  "language": "russian",
   "permissions": {
     "allow": [
       "Bash(git:*)",
       "Bash(npm:*)",
-      "Edit(src/**)"
+      "Bash(bd:*)",
+      "Edit(src/**)",
+      "mcp__playwright__*"
     ],
+    "defaultMode": "acceptEdits",
     "deny": ["Read(.env*)", "Read(**/credentials*)"]
   },
   "plansDirectory": "./docs/plans",
-  "respectGitignore": true
+  "respectGitignore": true,
+  "sandbox": {
+    "autoAllowBashIfSandboxed": true,
+    "enabled": true
+  }
 }
