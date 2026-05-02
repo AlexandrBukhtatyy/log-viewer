@@ -1,4 +1,5 @@
 {
+  "enableAllProjectMcpServers": true,
   "hooks": {
     "Stop": [
       {
@@ -11,5 +12,15 @@
         ]
       }
     ]
-  }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(npm:*)",
+      "Edit(src/**)"
+    ],
+    "deny": ["Read(.env*)", "Read(**/credentials*)"]
+  },
+  "plansDirectory": "./docs/plans",
+  "respectGitignore": true
 }
