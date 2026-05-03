@@ -1,0 +1,21 @@
+import type { LvLogLevel } from '../../contracts/lv-types.ts';
+
+export interface LvLevelPillProps {
+  readonly level: LvLogLevel;
+  readonly active: boolean;
+  readonly count: number;
+  onToggle: () => void;
+}
+
+export const LvLevelPill = ({ level, active, count, onToggle }: LvLevelPillProps) => (
+  <button
+    type="button"
+    className={`lv-lvl lv-lvl-${level}${active ? ' is-on' : ' is-off'}`}
+    onClick={onToggle}
+    aria-pressed={active}
+  >
+    <span className="lv-lvl-dot" />
+    <span className="lv-lvl-name">{level}</span>
+    <span className="lv-lvl-count">{count}</span>
+  </button>
+);
