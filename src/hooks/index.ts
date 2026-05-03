@@ -18,3 +18,6 @@ export type { UseGroupCounts } from './use-group-counts.ts';
 
 export { useHistogram } from './use-histogram.ts';
 export type { UseHistogram } from './use-histogram.ts';
+
+export { useExport } from './use-export.ts';
+export type { UseExport } from './use-export.ts';

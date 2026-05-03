@@ -2,6 +2,7 @@ import * as Comlink from 'comlink';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type {
   CoordinatorApi,
+  ExportFormat,
   GroupBucket,
   HistogramResponse,
   ResumeReport,
@@ -86,6 +87,7 @@ export interface ViewActions {
   clearAll: () => Promise<void>;
   resumePersistedSources: () => Promise<ResumeReport>;
   grantPermission: (id: SourceId) => Promise<boolean>;
+  exportFiltered: (format: ExportFormat) => Promise<Blob>;
   getEntry: (id: EntryId) => Promise<LogEntry | null>;
   getGroupCounts: (
     filter: LogFilter,
@@ -281,6 +283,7 @@ export const createLogClient = (): ViewStore => {
       },
       resumePersistedSources: async () => api.resumePersistedSources(),
       grantPermission: async (id) => api.grantPermission(id),
+      exportFiltered: async (format) => api.exportFiltered(get().filter, format),
       getEntry: async (id) => api.getEntry(id),
       getGroupCounts: async (filter, field, limit) =>
         api.getGroupCounts(filter, field, limit),

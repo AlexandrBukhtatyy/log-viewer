@@ -61,6 +61,17 @@ export interface IndexerApi {
     bucketCount: number,
   ) => Promise<HistogramResponse>;
 
+  /**
+   * Materialize the entire filtered dataset into a single string. Caller is
+   * responsible for wrapping it in a Blob with the right MIME type — keeping
+   * this contract serializable also makes it cheap to test without a live
+   * worker.
+   */
+  exportFiltered: (
+    filter: LogFilter,
+    format: 'jsonl' | 'csv',
+  ) => Promise<string>;
+
   vacuum: () => Promise<void>;
   estimateSize: () => Promise<SizeReport>;
   clearAll: () => Promise<void>;

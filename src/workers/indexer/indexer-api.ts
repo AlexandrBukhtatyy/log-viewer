@@ -1,5 +1,6 @@
 import type { Database, PreparedStatement, SqlValue } from '@sqlite.org/sqlite-wasm';
 import { buildClause, ORDER_BY_DEFAULT } from '../../core/filter/query.ts';
+import { buildCsv, buildJsonl } from '../../core/util/export.ts';
 import type {
   GroupBucket,
   HistogramBucket,
@@ -393,6 +394,16 @@ export const indexerApi: IndexerApi = {
       });
     }
     return { buckets: out, range: { from, to } };
+  },
+
+  exportFiltered: async (filter, format) => {
+    const { db } = requireState();
+    const { joinSql, whereSql, params } = buildClause(filter);
+    const sql =
+      `SELECT ${ENTRY_COLS_SELECT} FROM entry ${joinSql} ${whereSql} ${ORDER_BY_DEFAULT}`;
+    const rows = runRows(db, sql, params);
+    const entries = rows.map(rowToEntry);
+    return format === 'csv' ? buildCsv(entries) : buildJsonl(entries);
   },
 
   vacuum: async () => {

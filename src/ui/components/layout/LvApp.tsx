@@ -116,6 +116,9 @@ export interface LvAppProps {
   readonly groupField: string | null;
   onGroupDrillDown: (bucket: GroupBucket, field: string) => void;
 
+  /** File menu → Export → JSONL/CSV; container wires `useExport`. */
+  onExport?: (format: 'jsonl' | 'csv') => void;
+
   // Server-aggregated histogram (Phase 2).
   readonly histogramData: HistogramResponse;
 
@@ -165,6 +168,7 @@ export const LvApp = ({
   groupBuckets,
   groupField,
   onGroupDrillDown,
+  onExport,
   histogramData,
   stats,
   onAiComplete,
@@ -228,6 +232,13 @@ export const LvApp = ({
         break;
       case 'select-all':
         setSelectedIds(() => new Set(Object.keys(filesById)));
+        break;
+      case 'export-json':
+      case 'export-ndjson':
+        onExport?.('jsonl');
+        break;
+      case 'export-csv':
+        onExport?.('csv');
         break;
     }
   };

@@ -8,6 +8,7 @@ import {
   type SourceId,
 } from '../../core/types/index.ts';
 import { entryFingerprint } from '../../core/util/fingerprint.ts';
+import { useExport } from '../../hooks/use-export.ts';
 import { useGroupCounts } from '../../hooks/use-group-counts.ts';
 import { useHistogram } from '../../hooks/use-histogram.ts';
 import { useLogFilter } from '../../hooks/use-log-filter.ts';
@@ -164,6 +165,14 @@ export const LvAppContainer = () => {
 
   const savedSearchesStore = useSavedSearches();
   const savedSearches = savedSearchesStore.list;
+
+  const exportHook = useExport();
+  const onExport = useCallback(
+    (format: 'jsonl' | 'csv') => {
+      void exportHook.exportFiltered(format);
+    },
+    [exportHook],
+  );
 
   // Catalog + filesById from live SourceRecord[].
   const catalog = useMemo(() => buildCatalogTree(sources), [sources]);
@@ -429,6 +438,7 @@ export const LvAppContainer = () => {
       groupBuckets={groupField !== null ? groupBuckets : null}
       groupField={groupField}
       onGroupDrillDown={onGroupDrillDown}
+      onExport={onExport}
       histogramData={histogramData}
       stats={stats}
     />

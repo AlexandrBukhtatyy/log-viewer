@@ -580,7 +580,12 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       emitChange();
     },
 
-    exportFiltered: async () => notImplemented('exportFiltered'),
+    exportFiltered: async (filter, format) => {
+      await deps.indexerOpening;
+      const text = await deps.indexer.exportFiltered(filter, format);
+      const mime = format === 'csv' ? 'text/csv' : 'application/x-ndjson';
+      return new Blob([text], { type: mime });
+    },
     cancel: async () => notImplemented('cancel'),
   };
 };
