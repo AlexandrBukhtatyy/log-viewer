@@ -17,13 +17,29 @@ Service worker и Web App Manifest генерируются `vite-plugin-pwa` (W
 ## Команды
 
 ```bash
-pnpm dev        # vite dev-server, http://localhost:5173, PWA включена через devOptions.enabled
-pnpm build      # tsc -b && vite build → dist/ (включая sw.js, manifest.webmanifest)
-pnpm preview    # vite preview, http://localhost:4173 — для проверки prod-сборки локально
-pnpm lint       # ESLint (flat config)
+pnpm dev           # vite dev-server, http://localhost:5173, PWA включена через devOptions.enabled
+pnpm build         # tsc -b && vite build → dist/ (включая sw.js, manifest.webmanifest)
+pnpm preview       # vite preview, http://localhost:4173 — для проверки prod-сборки локально
+pnpm lint          # ESLint (flat config)
+pnpm gen:fixtures  # перегенерировать .tmp/ — sample-логи разных форматов для локальной проверки viewer'а
 ```
 
-Тестового фреймворка пока нет. Если будешь добавлять — Vitest идиоматичен для Vite.
+Тестового фреймворка нет — есть Vitest как dev-зависимость, гоняется через `pnpm test` / `pnpm test:watch` (см. `package.json`).
+
+## Локальные фикстуры
+
+Скрипт [scripts/gen-fixtures.mjs](scripts/gen-fixtures.mjs) (`pnpm gen:fixtures`) пишет в `.tmp/` набор детерминированных sample-логов под форматы, которые умеет парсер. Каталог в `.gitignore`, файлы воспроизводятся из фиксированного seed.
+
+Что там:
+- `pino.jsonl` — pino-style JSON Lines (числовые `level`, `time` в ms, поле `err`).
+- `bunyan.jsonl` — JSON Lines с ISO `@timestamp` и текстовыми `level` (`INFO`/`WARN`/…), плюс `traceId`/`spanId`.
+- `app.log` — plain-text `[ISO] LEVEL [service] message k=v`.
+- `mixed.log` — plain-text + JSON в одном файле (проверка `parseAny`-fallback'а в [src/core/parsers/registry.ts](src/core/parsers/registry.ts)).
+- `nginx-access.log` — Apache/Nginx combined log format.
+- `stack-traces.log` — многострочные Java/Python tracebacks вперемешку с обычными строками.
+- `large.jsonl` — ~50k pino-строк (~6.5 MB), нагрузочная проверка virtual scroll и индексации.
+
+Если для нового парсера/адаптера нужен ещё формат — добавляй ещё один генератор в этот скрипт, не плоди отдельные ad-hoc файлы вне `.tmp/`.
 
 ## Архитектура
 

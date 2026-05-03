@@ -17,6 +17,9 @@ dev-dist
 .pnpm-store
 .playwright-mcp
 
+# Local fixtures (sample log files, ad-hoc dumps)
+.tmp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -12,12 +12,18 @@ PWA для просмотра логов. React + TypeScript, собираетс
 ## Команды
 
 ```bash
-pnpm install      # установить зависимости
-pnpm dev          # dev-сервер на http://localhost:5173 (PWA включена и в dev)
-pnpm build        # production-сборка в dist/
-pnpm preview      # запуск preview-сборки на http://localhost:4173
-pnpm lint         # ESLint
+pnpm install        # установить зависимости
+pnpm dev            # dev-сервер на http://localhost:5173 (PWA включена и в dev)
+pnpm build          # production-сборка в dist/
+pnpm preview        # запуск preview-сборки на http://localhost:4173
+pnpm lint           # ESLint
+pnpm test           # Vitest (run-mode); pnpm test:watch — watch-mode
+pnpm gen:fixtures   # сгенерировать sample-логи в .tmp/ (см. ниже)
 ```
+
+## Локальные фикстуры
+
+`pnpm gen:fixtures` ([scripts/gen-fixtures.mjs](scripts/gen-fixtures.mjs)) пишет в `.tmp/` набор sample-логов разных форматов (pino JSON, bunyan/ISO JSON, plain-text, nginx access, multi-line tracebacks, mixed, плюс крупный ~6.5 MB файл для нагрузки). Каталог `.tmp/` в `.gitignore`; данные детерминированы, перегенерируются из фиксированного seed. Используется для ручной проверки viewer'а на разнообразных входных данных.
 
 ## PWA
 
@@ -32,6 +38,6 @@ pnpm lint         # ESLint
 
 - [src/](src/) — исходники приложения
 - [public/](public/) — статические ассеты, копируются в корень `dist/`
-- [scripts/](scripts/) — служебные скрипты (генерация иконок)
+- [scripts/](scripts/) — служебные скрипты (генерация иконок, генерация локальных лог-фикстур)
 - [docs/](docs/) — документация проекта, в т.ч. [docs/adr/](docs/adr/) — Architecture Decision Records
 - [.claude/](.claude/) — конфиг Claude Code: команда `/adr` для создания ADR и Stop-hook ADR-напоминалки
