@@ -1,6 +1,11 @@
 import type { Database, PreparedStatement, SqlValue } from '@sqlite.org/sqlite-wasm';
 import { buildClause, ORDER_BY_DEFAULT } from '../../core/filter/query.ts';
 import type {
+  GroupBucket,
+  HistogramBucket,
+  HistogramResponse,
+} from '../../core/rpc/coordinator.contract.ts';
+import type {
   IndexedSourceRecord,
   IndexerApi,
   OpenReport,
@@ -14,6 +19,7 @@ import type {
   LogSourceKind,
   SourceId,
 } from '../../core/types/index.ts';
+import { collectLevelCounts, groupFieldExpr, levelBreakdownSql } from './aggregate.ts';
 import { openDb } from './db/open-db.ts';
 
 const WORKER_ID = crypto.randomUUID();
@@ -294,6 +300,99 @@ export const indexerApi: IndexerApi = {
       [id],
     );
     return rows.length === 0 ? null : rowToEntry(rows[0]!);
+  },
+
+  groupCounts: async (filter, field, limit): Promise<ReadonlyArray<GroupBucket>> => {
+    const { db } = requireState();
+    const { joinSql, whereSql, params } = buildClause(filter);
+    const expr = groupFieldExpr(field);
+    const cap = Math.max(1, Math.min(10000, limit ?? 1000));
+    const lvl = levelBreakdownSql();
+    const sql =
+      `SELECT ${expr} AS gv, ` +
+      `COUNT(*) AS cnt, ` +
+      `MIN(entry.ts) AS ts_min, ` +
+      `MAX(entry.ts) AS ts_max, ` +
+      `${lvl.columns} ` +
+      `FROM entry ${joinSql} ${whereSql} ` +
+      `GROUP BY ${expr} ` +
+      `ORDER BY cnt DESC, gv ASC ` +
+      `LIMIT ?`;
+    const rows = runRows(db, sql, [...params, ...lvl.binds, cap]);
+    return rows.map((r): GroupBucket => {
+      const v = r.gv;
+      return {
+        value: v === null || v === undefined ? null : String(v),
+        count: Number(r.cnt ?? 0),
+        tsMin: (r.ts_min as number | null) ?? null,
+        tsMax: (r.ts_max as number | null) ?? null,
+        levelCounts: collectLevelCounts(r),
+      };
+    });
+  },
+
+  histogram: async (filter, bucketCount): Promise<HistogramResponse> => {
+    const { db } = requireState();
+    const buckets = Math.max(1, Math.min(1000, Math.floor(bucketCount)));
+    const { joinSql, whereSql, params } = buildClause(filter);
+
+    const tsWhere = whereSql === '' ? 'WHERE entry.ts IS NOT NULL' : `${whereSql} AND entry.ts IS NOT NULL`;
+
+    const tr = filter.timeRange;
+    let from: number | null = tr ? tr.from : null;
+    let to: number | null = tr ? tr.to : null;
+    if (from === null || to === null) {
+      const rangeRow = runRows(
+        db,
+        `SELECT MIN(entry.ts) AS lo, MAX(entry.ts) AS hi FROM entry ${joinSql} ${tsWhere}`,
+        params,
+      );
+      const lo = (rangeRow[0]?.lo as number | null) ?? null;
+      const hi = (rangeRow[0]?.hi as number | null) ?? null;
+      if (from === null) from = lo;
+      if (to === null) to = hi;
+    }
+    if (from === null || to === null || to <= from) {
+      return { buckets: [], range: from !== null && to !== null ? { from, to } : null };
+    }
+
+    const span = to - from;
+    const bucketSize = span / buckets;
+    const lvl = levelBreakdownSql();
+    // bucket index = MIN(buckets-1, FLOOR((ts - from) / bucketSize)) — clamps the "to" edge into the last bucket.
+    const idxExpr = `MIN(?, CAST((entry.ts - ?) / ? AS INTEGER))`;
+    const sql =
+      `SELECT ${idxExpr} AS bidx, ` +
+      `COUNT(*) AS cnt, ` +
+      `${lvl.columns} ` +
+      `FROM entry ${joinSql} ${tsWhere} AND entry.ts >= ? AND entry.ts <= ? ` +
+      `GROUP BY bidx ORDER BY bidx ASC`;
+    const bind: SqlValue[] = [
+      buckets - 1,
+      from,
+      bucketSize === 0 ? 1 : bucketSize,
+      ...params,
+      from,
+      to,
+      ...lvl.binds,
+    ];
+    const rows = runRows(db, sql, bind);
+    const byIdx = new Map<number, Record<string, SqlValue>>();
+    for (const r of rows) byIdx.set(Number(r.bidx ?? 0), r);
+
+    const out: HistogramBucket[] = [];
+    for (let i = 0; i < buckets; i++) {
+      const tsFrom = from + i * bucketSize;
+      const tsTo = i === buckets - 1 ? to : from + (i + 1) * bucketSize;
+      const r = byIdx.get(i);
+      out.push({
+        tsFrom,
+        tsTo,
+        count: r ? Number(r.cnt ?? 0) : 0,
+        levelCounts: r ? collectLevelCounts(r) : {},
+      });
+    }
+    return { buckets: out, range: { from, to } };
   },
 
   vacuum: async () => {

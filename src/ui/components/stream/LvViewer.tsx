@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import type {
+  GroupBucket,
+  HistogramResponse,
+} from '../../../core/rpc/coordinator.contract.ts';
 import type { LogEntry, LogFilter, LogLevel } from '../../../core/types/index.ts';
 import type {
   FieldFilter,
@@ -15,6 +19,7 @@ import type {
 import { LvFilterBar } from '../filter/LvFilterBar.tsx';
 import { LvTimeline } from '../timeline/LvTimeline.tsx';
 import { LvEmpty } from './LvEmpty.tsx';
+import { LvGroupHeader } from './LvGroupHeader.tsx';
 import { LvOpenMenu } from './LvOpenMenu.tsx';
 import { LvRow } from './LvRow.tsx';
 import { LvTabs } from './LvTabs.tsx';
@@ -66,6 +71,19 @@ export interface LvViewerProps {
   readonly groupBy: ReadonlyArray<LvGroupBy>;
   setGroupBy: (next: LvGroupBy[]) => void;
 
+  /** Server-aggregated histogram for timeline rendering (Phase 2). */
+  readonly histogramData: HistogramResponse;
+  /**
+   * Server-aggregated group buckets when group-by is active. `null` means
+   * group-by is off OR unsupported (e.g. UI-only `kind`); the entry stream
+   * is rendered instead.
+   */
+  readonly groupBuckets: ReadonlyArray<GroupBucket> | null;
+  /** The active group field as it would appear in SQL (`level`, `service`, …). Pure label use. */
+  readonly groupField: string | null;
+  /** Drill into a group: container appends a `fieldFilter` and clears group-by. */
+  onGroupDrillDown: (bucket: GroupBucket, field: string) => void;
+
   renderDetailEditor?: RenderDetailEditor;
 }
 
@@ -94,6 +112,10 @@ export const LvViewer = ({
   onToggleTimeline,
   groupBy,
   setGroupBy,
+  histogramData,
+  groupBuckets,
+  groupField,
+  onGroupDrillDown,
   renderDetailEditor,
 }: LvViewerProps) => {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -258,8 +280,7 @@ export const LvViewer = ({
           />
 
           {timelineOn && (
-            // Phase 1: timeline shown empty (server-side getHistogram lands in Phase 2).
-            <LvTimeline entries={[]} range={filter.timeRange} onRangeChange={setTimeRange} />
+            <LvTimeline data={histogramData} range={filter.timeRange} onRangeChange={setTimeRange} />
           )}
 
           <div className="lv-stream-wrap">
@@ -398,7 +419,30 @@ export const LvViewer = ({
               data-density={tweaks.density}
               style={{ flex: 1, overflowY: 'auto', position: 'relative' }}
             >
-              {rowCount === 0 ? (
+              {groupBuckets !== null && groupField !== null ? (
+                groupBuckets.length === 0 ? (
+                  <div className="lv-stream-empty">
+                    <div className="lv-stream-empty-title">No groups</div>
+                    <div className="lv-stream-empty-sub">
+                      No matches for the current filter, or the field is empty in all entries.
+                    </div>
+                  </div>
+                ) : (
+                  groupBuckets.map((bucket, i) => (
+                    <LvGroupHeader
+                      key={`${bucket.value ?? '∅'}-${i}`}
+                      bucket={bucket}
+                      field={groupField}
+                      onFocus={() => onGroupDrillDown(bucket, groupField)}
+                      onCopy={() => {
+                        if (bucket.value !== null) {
+                          void navigator.clipboard?.writeText(bucket.value);
+                        }
+                      }}
+                    />
+                  ))
+                )
+              ) : rowCount === 0 ? (
                 <div className="lv-stream-empty">
                   <div className="lv-stream-empty-title">No matching lines</div>
                   <div className="lv-stream-empty-sub">

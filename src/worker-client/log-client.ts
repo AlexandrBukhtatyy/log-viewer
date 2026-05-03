@@ -1,6 +1,10 @@
 import * as Comlink from 'comlink';
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import type { CoordinatorApi } from '../core/rpc/coordinator.contract.ts';
+import type {
+  CoordinatorApi,
+  GroupBucket,
+  HistogramResponse,
+} from '../core/rpc/coordinator.contract.ts';
 import type {
   CloudProvider,
   DbDialect,
@@ -80,6 +84,15 @@ export interface ViewActions {
   removeSource: (id: SourceId) => Promise<void>;
   clearAll: () => Promise<void>;
   getEntry: (id: EntryId) => Promise<LogEntry | null>;
+  getGroupCounts: (
+    filter: LogFilter,
+    field: string,
+    limit?: number,
+  ) => Promise<ReadonlyArray<GroupBucket>>;
+  getHistogram: (
+    filter: LogFilter,
+    bucketCount: number,
+  ) => Promise<HistogramResponse>;
   refresh: () => Promise<void>;
   destroy: () => void;
 }
@@ -264,6 +277,10 @@ export const createLogClient = (): ViewStore => {
         set({ selectedId: null, entries: new Map() });
       },
       getEntry: async (id) => api.getEntry(id),
+      getGroupCounts: async (filter, field, limit) =>
+        api.getGroupCounts(filter, field, limit),
+      getHistogram: async (filter, bucketCount) =>
+        api.getHistogram(filter, bucketCount),
       refresh,
       destroy: () => {
         statusUnsubPromise

@@ -29,6 +29,35 @@ export interface CallOptions {
   readonly taskId?: string;
 }
 
+/**
+ * Aggregated counts for a single group bucket (one distinct value of the
+ * grouping field). `path` carries the parent-group context so nested expand
+ * can be resolved server-side without the UI re-deriving it from filters.
+ */
+export interface GroupBucket {
+  /** The grouping value for this bucket (string-coerced). `null` = entries where the field is missing. */
+  readonly value: string | null;
+  readonly count: number;
+  readonly tsMin: number | null;
+  readonly tsMax: number | null;
+  /** Per-level counts; absent levels are omitted. */
+  readonly levelCounts: Readonly<Record<string, number>>;
+}
+
+export interface HistogramBucket {
+  /** Bucket lower bound (epoch ms); `tsTo - tsFrom` is constant within a single histogram response. */
+  readonly tsFrom: number;
+  readonly tsTo: number;
+  readonly count: number;
+  readonly levelCounts: Readonly<Record<string, number>>;
+}
+
+export interface HistogramResponse {
+  readonly buckets: ReadonlyArray<HistogramBucket>;
+  /** Total `ts` range covered by buckets. `null` if no entries match the filter. */
+  readonly range: { readonly from: number; readonly to: number } | null;
+}
+
 export interface CoordinatorApi {
   ping: () => Promise<string>;
 
@@ -42,6 +71,29 @@ export interface CoordinatorApi {
   getRange: (from: number, to: number) => Promise<ReadonlyArray<LogEntry>>;
   getCount: () => Promise<RangeCounts>;
   getEntry: (id: EntryId) => Promise<LogEntry | null>;
+
+  /**
+   * Server-side group-by aggregation. `field` is a JSON path inside
+   * `fields_json` ("$.<key>") OR one of the entry-level columns: `level`,
+   * `source_id`, `service`. Results are sorted by `count DESC, value ASC`.
+   * `limit` clamps the bucket count (default 1000).
+   */
+  getGroupCounts: (
+    filter: LogFilter,
+    field: string,
+    limit?: number,
+  ) => Promise<ReadonlyArray<GroupBucket>>;
+
+  /**
+   * Server-side histogram over `ts`. `bucketCount` controls resolution; range
+   * is derived from min/max ts of matching entries (or filter.timeRange when
+   * both bounds set). Empty buckets are still returned (count=0) for stable
+   * x-axis rendering. `null`-ts entries are excluded.
+   */
+  getHistogram: (
+    filter: LogFilter,
+    bucketCount: number,
+  ) => Promise<HistogramResponse>;
 
   listSources: () => Promise<ReadonlyArray<SourceRecord>>;
   subscribeStatus: (

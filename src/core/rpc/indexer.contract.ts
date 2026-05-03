@@ -6,6 +6,7 @@ import type {
   LogSourceKind,
   SourceId,
 } from '../types/index.ts';
+import type { GroupBucket, HistogramResponse } from './coordinator.contract.ts';
 
 /**
  * Indexer не хранит File/FileSystemHandle (они живут в coordinator handle-store).
@@ -49,6 +50,16 @@ export interface IndexerApi {
   ) => Promise<ReadonlyArray<LogEntry>>;
   count: (filter: LogFilter) => Promise<number>;
   getEntry: (id: EntryId) => Promise<LogEntry | null>;
+
+  groupCounts: (
+    filter: LogFilter,
+    field: string,
+    limit?: number,
+  ) => Promise<ReadonlyArray<GroupBucket>>;
+  histogram: (
+    filter: LogFilter,
+    bucketCount: number,
+  ) => Promise<HistogramResponse>;
 
   vacuum: () => Promise<void>;
   estimateSize: () => Promise<SizeReport>;

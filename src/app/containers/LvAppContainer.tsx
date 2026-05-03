@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { GroupBucket } from '../../core/rpc/coordinator.contract.ts';
 import {
   EMPTY_FILTER,
+  type FieldFilter,
   type LogEntry,
   type LogFilter,
   type SourceId,
 } from '../../core/types/index.ts';
+import { useGroupCounts } from '../../hooks/use-group-counts.ts';
+import { useHistogram } from '../../hooks/use-histogram.ts';
 import { useLogFilter } from '../../hooks/use-log-filter.ts';
 import { useLogWindow } from '../../hooks/use-log-window.ts';
 import { useSourceController } from '../../hooks/use-source-controller.ts';
@@ -21,6 +25,31 @@ import type {
   LvTab,
   LvTweaks,
 } from '../../ui/contracts/lv-types.ts';
+
+const HISTOGRAM_BUCKETS = 80;
+const GROUP_LIMIT = 200;
+
+/**
+ * Map UI group-by token to the SQL field name used by `coordinator.getGroupCounts`.
+ * `kind` is UI-only (file-meta classification) — returns null so the hook
+ * stays inactive and LvViewer falls back to the entry stream.
+ */
+const lvGroupByToCoreField = (g: LvGroupBy | undefined): string | null => {
+  if (!g) return null;
+  switch (g) {
+    case 'level':
+      return 'level';
+    case 'file':
+      return 'source_id';
+    case 'service':
+    case 'trace_id':
+    case 'req_id':
+    case 'user_id':
+      return g;
+    case 'kind':
+      return null;
+  }
+};
 import {
   buildCatalogTree,
   filesByIdFromSources,
@@ -199,13 +228,52 @@ export const LvAppContainer = () => {
     savedSearchesStore.add(search);
   }, [filter, savedSearchesStore]);
 
-  // Status-bar stats — Phase 1 placeholder (level breakdown lands with
-  // server-side aggregates in Phase 2).
-  const stats = useMemo(
-    () => ({ files: selectedIds.size, errors: 0, warns: 0 }),
-    [selectedIds],
+  // Server-aggregated group buckets when the user picked a group-by axis.
+  const groupField = lvGroupByToCoreField(groupBy[0]);
+  const { buckets: groupBuckets } = useGroupCounts(groupField, GROUP_LIMIT);
+
+  // Server-aggregated histogram — only when the timeline is on, otherwise we
+  // keep the worker idle.
+  const { data: histogramData } = useHistogram(
+    tweaks.timelineOn ? HISTOGRAM_BUCKETS : 0,
   );
-  const levelCounts = useMemo(() => ({}), []);
+
+  // Drill into a group: append a fieldFilter for the bucket value and clear
+  // group-by so the entry stream comes back. `null` value (missing field) is
+  // mapped to an "exists" semantics by skipping the drill.
+  const onGroupDrillDown = useCallback(
+    (bucket: GroupBucket, field: string) => {
+      if (bucket.value === null) {
+        setGroupBy([]);
+        return;
+      }
+      const ff: FieldFilter = { key: field, op: '=', value: bucket.value };
+      setFilter((f) => ({ ...f, fieldFilters: [...(f.fieldFilters ?? []), ff] }));
+      setGroupBy([]);
+    },
+    [setFilter],
+  );
+
+  // Level counts for the filter bar — derived from histogram (sum across
+  // buckets gives total filtered counts per level).
+  const levelCounts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const b of histogramData.buckets) {
+      for (const [lvl, n] of Object.entries(b.levelCounts)) {
+        out[lvl] = (out[lvl] ?? 0) + n;
+      }
+    }
+    return out;
+  }, [histogramData]);
+
+  const stats = useMemo(
+    () => ({
+      files: selectedIds.size,
+      errors: (levelCounts.error ?? 0) + (levelCounts.fatal ?? 0),
+      warns: levelCounts.warn ?? 0,
+    }),
+    [selectedIds, levelCounts],
+  );
 
   // File-pickers / per-kind add-source dispatch.
   const onOpenLocalFile = useCallback(async () => {
@@ -342,6 +410,10 @@ export const LvAppContainer = () => {
       onToggleLiveTail={() => setLiveTail((v) => !v)}
       groupBy={groupBy}
       setGroupBy={setGroupBy}
+      groupBuckets={groupField !== null ? groupBuckets : null}
+      groupField={groupField}
+      onGroupDrillDown={onGroupDrillDown}
+      histogramData={histogramData}
       stats={stats}
     />
   );

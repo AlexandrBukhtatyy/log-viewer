@@ -15,6 +15,10 @@ export interface BuiltClause {
 const escapeLike = (s: string): string =>
   s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 
+/** Escape regex metacharacters so a substring query can be wrapped in \b…\b safely. */
+const escapeRegex = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
  * Translate a `LogFilter` to a SQL JOIN + WHERE clause + bind parameters.
  *
@@ -79,21 +83,31 @@ export const buildClause = (filter: LogFilter): BuiltClause => {
       joinSql = 'JOIN entry_fts ON entry_fts.rowid = entry.rowid';
       conds.push('entry_fts MATCH ?');
       params.push(filter.wholeWord ? `"${trimmedQuery}"` : trimmedQuery);
-    } else if (filter.queryMode === 'substring') {
-      // wholeWord fallback: pad both sides with sentinel spaces and match
-      // ' word '. Doesn't catch boundaries against punctuation — Phase 2's
-      // REGEXP UDF handles that case.
-      const escaped = escapeLike(trimmedQuery);
-      const pattern = filter.wholeWord ? `% ${escaped} %` : `%${escaped}%`;
-      const left = filter.wholeWord ? "' ' || message || ' '" : 'message';
-      if (filter.caseSensitive) {
-        conds.push(`${left} LIKE ? ESCAPE '\\'`);
-      } else {
-        conds.push(`LOWER(${left}) LIKE LOWER(?) ESCAPE '\\'`);
-      }
+    } else if (filter.queryMode === 'regex') {
+      // Case sensitivity selects between regexp/regexpi UDFs (see open-db.ts).
+      const fn = filter.caseSensitive ? 'regexp' : 'regexpi';
+      const pattern = filter.wholeWord ? `\\b(?:${trimmedQuery})\\b` : trimmedQuery;
+      conds.push(`${fn}(?, message)`);
       params.push(pattern);
+    } else {
+      // queryMode === 'substring'.
+      // wholeWord uses regex \b…\b for proper word boundaries (handles
+      // punctuation), with the user's input regex-escaped so it matches
+      // literally. Otherwise — LIKE (with case folding when not caseSensitive).
+      if (filter.wholeWord) {
+        const fn = filter.caseSensitive ? 'regexp' : 'regexpi';
+        conds.push(`${fn}(?, message)`);
+        params.push(`\\b${escapeRegex(trimmedQuery)}\\b`);
+      } else {
+        const pattern = `%${escapeLike(trimmedQuery)}%`;
+        if (filter.caseSensitive) {
+          conds.push("message LIKE ? ESCAPE '\\'");
+        } else {
+          conds.push("LOWER(message) LIKE LOWER(?) ESCAPE '\\'");
+        }
+        params.push(pattern);
+      }
     }
-    // queryMode='regex' — not implemented yet (Phase 2).
   }
 
   if (filter.fieldFilters && filter.fieldFilters.length > 0) {

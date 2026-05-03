@@ -4,8 +4,6 @@
 // consumption, no adapter layer (see ADR-0002 §Adapter-слой and the plan
 // in docs/plans/replicated-cooking-muffin.md §1.6).
 
-import type { LogEntry, LogLevel } from '../../core/types/index.ts';
-
 // Tweaks shape lives next to its persistence hook; re-exported here for
 // ergonomic UI imports. Same for LvSavedSearch (hooks/use-saved-searches.ts).
 // This keeps `hooks/` from importing `ui/`, satisfying the ADR-0002 layer
@@ -89,27 +87,6 @@ export type LvGroupBy =
   | 'level'
   | 'kind'
   | 'file';
-
-export interface LvGroupPathSegment {
-  field: string;
-  key: string;
-}
-
-/**
- * Client-side group built by lvBuildGroups. Used in Phase 1; in Phase 2 the
- * coordinator API takes over (`getGroupCounts`) and this type can shrink.
- */
-export interface LvGroup {
-  field: string;
-  key: string;
-  depth: number;
-  entries: LogEntry[];
-  children?: LvGroup[];
-  minTs: number;
-  maxTs: number;
-  levels: Partial<Record<LogLevel, number>>;
-  path: LvGroupPathSegment[];
-}
 
 export interface LvTab {
   id: string;

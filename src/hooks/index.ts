@@ -12,3 +12,9 @@ export type { UseSourceController } from './use-source-controller.ts';
 
 export { useSourceStatus } from './use-source-status.ts';
 export type { UseSourceStatus } from './use-source-status.ts';
+
+export { useGroupCounts } from './use-group-counts.ts';
+export type { UseGroupCounts } from './use-group-counts.ts';
+
+export { useHistogram } from './use-histogram.ts';
+export type { UseHistogram } from './use-histogram.ts';

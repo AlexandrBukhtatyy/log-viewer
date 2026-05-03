@@ -80,10 +80,26 @@ describe('buildClause', () => {
     expect(built.params).toEqual(['memory OR exception']);
   });
 
-  it('regex queryMode is silently dropped (planned but not implemented in Phase 1)', () => {
-    const built = buildClause(f({ query: '.*', queryMode: 'regex' }));
-    expect(built.whereSql).toBe('');
-    expect(built.params).toEqual([]);
+  it('regex queryMode case-insensitive uses regexpi UDF', () => {
+    const built = buildClause(f({ query: 'err.*o', queryMode: 'regex' }));
+    expect(built.whereSql).toBe('WHERE regexpi(?, message)');
+    expect(built.params).toEqual(['err.*o']);
+  });
+
+  it('regex queryMode case-sensitive uses regexp UDF', () => {
+    const built = buildClause(
+      f({ query: 'Err.*o', queryMode: 'regex', caseSensitive: true }),
+    );
+    expect(built.whereSql).toBe('WHERE regexp(?, message)');
+    expect(built.params).toEqual(['Err.*o']);
+  });
+
+  it('regex + wholeWord wraps user pattern in \\b(?:...)\\b', () => {
+    const built = buildClause(
+      f({ query: 'foo|bar', queryMode: 'regex', wholeWord: true }),
+    );
+    expect(built.whereSql).toBe('WHERE regexpi(?, message)');
+    expect(built.params).toEqual(['\\b(?:foo|bar)\\b']);
   });
 
   it('services filter generates JSON_EXTRACT IN clause', () => {
@@ -94,17 +110,15 @@ describe('buildClause', () => {
     expect(built.params).toEqual(['api-gateway', 'billing']);
   });
 
-  it('wholeWord substring pads both sides with sentinel spaces (case-insensitive)', () => {
+  it('wholeWord substring uses regexpi UDF with \\b…\\b (case-insensitive)', () => {
     const built = buildClause(
       f({ query: 'foo', queryMode: 'substring', wholeWord: true }),
     );
-    expect(built.whereSql).toBe(
-      "WHERE LOWER(' ' || message || ' ') LIKE LOWER(?) ESCAPE '\\'",
-    );
-    expect(built.params).toEqual(['% foo %']);
+    expect(built.whereSql).toBe('WHERE regexpi(?, message)');
+    expect(built.params).toEqual(['\\bfoo\\b']);
   });
 
-  it('wholeWord substring (case-sensitive) preserves original casing', () => {
+  it('wholeWord substring uses regexp UDF when case-sensitive', () => {
     const built = buildClause(
       f({
         query: 'Foo',
@@ -113,10 +127,15 @@ describe('buildClause', () => {
         caseSensitive: true,
       }),
     );
-    expect(built.whereSql).toBe(
-      "WHERE ' ' || message || ' ' LIKE ? ESCAPE '\\'",
+    expect(built.whereSql).toBe('WHERE regexp(?, message)');
+    expect(built.params).toEqual(['\\bFoo\\b']);
+  });
+
+  it('wholeWord substring escapes regex metacharacters in user input', () => {
+    const built = buildClause(
+      f({ query: 'a.b+c', queryMode: 'substring', wholeWord: true }),
     );
-    expect(built.params).toEqual(['% Foo %']);
+    expect(built.params).toEqual(['\\ba\\.b\\+c\\b']);
   });
 
   it('wholeWord with FTS wraps query in phrase quotes', () => {

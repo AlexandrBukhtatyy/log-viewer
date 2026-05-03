@@ -1,40 +1,38 @@
+import type { GroupBucket } from '../../../core/rpc/coordinator.contract.ts';
 import type { LogLevel } from '../../../core/types/index.ts';
-import type { LvGroup } from '../../contracts/lv-types.ts';
 
 const LEVELS: LogLevel[] = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'unknown'];
 
 export interface LvGroupHeaderProps {
-  readonly group: LvGroup;
-  readonly expanded: boolean;
-  onToggle: () => void;
+  readonly bucket: GroupBucket;
+  readonly field: string;
+  readonly depth?: number;
+  readonly expanded?: boolean;
+  onToggle?: () => void;
   onFocus: () => void;
   onCopy: () => void;
 }
 
 export const LvGroupHeader = ({
-  group,
-  expanded,
+  bucket,
+  field,
+  depth = 0,
+  expanded = false,
   onToggle,
   onFocus,
   onCopy,
 }: LvGroupHeaderProps) => {
-  const { key, entries, minTs, maxTs, levels, depth, field } = group;
-  const dur = Math.max(0, maxTs - minTs);
+  const { value, count, tsMin, tsMax, levelCounts } = bucket;
+  const dur = tsMin !== null && tsMax !== null ? Math.max(0, tsMax - tsMin) : 0;
   const durStr = dur < 1000 ? `${dur}ms` : `${(dur / 1000).toFixed(2)}s`;
-  const serviceOf = (e: { fields: Readonly<Record<string, unknown>> }): string => {
-    const v = (e.fields as Record<string, unknown>).service;
-    return typeof v === 'string' ? v : '—';
-  };
-  const allServices = new Set(entries.map(serviceOf));
-  const services = Array.from(allServices).slice(0, 3);
-  const files = new Set(entries.map((e) => e.sourceId)).size;
-  const topMsg = (entries.find((e) => e.level === 'error') ?? entries[0])?.message ?? '';
+  const labelKey = value ?? '∅';
+  const hasError = (levelCounts.error ?? 0) > 0 || (levelCounts.fatal ?? 0) > 0;
 
   return (
     <div
-      className={`lv-grp lv-grp-d${depth || 0}${expanded ? ' is-expanded' : ''}${levels.error ? ' has-error' : ''}`}
+      className={`lv-grp lv-grp-d${depth}${expanded ? ' is-expanded' : ''}${hasError ? ' has-error' : ''}`}
       onClick={onToggle}
-      style={{ paddingLeft: 12 + (depth || 0) * 16 }}
+      style={{ paddingLeft: 12 + depth * 16 }}
     >
       <span className="lv-grp-caret">
         <svg
@@ -55,39 +53,32 @@ export const LvGroupHeader = ({
       </span>
       <span className="lv-grp-label">
         <span className="lv-grp-by">{field}</span>
-        <span className="lv-grp-key" title={key}>
-          {key}
+        <span className="lv-grp-key" title={labelKey}>
+          {labelKey}
         </span>
       </span>
       <span className="lv-grp-mix">
         {LEVELS.map((l) =>
-          levels[l] ? (
+          levelCounts[l] ? (
             <span
               key={l}
               className={`lv-grp-dot lv-level-tag-${l}`}
-              title={`${levels[l]} ${l}`}
+              title={`${levelCounts[l]} ${l}`}
             >
               <i />
-              <span>{levels[l]}</span>
+              <span>{levelCounts[l]}</span>
             </span>
           ) : null,
         )}
       </span>
-      <span className="lv-grp-svc">
-        {services.join(', ')}
-        {services.length < allServices.size ? '…' : ''}
-      </span>
       <span className="lv-grp-meta">
-        <span className="lv-grp-count">{entries.length} lines</span>
-        <span className="lv-grp-sep">·</span>
-        <span>
-          {files} file{files !== 1 ? 's' : ''}
-        </span>
-        <span className="lv-grp-sep">·</span>
-        <span>{durStr}</span>
-      </span>
-      <span className="lv-grp-preview" title={topMsg}>
-        {topMsg}
+        <span className="lv-grp-count">{count} lines</span>
+        {dur > 0 && (
+          <>
+            <span className="lv-grp-sep">·</span>
+            <span>{durStr}</span>
+          </>
+        )}
       </span>
       <span className="lv-grp-actions" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="lv-row-open" onClick={onFocus} title="Focus this group only">

@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
+  GroupBucket,
+  HistogramResponse,
+} from '../../../core/rpc/coordinator.contract.ts';
+import type {
   LogEntry,
   LogFilter,
   LogLevel,
@@ -103,9 +107,15 @@ export interface LvAppProps {
   readonly liveTail: boolean;
   onToggleLiveTail: () => void;
 
-  // Group-by (UI state — Phase 1 toggles UI, Phase 2 wires to coordinator).
+  // Group-by (UI state) + server-aggregated buckets (Phase 2).
   readonly groupBy: ReadonlyArray<LvGroupBy>;
   setGroupBy: (next: LvGroupBy[]) => void;
+  readonly groupBuckets: ReadonlyArray<GroupBucket> | null;
+  readonly groupField: string | null;
+  onGroupDrillDown: (bucket: GroupBucket, field: string) => void;
+
+  // Server-aggregated histogram (Phase 2).
+  readonly histogramData: HistogramResponse;
 
   // Status bar stats (computed by container).
   readonly stats: LvAppStatusStats;
@@ -148,6 +158,10 @@ export const LvApp = ({
   onToggleLiveTail,
   groupBy,
   setGroupBy,
+  groupBuckets,
+  groupField,
+  onGroupDrillDown,
+  histogramData,
   stats,
   onAiComplete,
   renderDetailEditor,
@@ -376,6 +390,10 @@ export const LvApp = ({
           onToggleTimeline={() => setTweak('timelineOn', !tweaks.timelineOn)}
           groupBy={groupBy}
           setGroupBy={setGroupBy}
+          histogramData={histogramData}
+          groupBuckets={groupBuckets}
+          groupField={groupField}
+          onGroupDrillDown={onGroupDrillDown}
           renderDetailEditor={renderDetailEditor}
         />
       </div>

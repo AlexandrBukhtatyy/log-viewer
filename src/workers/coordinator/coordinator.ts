@@ -400,6 +400,16 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       return deps.indexer.getEntry(id);
     },
 
+    getGroupCounts: async (filter, field, limit) => {
+      await deps.indexerOpening;
+      return deps.indexer.groupCounts(filter, field, limit);
+    },
+
+    getHistogram: async (filter, bucketCount) => {
+      await deps.indexerOpening;
+      return deps.indexer.histogram(filter, bucketCount);
+    },
+
     listSources: async () => {
       await hydratePersisted();
       return snapshotSources();
