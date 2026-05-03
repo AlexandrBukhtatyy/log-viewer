@@ -250,6 +250,62 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     }
   };
 
+  /**
+   * Start (or restart) ingest for a known source. Used by both `addSource` and
+   * the resume/grant-permission paths — keeps the live `SourceEntry` lifecycle
+   * (aborter, onStatus, onChange) in one place.
+   */
+  const startIngest = (source: LogSource): void => {
+    const factory = deps.adapterFactories[source.kind];
+    if (!factory) {
+      sources.set(source.id, {
+        source,
+        status: {
+          kind: 'error',
+          error: { name: 'Error', message: `no adapter for kind '${source.kind}'` },
+        },
+        aborter: null,
+      });
+      emitStatus();
+      return;
+    }
+    const aborter = new AbortController();
+    sources.set(source.id, { source, status: { kind: 'idle' }, aborter });
+    persistedRecords.delete(source.id);
+    emitStatus();
+
+    const adapter = factory(source);
+    void ingestSource({
+      source,
+      adapter,
+      parserPool: deps.parserPool,
+      indexer: deps.indexer,
+      signal: aborter.signal,
+      onStatus: (status) => {
+        const entry = sources.get(source.id);
+        if (!entry) return;
+        entry.status = status;
+        emitStatus();
+      },
+      onChange: () => {
+        emitChange();
+      },
+    });
+  };
+
+  /**
+   * Mark a persisted source as needing user permission. The record stays in
+   * `persistedRecords` (still visible in the tree) but with a status that
+   * tells the UI to surface a "Grant access" affordance.
+   */
+  const markPermissionRequired = (source: LogSource): void => {
+    persistedRecords.set(source.id, {
+      source,
+      status: { kind: 'permission-required' },
+    });
+    emitStatus();
+  };
+
   const emitChange = (): void => {
     version++;
     if (pendingFilteredCount !== null) return; // coalesce concurrent change events
@@ -301,17 +357,13 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     addSource: async (input) => {
       await deps.indexerOpening;
-      const factory = deps.adapterFactories[input.kind];
-      if (!factory) {
+      if (!deps.adapterFactories[input.kind]) {
         throw new Error(
           `addSource: no adapter for source kind '${input.kind}' (probably not implemented yet)`,
         );
       }
       const id = newSourceId();
       const source = buildLogSource(input, id);
-      const aborter = new AbortController();
-      sources.set(id, { source, status: { kind: 'idle' }, aborter });
-      persistedRecords.delete(id); // live takes over if same id
 
       await deps.indexer.upsertSource(source);
 
@@ -327,27 +379,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         });
       }
 
-      emitStatus();
-
-      const adapter = factory(source);
-
-      // Fire-and-forget; ingest emits its own status updates and change events.
-      void ingestSource({
-        source,
-        adapter,
-        parserPool: deps.parserPool,
-        indexer: deps.indexer,
-        signal: aborter.signal,
-        onStatus: (status) => {
-          const entry = sources.get(id);
-          if (!entry) return;
-          entry.status = status;
-          emitStatus();
-        },
-        onChange: () => {
-          emitChange();
-        },
-      });
+      startIngest(source);
 
       return id;
     },
@@ -432,8 +464,76 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       });
     },
 
-    resumePersistedSources: async () => notImplemented('resumePersistedSources'),
-    grantPermission: async () => notImplemented('grantPermission'),
+    /**
+     * Walk every persisted directory record, query its FS handle permission, and:
+     *   - 'granted'  → start ingest immediately (`resumed`).
+     *   - 'prompt'   → mark permission-required (`needsPermission`); UI surfaces
+     *                  a "Grant access" button that calls `grantPermission(id)`.
+     *   - 'denied'   → same as prompt — user can still re-grant via the same
+     *                  button (browser will re-prompt).
+     *
+     * Idempotent: re-running this returns the current state. Sources already
+     * live (in `sources` map) are skipped.
+     */
+    resumePersistedSources: async () => {
+      await hydratePersisted();
+      const handleStore = await deps.handleStoreOpening;
+      const resumed: SourceId[] = [];
+      const needsPermission: SourceId[] = [];
+
+      for (const [id, rec] of persistedRecords) {
+        if (sources.has(id)) continue;
+        if (rec.source.kind !== 'directory') continue;
+        const persisted = await handleStore.get(id);
+        if (!persisted || persisted.kind !== 'directory') continue;
+
+        const handle = persisted.handle as FileSystemDirectoryHandle;
+        let perm: PermissionState | null = null;
+        try {
+          perm = (await handle.queryPermission?.({ mode: 'read' })) ?? null;
+        } catch (err) {
+          console.warn('[coordinator] queryPermission failed', err);
+        }
+        if (perm === 'granted') {
+          startIngest({ ...rec.source, handle });
+          resumed.push(id);
+        } else {
+          markPermissionRequired({ ...rec.source, handle });
+          needsPermission.push(id);
+        }
+      }
+      return { resumed, needsPermission };
+    },
+
+    /**
+     * Request read permission for a previously-persisted directory and, on
+     * success, restart its ingest. Must be invoked from a fresh user gesture
+     * (the UI's "Grant access" click) — the browser will reject otherwise.
+     */
+    grantPermission: async (id) => {
+      await hydratePersisted();
+      const handleStore = await deps.handleStoreOpening;
+      const persisted = await handleStore.get(id);
+      if (!persisted || persisted.kind !== 'directory') return false;
+      const handle = persisted.handle as FileSystemDirectoryHandle;
+
+      let perm: PermissionState | undefined;
+      try {
+        perm = await handle.requestPermission?.({ mode: 'read' });
+      } catch (err) {
+        console.warn('[coordinator] requestPermission failed', err);
+        return false;
+      }
+      if (perm !== 'granted') return false;
+
+      const rec = persistedRecords.get(id);
+      const source: LogSource =
+        rec && rec.source.kind === 'directory'
+          ? { ...rec.source, handle }
+          : { kind: 'directory', id, name: persisted.name, handle };
+      startIngest(source);
+      return true;
+    },
 
     estimateStorage: async () => {
       await deps.indexerOpening;

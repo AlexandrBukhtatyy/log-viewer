@@ -63,6 +63,8 @@ export interface LvViewerProps {
 
   readonly bookmarks: ReadonlySet<string>;
   onBookmark: (id: string) => void;
+  /** Stable bookmark key for an entry (survives re-ingest). Container wires `entryFingerprint`. */
+  bookmarkKeyOf: (entry: LogEntry) => string;
 
   readonly tweaks: LvTweaks;
   readonly timelineOn: boolean;
@@ -107,6 +109,7 @@ export const LvViewer = ({
   onCloseTab,
   bookmarks,
   onBookmark,
+  bookmarkKeyOf,
   tweaks,
   timelineOn,
   onToggleTimeline,
@@ -498,10 +501,10 @@ export const LvViewer = ({
                             isFindCurrent={findOpen && findMatches[findIdx] === vi.index}
                             selected={false}
                             expanded={expanded.has(entry.id)}
-                            bookmarked={bookmarks.has(entry.id)}
+                            bookmarked={bookmarks.has(bookmarkKeyOf(entry))}
                             onSelect={() => {}}
                             onToggleExpand={() => toggleExpand(entry.id)}
-                            onBookmark={() => onBookmark(entry.id)}
+                            onBookmark={() => onBookmark(bookmarkKeyOf(entry))}
                             onOpenAtLine={openAtLine}
                             onContextMenu={openAtLine}
                             onAddFieldFilter={addFieldFilter}

@@ -57,6 +57,10 @@ export interface LvFileNode {
   service?: string;
   live?: boolean;
   newCount?: number;
+  /** True when the persisted handle needs `requestPermission`. UI renders a "Grant access" button. */
+  needsPermission?: boolean;
+  /** Free-text error from a failed adapter (`SourceStatus.kind === 'error'`). */
+  errorMessage?: string;
 }
 
 export interface LvFolderNode {

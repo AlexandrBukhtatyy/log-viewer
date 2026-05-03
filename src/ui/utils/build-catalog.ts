@@ -85,6 +85,9 @@ const fileNodeFromSource = (record: SourceRecord): LvFileNode => ({
   live: isLive(record.status),
   newCount: newCountOf(record.status),
   count: record.status.kind === 'done' ? record.status.entryCount : undefined,
+  needsPermission: record.status.kind === 'permission-required',
+  errorMessage:
+    record.status.kind === 'error' ? record.status.error.message : undefined,
 });
 
 export const buildCatalogTree = (

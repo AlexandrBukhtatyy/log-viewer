@@ -12,6 +12,8 @@ export interface LvTreeNodeProps {
   toggleSelect: (id: string) => void;
   onToggleFolder: (id: string) => void;
   onRemoveRoot?: (id: string) => void;
+  /** Click handler for the "Grant access" button on permission-required files. */
+  onGrantPermission?: (id: string) => void;
 }
 
 const collectFileIds = (node: LvNode, out: string[]): void => {
@@ -27,6 +29,7 @@ export const LvTreeNode = ({
   toggleSelect,
   onToggleFolder,
   onRemoveRoot,
+  onGrantPermission,
 }: LvTreeNodeProps) => {
   const isFolder = node.type === 'folder';
   const open = isFolder ? !!openFolders[node.id] : false;
@@ -108,6 +111,24 @@ export const LvTreeNode = ({
                 +{node.newCount}
               </span>
             ) : null}
+            {node.needsPermission && onGrantPermission && (
+              <button
+                type="button"
+                className="lv-grant-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onGrantPermission(node.id);
+                }}
+                title="Re-grant read access for this folder"
+              >
+                Grant access
+              </button>
+            )}
+            {node.errorMessage && (
+              <span className="lv-tree-error" title={node.errorMessage}>
+                ⚠
+              </span>
+            )}
             <span className="lv-tree-meta">{node.count}</span>
             <span
               className={`lv-tree-check${selected ? ' is-on' : ''}`}
@@ -147,6 +168,7 @@ export const LvTreeNode = ({
             toggleSelect={toggleSelect}
             onToggleFolder={onToggleFolder}
             onRemoveRoot={onRemoveRoot}
+            onGrantPermission={onGrantPermission}
           />
         ))}
     </>

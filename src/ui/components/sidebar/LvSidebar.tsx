@@ -16,6 +16,7 @@ export interface LvSidebarProps {
   onAddRoot: (sourceType: LvSourceKind) => void;
   onRemoveRoot: (rootId: string) => void;
   onDropFolders?: (names: string[]) => void;
+  onGrantPermission?: (id: string) => void;
 }
 
 export const LvSidebar = ({
@@ -26,6 +27,7 @@ export const LvSidebar = ({
   onAddRoot,
   onRemoveRoot,
   onDropFolders,
+  onGrantPermission,
 }: LvSidebarProps) => {
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => {
     const o: Record<string, boolean> = {};
@@ -217,6 +219,7 @@ export const LvSidebar = ({
               toggleSelect={toggleSelect}
               onToggleFolder={toggleFolder}
               onRemoveRoot={onRemoveRoot}
+              onGrantPermission={onGrantPermission}
             />
           ))
         )}

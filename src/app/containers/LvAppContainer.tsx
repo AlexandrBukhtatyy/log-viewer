@@ -7,6 +7,7 @@ import {
   type LogFilter,
   type SourceId,
 } from '../../core/types/index.ts';
+import { entryFingerprint } from '../../core/util/fingerprint.ts';
 import { useGroupCounts } from '../../hooks/use-group-counts.ts';
 import { useHistogram } from '../../hooks/use-histogram.ts';
 import { useLogFilter } from '../../hooks/use-log-filter.ts';
@@ -205,12 +206,16 @@ export const LvAppContainer = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only on selection diff
   }, [selectedIds]);
 
-  // Resolve LogEntry for each bookmarked id from the cached window.
+  // Resolve LogEntry for each bookmarked fingerprint from the cached window.
+  // Bookmarks store stable `<sourceId>:<fnv1a(raw)>` keys (see entryFingerprint),
+  // so they survive a re-ingest where entry.id (UUID) is regenerated.
   const bookmarkEntries = useMemo<Record<string, LogEntry>>(() => {
     const out: Record<string, LogEntry> = {};
     for (let i = 0; i < filteredCount; i++) {
       const e = getRow(i);
-      if (e && bookmarksHook.ids.has(e.id)) out[e.id] = e;
+      if (!e) continue;
+      const key = entryFingerprint(e);
+      if (bookmarksHook.ids.has(key as never)) out[key] = e;
     }
     return out;
   }, [filteredCount, getRow, bookmarksHook.ids]);
@@ -349,6 +354,15 @@ export const LvAppContainer = () => {
     [sourceCtrl],
   );
 
+  const onGrantPermission = useCallback(
+    (id: string) => {
+      void sourceCtrl.grantPermission(id as SourceId).catch((err: unknown) => {
+        console.warn('grantPermission failed', err);
+      });
+    },
+    [sourceCtrl],
+  );
+
   const onRemoveRoot = useCallback(
     (rootId: string) => {
       // Catalog roots have id `lv-root-<lvKind>` — remove every contained file.
@@ -391,6 +405,7 @@ export const LvAppContainer = () => {
       onAddRoot={onAddRoot}
       onRemoveRoot={onRemoveRoot}
       onOpenLocalFile={onOpenLocalFile}
+      onGrantPermission={onGrantPermission}
       tweaks={{
         theme: tweaks.theme,
         density: tweaks.density,
@@ -402,6 +417,7 @@ export const LvAppContainer = () => {
       setTweak={setTweak}
       bookmarks={bookmarksHook.ids as ReadonlySet<string>}
       toggleBookmark={toggleBookmark}
+      bookmarkKeyOf={entryFingerprint}
       bookmarkEntries={bookmarkEntries}
       savedSearches={savedSearches}
       onSaveSearch={onSaveSearch}

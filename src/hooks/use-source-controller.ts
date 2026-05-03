@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useViewStore } from '../app/providers/view-store-context.ts';
+import type { ResumeReport } from '../core/rpc/coordinator.contract.ts';
 import type {
   CloudProvider,
   DbDialect,
@@ -53,6 +54,18 @@ export interface UseSourceController {
   addSnapshot: (file: File) => Promise<SourceId>;
   removeSource: (id: SourceId) => Promise<void>;
   clearAll: () => Promise<void>;
+  /**
+   * Re-attach previously persisted directory sources after page reload.
+   * Granted handles start ingest immediately; the rest surface as
+   * `SourceStatus.kind === 'permission-required'` and need `grantPermission`.
+   */
+  resumePersistedSources: () => Promise<ResumeReport>;
+  /**
+   * Request read permission for a persisted directory and (on success) start
+   * ingest. Must be called from a fresh user gesture (the UI's "Grant access"
+   * click) — browsers reject `requestPermission` otherwise.
+   */
+  grantPermission: (id: SourceId) => Promise<boolean>;
 }
 
 export const useSourceController = (): UseSourceController => {
@@ -120,6 +133,16 @@ export const useSourceController = (): UseSourceController => {
     [store],
   );
 
+  const resumePersistedSources = useCallback(
+    () => store.getState().resumePersistedSources(),
+    [store],
+  );
+
+  const grantPermission = useCallback(
+    (id: SourceId) => store.getState().grantPermission(id),
+    [store],
+  );
+
   return {
     addFile,
     addDirectory,
@@ -134,5 +157,7 @@ export const useSourceController = (): UseSourceController => {
     addSnapshot,
     removeSource,
     clearAll,
+    resumePersistedSources,
+    grantPermission,
   };
 };

@@ -4,6 +4,7 @@ import type {
   CoordinatorApi,
   GroupBucket,
   HistogramResponse,
+  ResumeReport,
 } from '../core/rpc/coordinator.contract.ts';
 import type {
   CloudProvider,
@@ -83,6 +84,8 @@ export interface ViewActions {
   addSnapshot: (file: File) => Promise<SourceId>;
   removeSource: (id: SourceId) => Promise<void>;
   clearAll: () => Promise<void>;
+  resumePersistedSources: () => Promise<ResumeReport>;
+  grantPermission: (id: SourceId) => Promise<boolean>;
   getEntry: (id: EntryId) => Promise<LogEntry | null>;
   getGroupCounts: (
     filter: LogFilter,
@@ -276,6 +279,8 @@ export const createLogClient = (): ViewStore => {
         await api.clearAll();
         set({ selectedId: null, entries: new Map() });
       },
+      resumePersistedSources: async () => api.resumePersistedSources(),
+      grantPermission: async (id) => api.grantPermission(id),
       getEntry: async (id) => api.getEntry(id),
       getGroupCounts: async (filter, field, limit) =>
         api.getGroupCounts(filter, field, limit),
@@ -316,6 +321,13 @@ export const createLogClient = (): ViewStore => {
 
   // Initial fetch — pulls counts (zero) and primes filter on coordinator side.
   void store.getState().refresh();
+
+  // Auto-resume persisted directory handles. Granted ones go straight back
+  // to ingest; the rest surface as `permission-required` chips that the UI
+  // turns into "Grant access" buttons.
+  void api.resumePersistedSources().catch((err: unknown) => {
+    console.warn('[log-client] resumePersistedSources failed', err);
+  });
 
   return store;
 };

@@ -85,6 +85,7 @@ export interface LvAppProps {
   onAddRoot: (sourceType: LvSourceKind) => void;
   onRemoveRoot: (id: string) => void;
   onOpenLocalFile?: () => Promise<void>;
+  onGrantPermission?: (id: string) => void;
 
   // Tweaks / UI prefs (persisted in container via useUiPrefs).
   readonly tweaks: LvTweaks;
@@ -94,6 +95,7 @@ export interface LvAppProps {
   // resolved LogEntry for each bookmarked id where currently available.
   readonly bookmarks: ReadonlySet<string>;
   toggleBookmark: (id: string) => void;
+  bookmarkKeyOf: (entry: LogEntry) => string;
   readonly bookmarkEntries: Readonly<Record<string, LogEntry>>;
 
   // Saved searches.
@@ -146,10 +148,12 @@ export const LvApp = ({
   onAddRoot,
   onRemoveRoot,
   onOpenLocalFile,
+  onGrantPermission,
   tweaks,
   setTweak,
   bookmarks,
   toggleBookmark,
+  bookmarkKeyOf,
   bookmarkEntries,
   savedSearches,
   onSaveSearch,
@@ -265,6 +269,7 @@ export const LvApp = ({
         setSelectedIds={(updater) => setSelectedIds((prev) => updater(prev))}
         onAddRoot={onAddRoot}
         onRemoveRoot={onRemoveRoot}
+        onGrantPermission={onGrantPermission}
       />
     ) : rail === 'search' ? (
       <LvSearchPanel
@@ -385,6 +390,7 @@ export const LvApp = ({
           }
           bookmarks={bookmarks}
           onBookmark={toggleBookmark}
+          bookmarkKeyOf={bookmarkKeyOf}
           tweaks={tweaks}
           timelineOn={tweaks.timelineOn}
           onToggleTimeline={() => setTweak('timelineOn', !tweaks.timelineOn)}
