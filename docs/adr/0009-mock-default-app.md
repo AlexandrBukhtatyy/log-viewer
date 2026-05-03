@@ -1,6 +1,6 @@
 # 0009. Mock-default app: переходное состояние UI без worker-привязки
 
-- Status: proposed
+- Status: superseded by [ADR-0010](0010-lv-on-viewstore-core-types.md)
 - Date: 2026-05-03
 
 ## Context and Problem Statement

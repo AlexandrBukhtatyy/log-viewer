@@ -1,7 +1,7 @@
-import type { LvLogLevel } from '../../contracts/lv-types.ts';
+import type { LogLevel } from '../../../core/types/index.ts';
 
 export interface LvLevelPillProps {
-  readonly level: LvLogLevel;
+  readonly level: LogLevel;
   readonly active: boolean;
   readonly count: number;
   onToggle: () => void;

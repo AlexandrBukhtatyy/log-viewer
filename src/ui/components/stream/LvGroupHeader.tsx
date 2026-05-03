@@ -1,6 +1,7 @@
-import type { LvGroup, LvLogLevel } from '../../contracts/lv-types.ts';
+import type { LogLevel } from '../../../core/types/index.ts';
+import type { LvGroup } from '../../contracts/lv-types.ts';
 
-const LEVELS: LvLogLevel[] = ['error', 'warn', 'info', 'debug', 'trace'];
+const LEVELS: LogLevel[] = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'unknown'];
 
 export interface LvGroupHeaderProps {
   readonly group: LvGroup;
@@ -20,10 +21,14 @@ export const LvGroupHeader = ({
   const { key, entries, minTs, maxTs, levels, depth, field } = group;
   const dur = Math.max(0, maxTs - minTs);
   const durStr = dur < 1000 ? `${dur}ms` : `${(dur / 1000).toFixed(2)}s`;
-  const allServices = new Set(entries.map((e) => e.service));
+  const serviceOf = (e: { fields: Readonly<Record<string, unknown>> }): string => {
+    const v = (e.fields as Record<string, unknown>).service;
+    return typeof v === 'string' ? v : '—';
+  };
+  const allServices = new Set(entries.map(serviceOf));
   const services = Array.from(allServices).slice(0, 3);
-  const files = new Set(entries.map((e) => e.fileId)).size;
-  const topMsg = (entries.find((e) => e.level === 'error') ?? entries[0])?.msg ?? '';
+  const files = new Set(entries.map((e) => e.sourceId)).size;
+  const topMsg = (entries.find((e) => e.level === 'error') ?? entries[0])?.message ?? '';
 
   return (
     <div

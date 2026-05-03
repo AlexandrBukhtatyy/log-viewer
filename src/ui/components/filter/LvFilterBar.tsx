@@ -1,20 +1,33 @@
 import { useState } from 'react';
 import type {
-  LvFilters,
-  LvGroupBy,
-  LvLogLevel,
-  LvSavedSearch,
-} from '../../contracts/lv-types.ts';
+  LogFilter,
+  LogLevel,
+  QueryMode,
+} from '../../../core/types/index.ts';
+import type { LvGroupBy, LvSavedSearch } from '../../contracts/lv-types.ts';
 import { LvLevelPill } from './LvLevelPill.tsx';
 import { LvGroupBySelect } from './LvGroupBySelect.tsx';
 import { LvAddFieldFilter } from './LvAddFieldFilter.tsx';
 
-const LEVELS: LvLogLevel[] = ['error', 'warn', 'info', 'debug', 'trace'];
+const ALL_LEVELS: ReadonlyArray<LogLevel> = [
+  'fatal',
+  'error',
+  'warn',
+  'info',
+  'debug',
+  'trace',
+  'unknown',
+];
+
+const isAllLevels = (levels: ReadonlyArray<LogLevel> | null): boolean =>
+  levels === null ||
+  (levels.length === ALL_LEVELS.length &&
+    ALL_LEVELS.every((l) => levels.includes(l)));
 
 export interface LvFilterBarProps {
-  readonly filters: LvFilters;
-  setFilters: (next: (prev: LvFilters) => LvFilters) => void;
-  readonly levelCounts: Partial<Record<LvLogLevel, number>>;
+  readonly filters: LogFilter;
+  setFilters: (next: (prev: LogFilter) => LogFilter) => void;
+  readonly levelCounts: Partial<Record<LogLevel, number>>;
   readonly savedSearches: ReadonlyArray<LvSavedSearch>;
   readonly liveTail: boolean;
   onToggleLiveTail: () => void;
@@ -44,29 +57,49 @@ export const LvFilterBar = ({
 }: LvFilterBarProps) => {
   const [savedOpen, setSavedOpen] = useState(false);
 
-  const toggleLevel = (lvl: LvLogLevel) => {
+  // null in core LogFilter means "all on"; UI displays each pill as active.
+  const activeLevels: Set<LogLevel> = filters.levels === null
+    ? new Set(ALL_LEVELS)
+    : new Set(filters.levels);
+
+  const toggleLevel = (lvl: LogLevel) => {
     setFilters((f) => {
-      const next = new Set(f.levels);
-      if (next.has(lvl)) next.delete(lvl);
-      else next.add(lvl);
-      return { ...f, levels: next };
+      const cur = f.levels === null ? new Set(ALL_LEVELS) : new Set(f.levels);
+      if (cur.has(lvl)) cur.delete(lvl);
+      else cur.add(lvl);
+      const arr = ALL_LEVELS.filter((l) => cur.has(l));
+      return {
+        ...f,
+        levels: arr.length === ALL_LEVELS.length ? null : arr,
+      };
     });
   };
+
   const setQuery = (q: string) => setFilters((f) => ({ ...f, query: q }));
-  const toggleRegex = () => setFilters((f) => ({ ...f, useRegex: !f.useRegex }));
   const toggleCase = () => setFilters((f) => ({ ...f, caseSensitive: !f.caseSensitive }));
   const toggleWord = () => setFilters((f) => ({ ...f, wholeWord: !f.wholeWord }));
+  const toggleMode = (mode: QueryMode) =>
+    setFilters((f) => ({
+      ...f,
+      queryMode: f.queryMode === mode ? 'substring' : mode,
+    }));
 
   const applyPreset = (p: LvSavedSearch) => {
-    setFilters((f) => ({ ...f, query: p.query, levels: new Set(p.levels) }));
+    setFilters((f) => ({
+      ...f,
+      query: p.query,
+      levels: isAllLevels(p.levels) ? null : p.levels,
+    }));
     setSavedOpen(false);
   };
 
   const removeField = (i: number) =>
     setFilters((f) => ({
       ...f,
-      fieldFilters: f.fieldFilters.filter((_, idx) => idx !== i),
+      fieldFilters: (f.fieldFilters ?? []).filter((_, idx) => idx !== i),
     }));
+
+  const fieldFilters = filters.fieldFilters ?? [];
 
   return (
     <div className="lv-fbar">
@@ -88,9 +121,11 @@ export const LvFilterBar = ({
             value={filters.query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={
-              filters.useRegex
+              filters.queryMode === 'regex'
                 ? 'Regex… e.g. \\btimeout\\b'
-                : 'Search logs across selected files…'
+                : filters.queryMode === 'fts'
+                  ? 'FTS5 query… e.g. "out of memory" OR error'
+                  : 'Search logs across selected files…'
             }
             spellCheck={false}
           />
@@ -127,10 +162,19 @@ export const LvFilterBar = ({
             </button>
             <button
               type="button"
-              className={`lv-search-tog${filters.useRegex ? ' is-on' : ''}`}
-              onClick={toggleRegex}
-              title="Use Regular Expression (Alt+R)"
-              aria-label="Regex"
+              className={`lv-search-tog${filters.queryMode === 'fts' ? ' is-on' : ''}`}
+              onClick={() => toggleMode('fts')}
+              title="Full-text search (FTS5 grammar — phrases, AND, OR, NOT)"
+              aria-label="FTS5 query mode"
+            >
+              <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'sans-serif' }}>FTS</span>
+            </button>
+            <button
+              type="button"
+              className={`lv-search-tog${filters.queryMode === 'regex' ? ' is-on' : ''}`}
+              onClick={() => toggleMode('regex')}
+              title="Regular Expression (Alt+R)"
+              aria-label="Regex query mode"
             >
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <path
@@ -248,11 +292,11 @@ export const LvFilterBar = ({
 
       <div className="lv-fbar-row lv-fbar-row-2">
         <div className="lv-levels">
-          {LEVELS.map((lvl) => (
+          {ALL_LEVELS.map((lvl) => (
             <LvLevelPill
               key={lvl}
               level={lvl}
-              active={filters.levels.has(lvl)}
+              active={activeLevels.has(lvl)}
               count={levelCounts[lvl] ?? 0}
               onToggle={() => toggleLevel(lvl)}
             />
@@ -262,7 +306,7 @@ export const LvFilterBar = ({
         <div className="lv-fbar-sep" />
 
         <div className="lv-chips">
-          {filters.fieldFilters.map((ff, i) => (
+          {fieldFilters.map((ff, i) => (
             <span
               key={`${ff.key}-${i}`}
               className={`lv-chip${ff.key.startsWith('$') ? ' is-sys' : ''}`}
@@ -282,7 +326,10 @@ export const LvFilterBar = ({
           ))}
           <LvAddFieldFilter
             onAdd={(ff) =>
-              setFilters((f) => ({ ...f, fieldFilters: [...f.fieldFilters, ff] }))
+              setFilters((f) => ({
+                ...f,
+                fieldFilters: [...(f.fieldFilters ?? []), ff],
+              }))
             }
           />
         </div>

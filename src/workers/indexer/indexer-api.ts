@@ -71,6 +71,40 @@ const serializeSourceMeta = (source: LogSource): string => {
       return JSON.stringify({ url: source.url, headers: source.headers ?? null });
     case 'stream':
       return JSON.stringify({ transport: source.transport, url: source.url });
+    case 'remote-ssh':
+      return JSON.stringify({
+        host: source.host,
+        user: source.user ?? null,
+        paths: source.paths ?? null,
+      });
+    case 'cloud':
+      return JSON.stringify({
+        provider: source.provider,
+        query: source.query ?? null,
+        region: source.region ?? null,
+      });
+    case 'k8s':
+      return JSON.stringify({
+        cluster: source.cluster,
+        namespace: source.namespace ?? null,
+        pod: source.pod ?? null,
+        container: source.container ?? null,
+      });
+    case 'bus':
+      return JSON.stringify({
+        broker: source.broker,
+        topic: source.topic,
+        group: source.group ?? null,
+      });
+    case 'db':
+      return JSON.stringify({
+        dialect: source.dialect,
+        url: source.url,
+        query: source.query,
+      });
+    case 'snapshot':
+      // archive (File) is not serializable; only persist name.
+      return JSON.stringify({});
   }
 };
 

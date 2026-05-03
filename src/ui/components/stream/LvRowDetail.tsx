@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import type { LvFieldFilter, LvLogEntry, LvTweakTheme } from '../../contracts/lv-types.ts';
+import type { FieldFilter, LogEntry } from '../../../core/types/index.ts';
+import type { LvLogKind, LvTweakTheme } from '../../contracts/lv-types.ts';
 
 type DetailView = 'fields' | 'pretty' | 'stack' | 'raw';
 
 export interface LvRowDetailProps {
-  readonly entry: LvLogEntry;
+  readonly entry: LogEntry;
+  readonly kind?: LvLogKind;
   readonly theme?: LvTweakTheme;
-  onAddFieldFilter: (filter: LvFieldFilter) => void;
+  onAddFieldFilter: (filter: FieldFilter) => void;
   renderEditor?: (props: {
     readonly value: string;
     readonly language: string;
@@ -17,15 +19,23 @@ export interface LvRowDetailProps {
   }) => ReactNode;
 }
 
-export const LvRowDetail = ({ entry, theme, onAddFieldFilter, renderEditor }: LvRowDetailProps) => {
+export const LvRowDetail = ({
+  entry,
+  kind,
+  theme,
+  onAddFieldFilter,
+  renderEditor,
+}: LvRowDetailProps) => {
   const fields = entry.fields;
   const hasFields = Object.keys(fields).length > 0;
+  const stack = (fields as Record<string, unknown>).stack;
+  const stackLines = Array.isArray(stack) ? (stack as string[]) : [];
   const [view, setView] = useState<DetailView>(
     hasFields
       ? 'fields'
-      : entry.kind === 'stacktrace'
+      : kind === 'stacktrace'
         ? 'stack'
-        : entry.kind === 'json'
+        : kind === 'json'
           ? 'pretty'
           : 'raw',
   );
@@ -34,7 +44,7 @@ export const LvRowDetail = ({ entry, theme, onAddFieldFilter, renderEditor }: Lv
     view === 'pretty'
       ? JSON.stringify(entry.fields, null, 2)
       : view === 'stack'
-        ? (entry.stack ?? []).join('\n')
+        ? stackLines.join('\n')
         : view === 'fields'
           ? Object.entries(fields)
               .map(([k, v]) => `${k}\t${String(v)}`)
@@ -56,7 +66,7 @@ export const LvRowDetail = ({ entry, theme, onAddFieldFilter, renderEditor }: Lv
               Fields
             </button>
           )}
-          {entry.kind === 'json' && (
+          {kind === 'json' && (
             <button
               type="button"
               className={`lv-det-viewopt${view === 'pretty' ? ' is-on' : ''}`}
@@ -65,7 +75,7 @@ export const LvRowDetail = ({ entry, theme, onAddFieldFilter, renderEditor }: Lv
               Pretty
             </button>
           )}
-          {entry.kind === 'stacktrace' && (
+          {kind === 'stacktrace' && (
             <button
               type="button"
               className={`lv-det-viewopt${view === 'stack' ? ' is-on' : ''}`}

@@ -1,171 +1,350 @@
-# Декомпозиция Claude Design dump в src/ui/
+# UI ↔ headless: gap-инвентаризация и план перепривязки `LvApp`
 
 ## Context
 
-В каталог [src/ui/](src/ui/) скопированы исходники из Claude Design — это монолитный дамп интерфейса log viewer'а:
+После [ADR-0009](../adr/0009-mock-default-app.md) дефолтный entry — `<LvApp/>` на mock-фикстуре в [src/dev/log-data-mock.ts](../../src/dev/log-data-mock.ts). Headless-слой (core / hooks / worker-client / workers) живой, под ним лежат рабочие core-парсеры, FTS5-индексер на wa-sqlite + OPFS, source-адаптеры, RPC через Comlink, Zustand-обёртка [src/worker-client/log-client.ts](../../src/worker-client/log-client.ts) и пять хуков-контрактов.
 
-- `Log Viewer.html` — standalone preview с `<script src="cdn.tailwindcss.com">` (классы Tailwind в коде **не используются**) и большим `<style>` блоком: design tokens (CSS-переменные `--lv-*`), темы `[data-theme="dark|light"]`, density-варианты, ~200 классов `.lv-*`.
-- `log-app.jsx`, `log-viewer.jsx`, `log-tree.jsx`, `log-monaco.jsx`, `tweaks-panel.jsx` — JSX (без TypeScript), ~30 React-компонентов в общей сложности, иконки inline-SVG, всё ставит классы `lv-*`.
-- `log-data.js` — IIFE, кладёт моки в `window.LogData` (каталог файлов, генераторы LogEntry).
+Но: новый UI декомпонован «по дизайну», а не «по контракту хуков», поэтому в нём есть фичи и формы данных, которые headless ЛИБО не умеет, ЛИБО умеет иначе. Цель — **актуализировать headless под UI** и сделать LvApp прод-вьювером.
 
-Цель — превратить этот монолит в набор независимых, регенерируемых компонентов в `src/ui/components/<region>/`, оставив рабочую основу `App.tsx → AppShell.tsx → 3 контейнера` нетронутой. Декомпозиция «единоразовая ручная» — дальше Claude Design эмитит апдейты в эту же структуру.
+Подход — **никаких адаптеров между формами**. Где UI и core расходятся — расширяем core (это одно изменение в одной точке), и UI начинает потреблять core-типы напрямую через `import type` (разрешено `allowTypeImports` из [eslint.config.js:69-78](../../eslint.config.js#L69-L78)). Дублирующие UI-типы из [src/ui/contracts/lv-types.ts](../../src/ui/contracts/lv-types.ts) удаляются. Это и проще для рантайма (один формат, без конверсий), и чище в коде (один источник истины для shape'ов).
 
-**Нерешённое до плана зафиксировано выбором пользователя:**
-- стилевая система — сохраняем `.lv-*` (CSS-файл с переменными и темами);
-- scope — все 5 файлов разом (~30 компонентов), Monaco и mock — параллельно;
-- wiring — `app/containers/` и `AppShell.tsx` в этой итерации **не трогаем**;
-- Tailwind подключаем как dev-зависимость (не CDN), но как дополнительную возможность — основная стилизация по-прежнему через `.lv-*` классы.
+## 1. Каталог несовпадений
 
-## Принципы
+### 1.1 Формы данных
 
-1. **ADR-0002 (headless).** [src/ui/components/](src/ui/components/) — props-only, без хуков, без runtime-импортов из core. ESLint в [eslint.config.js](eslint.config.js#L60-L79) уже это enforce'ит. Локальный UI-state (`useState/useRef` для open/close, refs на DOM) — разрешён.
-2. **Минимум диффа на регенерацию.** Стили лежат в одном CSS-файле как в исходном HTML; компоненты ставят `className="lv-..."`. Если Claude Design завтра эмитит свежий вариант с теми же классами — диффом будут только сами TSX, не стили.
-3. **Никакого подключения к данным сейчас.** Скопированный mock `log-data.js` нельзя импортировать в компонент (они должны принимать данные через props). Mock переезжает в [src/dev/](src/dev/) для локального превью, в основном app не подключается.
-4. **Старые [src/ui/components/{FilterBar,LogList,SourcePicker}.tsx](src/ui/components/) остаются.** AppShell продолжает рендерить их, путь к работающему билду не ломаем. Новые компоненты живут в подкаталогах с префиксом `Lv*` в именах файлов и классов — конфликтов имён нет.
+#### `LvFilters` (UI) ↔ `LogFilter` (core)
 
-## 1. Стили: вынос `<style>` из HTML
+| Поле | UI ([src/ui/contracts/lv-types.ts](../../src/ui/contracts/lv-types.ts)) | Core ([src/core/types/log-filter.ts:18](../../src/core/types/log-filter.ts#L18)) | Разрыв |
+| --- | --- | --- | --- |
+| `levels` | `Set<LvLogLevel>`, 5 значений | `ReadonlyArray<LogLevel> \| null`, 7 значений (+ `fatal/unknown`) | UI расширяется на 7 уровней; форма — массив (не Set). |
+| `services` | `Set<string>` | — | Добавить в core как `services: ReadonlyArray<string> \| null` (симметрично `sources`). |
+| `query` | `string` | `string` | OK. |
+| режим запроса | три `boolean`: `useRegex`, `caseSensitive`, `wholeWord` | enum `queryMode: 'substring'\|'fts'\|'regex'` + `caseSensitive` | Добавить в core `wholeWord: boolean`. UI получает явный select для `queryMode`; кнопка «Match Whole Word» пишет `wholeWord`. |
+| `timeRange` | `[number, number] \| null` | `{ from: number\|null; to: number\|null } \| null` | UI переходит на core-форму. |
+| `fieldFilters` | `{ key, op: '='\|'!='\|'>'\|'<'\|'~', value }[]` | `{ key, op: 'eq'\|'ne'\|'contains', value }[]?` | Расширить `FieldFilterOp` до символьного набора `'='\|'!='\|'~'\|'>'\|'<'`. UI-натуральные обозначения становятся wire-форматом. |
 
-Создать [src/ui/styles/lv.css](src/ui/styles/lv.css):
-- Скопировать содержимое `<style>` блока из [src/ui/Log Viewer.html](src/ui/Log%20Viewer.html) **as-is**, без модификаций.
-- Файл импортится единожды из [src/main.tsx](src/main.tsx) после существующего `import './index.css'`.
-- В `index.css` ничего не меняем — он остаётся базовым reset'ом.
+**Решение — выровнять core под UI, без адаптеров.** Расширить `LogFilter` тремя точечными добавлениями:
+- `wholeWord: boolean`
+- `services: ReadonlyArray<string> \| null`
+- `FieldFilterOp = '=' | '!=' | '~' | '>' | '<'`
 
-CSS-переменные (`--lv-bg`, `--lv-fg`, `--lv-level-error`, `--lv-accent`, `--lv-font-ui`, `--lv-font-mono`, …) и темы (`[data-theme="dark|light"]`, `[data-density="compact|comfortable"]`) сохраняются. Атрибут `data-theme` будут проставлять контейнер/контекст в следующей итерации wiring'а — сейчас просто оставляем default-значения из CSS.
+После этого `LvFilters` удаляется как тип, UI потребляет `LogFilter` напрямую. Toggle уровней через `levels.includes(L) ? levels.filter(...) : [...levels, L]` — нативный массив, без Set.
 
-Из исходного `Log Viewer.html` **удаляем** ссылку на `<script src="https://cdn.tailwindcss.com">` (файл всё равно идёт под удаление в §5, отдельной правки не нужно).
+#### `LogEntry` (core) ↔ `LvLogEntry` (UI)
 
-### 1a. Tailwind v4 как dev-зависимость
+| Поле UI | Поле core | Решение |
+| --- | --- | --- |
+| `id` | `id: EntryId` | OK (branded string). |
+| `fileId` | `sourceId: SourceId` | UI переименовывает доступ на `sourceId`. |
+| `file`, `path`, `kind` | — | Не дублируем в entry. UI берёт из `filesById[entry.sourceId].name/path/kind` — родительский prop. |
+| `line` | `seq: number` | Один и тот же концепт; UI рендерит как «line». |
+| `ts` (ISO string) | `timestamp: number \| null` | UI работает с числом; форматтер `lvFmtTime(timestamp, showDate?)` принимает `number \| null`. |
+| `level` | `level: LogLevel` | Идентично после расширения UI до 7 уровней. |
+| `service` | `fields.service` | UI уже по сути читает `entry.fields[...]` — продолжает. Если `service` нет в fields — fallback на `filesById[sourceId].service`. |
+| `msg` | `message` | Переименовать вызовы в UI. |
+| `fields`, `raw` | `fields`, `raw` | OK. |
+| `stack?` | — | Парсер stacktrace кладёт `stack: string[]` в `entry.fields.stack` — UI читает оттуда при `kind === 'stacktrace'`. |
 
-Подключаем Tailwind v4 через [`@tailwindcss/vite`](https://tailwindcss.com/docs/installation/using-vite) — это рекомендуемый путь под Vite. Mom утилитарные классы Tailwind в скопированной верстке **не используются** (всё через `.lv-*`), но мы:
+**Решение — `LogEntry` НЕ трогаем.** UI потребляет его напрямую. Потребуется правка вызовов в Lv*-компонентах (`entry.msg → entry.message`, `entry.ts → entry.timestamp`, `entry.line → entry.seq`); поля `file/path/kind` берутся через lookup `filesById`. `LvLogEntry` удаляется.
 
-- убираем рантайм-обращение к CDN (важно для prod-bundle и offline-режима PWA);
-- даём будущим итерациям Claude Design возможность эмитить utility-классы вперемешку с `.lv-*`;
-- не делаем рефакторинг существующих `.lv-*` или inline-стилей — миграция вне scope (см. §7).
+#### Каталог источников
 
-Шаги:
-1. `pnpm add -D tailwindcss @tailwindcss/vite` — обновит [package.json](package.json) и [pnpm-lock.yaml](pnpm-lock.yaml).
-2. В [vite.config.ts](vite.config.ts) добавить `import tailwindcss from '@tailwindcss/vite'` и `tailwindcss()` в массив `plugins` (рядом с `react()`, `VitePWA(...)`).
-3. Первой строкой [src/ui/styles/lv.css](src/ui/styles/lv.css) — `@import "tailwindcss";`. В Tailwind v4 content-detection автоматическое: сканируются `.ts/.tsx/.html` без явного `content`-конфига.
-4. Зафиксировать решение ADR'ом — создать [docs/adr/0008-tailwind-v4-via-package.md](docs/adr/0008-tailwind-v4-via-package.md) (status: proposed) с обоснованием: «через зависимость, не CDN; v4 + vite-plugin; сосуществует с `.lv-*`-системой; mass-migration на utility-классы — out of scope». Обновить index в [docs/adr/README.md](docs/adr/README.md).
+UI рендерит дерево `LvCatalogRoot[]` с детьми-папками-файлами. Headless даёт **плоский** `SourceRecord[]` через `useSourceStatus()`. Гэп — реконструкция дерева из плоского списка.
 
-**Подводный камень peer-deps.** Vite 8 уже создаёт peer-warning'и для `vite-plugin-pwa@1.2.0` ([CLAUDE.md → Подводные камни](CLAUDE.md)). У `@tailwindcss/vite` peer-range на момент 2026-05 — `vite ^5 || ^6 || ^7`, на Vite 8 будет аналогичный warning. Если `pnpm install` упадёт по `strict-peer-dependencies`, fallback — PostCSS-вариант: `pnpm add -D tailwindcss @tailwindcss/postcss`, создать `postcss.config.mjs` с плагином, без правки `vite.config.ts`. Решаем по факту в момент установки.
+**Решение — утилита `buildCatalogTree(sources: SourceRecord[]): LvCatalogRoot[]`** в [src/ui/utils/build-catalog.ts](../../src/ui/utils/build-catalog.ts). Группирует по `source.kind`, маппит `SourceStatus` → `LvFolderNode`/`LvFileNode` бейдж, `live`, `newCount`. Это **строитель UI-дерева**, не адаптер: формы entry/filter он не трогает.
 
-## 2. Структура каталогов и компонентный split
+Долгосрочно для `directory`-источников можно отдавать реальную иерархию из `dirHandle` — отдельная итерация (Phase 4 ниже).
 
-`src/ui/components/<region>/<Component>.tsx` — каждый файл экспортирует один named-компонент. Имена сохраняем с префиксом `Lv` чтобы не конфликтовали с уже существующими `FilterBar/LogList/SourcePicker` и читались узнаваемо.
+#### Бренды
 
+UI работает с обычными `string` для id. Core — с branded `EntryId`/`SourceId`. После удаления LvLogEntry все компоненты получают branded типы напрямую — runtime тот же `string`, разница только на уровне TS, проблем не будет.
+
+### 1.2 Что core/workers не умеют сегодня
+
+Подтверждено чтением [src/core/filter/query.ts:64](../../src/core/filter/query.ts#L64) и [src/core/rpc/coordinator.contract.ts:32-72](../../src/core/rpc/coordinator.contract.ts):
+
+| Возможность | Состояние | Phase |
+| --- | --- | --- |
+| `queryMode='regex'` | silently dropped в `buildClause` | Phase 2 (REGEXP UDF в wa-sqlite) |
+| `fieldFilters` в SQL | не реализованы (комментарий «после MVP, через JSON_EXTRACT») | **Phase 1** |
+| `wholeWord` | в core нет | **Phase 1** (через `\b`-обёртку для substring) |
+| `services` | нет | **Phase 1** (новое поле + `IN`-clause через JSON_EXTRACT) |
+| Числовые операторы `>`, `<` | нет | **Phase 1** (новые `FieldFilterOp` + CAST) |
+| `coordinator.reIndex(id)` | `notImplemented` | Phase 5 |
+| `coordinator.resumePersistedSources()` | `notImplemented` | Phase 4 (нужно для directory persistence) |
+| `coordinator.grantPermission(id)` | `notImplemented` | Phase 4 |
+| `coordinator.exportFiltered(filter, format)` | `notImplemented` | Phase 5 |
+| `coordinator.cancel(taskId)` | `notImplemented` | Phase 5 |
+| Группировка на сервере | нет API | Phase 2 (`getGroupCounts`) |
+| Гистограмма по time-buckets | нет API | Phase 2 (`getHistogram`) |
+| Live-tail end-to-end | компоненты есть, не верифицирован полностью | Phase 3 (smoke-проверка) |
+
+### 1.3 Концептуальные конфликты
+
+#### Группировка vs виртуализация
+
+UI группирует через [`lvBuildGroups`](../../src/ui/utils/lv-filter.ts) поверх массива `filtered: LogEntry[]`. Core отдаёт **виртуализованное окно** (`useLogWindow.getRow(i)` → undefined для не-загруженных) — полного массива на клиенте нет.
+
+**Решение** (Phase 2): серверная группировка — новый метод `coordinator.getGroupCounts(filter, fields, parent?)`. UI рендерит заголовки групп из агрегатов; entries внутри группы — отдельным окном по уточнённому фильтру (`filter.fieldFilters += group.path`).
+
+#### Timeline vs виртуализация
+
+`LvTimeline` принимает `entries: LogEntry[]` и считает гистограмму по 80 buckets. Тот же конфликт. **Решение** (Phase 2): серверный `coordinator.getHistogram(filter, buckets)`.
+
+#### Selectability файла vs `filter.sources`
+
+`LvApp.selectedIds: Set<string>` и `LvApp.activeTabId: string` — UI-state в контейнере. Маппинг в `filter.sources` тривиальный:
+```ts
+filter.sources = activeTabId === '__all__' ? [...selectedIds] : [activeTabId]
 ```
-src/ui/components/
-  topbar/
-    LvTitlebar.tsx              ← log-app.jsx:1020
-    LvMenuBar.tsx                ← log-app.jsx:696
-    LvMenuButton.tsx             ← log-app.jsx:800
-    LvMenu.tsx                   ← log-app.jsx:815
-  rail/
-    LvIconRail.tsx               ← log-app.jsx:3
-  status/
-    LvStatusBar.tsx              ← log-app.jsx:330
-  sidebar/
-    LvSidebar.tsx                ← log-tree.jsx:315
-    LvTreeNode.tsx               ← log-tree.jsx:147
-    LvFileIcon.tsx               ← log-tree.jsx (иконки)
-    LvSourceIcon.tsx             ← log-tree.jsx (иконки)
-    LvChevron.tsx                ← log-tree.jsx (иконка)
-    LvRootBadge.tsx              ← log-tree.jsx (иконка)
-    LvAddSourceMenu.tsx          ← log-tree.jsx:238
-  filter/
-    LvFilterBar.tsx              ← log-viewer.jsx:200
-    LvLevelPill.tsx              ← log-viewer.jsx:75
-    LvGroupBySelect.tsx          ← log-viewer.jsx:89
-    LvAddFieldFilter.tsx         ← log-viewer.jsx:374
-  timeline/
-    LvTimeline.tsx               ← log-viewer.jsx:444
-  stream/
-    LvViewer.tsx                 ← log-viewer.jsx:1004 (контейнер списка)
-    LvTabs.tsx                   ← log-viewer.jsx:936
-    LvFilePeek.tsx               ← log-viewer.jsx:966
-    LvRow.tsx                    ← log-viewer.jsx:635
-    LvRowDetail.tsx              ← log-viewer.jsx:689
-    LvGroupHeader.tsx            ← log-viewer.jsx:782
-    LvOpenMenu.tsx               ← log-viewer.jsx:566
-    LvEditorIcon.tsx             ← log-viewer.jsx:619
-    LvEmpty.tsx                  ← log-viewer.jsx:1354
-  panels/
-    LvBookmarksPanel.tsx         ← log-app.jsx:46
-    LvAiPanel.tsx                ← log-app.jsx:85
-    LvAlertsPanel.tsx            ← log-app.jsx:258
-    LvSearchPanel.tsx            ← log-app.jsx:292
-  modals/
-    LvCommandPalette.tsx         ← log-app.jsx:371
-    LvShortcutsModal.tsx         ← log-app.jsx:935
-  settings/
-    LvSettingsPopover.tsx        ← log-app.jsx:855
-  tweaks/
-    LvTweaksPanel.tsx            ← tweaks-panel.jsx
-    LvTweakSection.tsx
-    LvTweakSlider.tsx
-    LvTweakRadio.tsx
-    LvTweakColor.tsx
-    LvTweakToggle.tsx
-  layout/
-    LvApp.tsx                    ← log-app.jsx:413, чисто композиционная shell-обёртка над всем выше
-```
+Контейнерная склейка, не headless-доделка.
 
-**Утилиты** (не компоненты), которые сейчас лежат в [log-viewer.jsx](src/ui/log-viewer.jsx):
-- `lvFmtTime`, `lvHighlight`, `lvApplyFilters`, `lvBuildGroups` → [src/ui/utils/lv.ts](src/ui/utils/lv.ts) (ESLint допускает `ui/utils/`, ограничения на импорты из core/types те же, что у компонентов).
+#### Find-in-table
 
-**TS-types для props** — встраиваем в каждый файл как `interface Lv<Component>Props` (так уже сделано в [LogList.tsx:23](src/ui/components/LogList.tsx#L23) и [FilterBar.tsx:18](src/ui/components/FilterBar.tsx#L18)). Отдельный `ui/contracts/` пока не заводим — добавится, когда понадобится переиспользовать тип в нескольких местах.
+`LvViewer` имеет find-in-table (cmd+F) с собственным regex по уже отрендеренным строкам. С виртуализацией — матчи только в видимом окне. Решение в Phase 5: либо ограничиться окном (как сейчас), либо превратить в серверный поиск с подсветкой.
 
-## 3. Правила переноса JSX → TSX
+### 1.4 UI-only фичи (headless не нужен)
 
-Для каждого компонента:
-1. Вынести функцию из исходного JSX в одноимённый TSX-файл по схеме выше.
-2. Поменять `React.useState` / `React.useEffect` / `React.useRef` / `React.useMemo` / `React.useCallback` на named-импорты `import { useState, … } from 'react'`.
-3. Заменить deconstruction props на типизированный интерфейс. Все props — `readonly` где это просто значение; колбэки оставляем как есть.
-4. Убрать любые обращения к `window.LogData` — данные приходят только через props. Если в исходнике компонент сам звал mock — props получает родитель, контейнер пусть его передаёт (в этой итерации — `LvApp` собирает mock из `src/dev/log-data-mock.ts`, но импорт mock делает только `LvApp` или dev-страница, не сами компоненты).
-5. `useTweaks` из [tweaks-panel.jsx](src/ui/tweaks-panel.jsx) **не переносить** в `src/hooks/` — это ui-only state, который не нужен ядру. Превратить в локальный `useState` внутри `LvApp` и пробрасывать `tweaks/setTweaks` пропсами в `LvTweaksPanel`. Полноценный хук `useTweaks` появится в отдельном плане, когда понадобится persistence через ViewStore.
-6. Inline-SVG иконки (Chevron, FileIcon, SourceIcon, иконки в FilterBar/Titlebar) — выделить отдельные компоненты только там, где SVG переиспользуется ≥2 раз; одноразовые остаются inline.
-7. Никаких `default export`. Только named exports — соответствует стилю текущих TSX и плагин-правилам ESLint.
+| Фича | Где | Что нужно |
+| --- | --- | --- |
+| Tweaks (theme/density/accent/wrap/showDate/timelineOn) | LvApp local state, ставит CSS-vars | Persistence через `localStorage` — `useUiPrefs` хук. |
+| Recent files | LvApp `recentFiles` | `localStorage`, top 10. |
+| Saved searches | LvApp `savedSearches` | `localStorage`. |
+| Bookmarks | LvApp `Set<EntryId>` | `localStorage`. **Caveat:** `EntryId` меняется при reload источника — bookmarks устаревают. В Phase 4 заменить на стабильный fingerprint. |
+| Closed tabs | LvApp `closedTabs: Set<id>` | UI-only, можно не персистить. |
+| AI panel | `onAiComplete` prop | Внешняя интеграция (Anthropic API), отдельный ADR. |
+| Alerts panel | stub | Будущее. |
+| Open-at-line external editors | `vscode://`, `cursor://`, … | URI scheme, никакой headless-работы. |
+| Find-in-table | LvViewer local state | Уже работает, см. §1.3. |
 
-## 4. Что переезжает за пределы ui/components/
+### 1.5 Источники: 10 типов в UI vs 5 адаптеров в core
 
-- [src/ui/utils/lv.ts](src/ui/utils/lv.ts) — `lvFmtTime`, `lvHighlight`, `lvApplyFilters`, `lvBuildGroups`. Чистый TS, без React-импортов.
-- [src/dev/log-data-mock.ts](src/dev/log-data-mock.ts) — содержимое [src/ui/log-data.js](src/ui/log-data.js), типизированный экспорт `{ CATALOG, FILES_BY_ID, LOG_BY_FILE, SAVED, addFile, addRootFolder, removeRoot }`. Использовать ТОЛЬКО как dev-источник для local preview-страницы (см. ниже). Не импортируется ни одним компонентом и ни AppShell.
-- [src/dev/lv-preview.tsx](src/dev/lv-preview.tsx) — дев-страница, рендерит `<LvApp />` с подключённым mock. Подключается через query-параметр в [src/main.tsx](src/main.tsx) (`?preview=lv` → рендерит `<LvPreview/>` вместо `<App/>`), либо через отдельный entry — выбрать на этапе реализации, default — query-параметр (минимальный диффе).
+[src/core/sources/index.ts:21-29](../../src/core/sources/index.ts#L21-L29) даёт пять адаптеров: `file`, `directory`, `text`, `url`, `stream`. UI ([src/ui/components/sidebar/LvAddSourceMenu.tsx](../../src/ui/components/sidebar/LvAddSourceMenu.tsx)) предлагает девять.
 
-## 5. Что удаляется
+| UI kind | Core эквивалент | Решение |
+| --- | --- | --- |
+| `local-static` | `directory` | Маппинг 1-в-1. |
+| `local-live` | `directory` + watcher | watcher не реализован. ADR-0006 follow-up. |
+| `remote-ssh` | — | Не в браузере без прокси. **Скрыть в UI.** |
+| `stream` | `stream` (WS/SSE) | OK. |
+| `cloud` | возможно `url` или `stream` | Внешние API, отдельные интеграции. **Скрыть в Phase 1.** |
+| `k8s`, `bus`, `db` | — | Без прокси-сервера невозможно. **Скрыть в Phase 1.** |
+| `snapshot` | новый адаптер: zip → file/text-цепочка | **Phase 3.** |
+| (нет UI) | `file`, `text`, `url` | UI добирает через titlebar-меню «Open File / Paste / Open URL». |
 
-Когда декомпозиция закончена — удалить:
-- [src/ui/Log Viewer.html](src/ui/Log%20Viewer.html) — содержимое мигрировало в `lv.css`.
-- [src/ui/log-app.jsx](src/ui/log-app.jsx), [src/ui/log-viewer.jsx](src/ui/log-viewer.jsx), [src/ui/log-tree.jsx](src/ui/log-tree.jsx), [src/ui/tweaks-panel.jsx](src/ui/tweaks-panel.jsx) — мигрировали в TSX.
-- [src/ui/log-monaco.jsx](src/ui/log-monaco.jsx) — **оставляем как есть** до отдельного ADR/плана интеграции Monaco. Его никто не импортирует, ESLint его не цепляет (в `eslint.config.js` `files: ['**/*.{ts,tsx}']`, jsx без ts-инфры не проверяется).
-- [src/ui/log-data.js](src/ui/log-data.js) — после миграции mock'а в `src/dev/`.
+### 1.6 Связь с ADR-0002 (зачем тогда `src/ui/adapters/`?)
 
-[src/ui/components/{FilterBar,LogList,SourcePicker}.tsx](src/ui/components/) **остаются**. AppShell продолжает их рендерить.
+[ADR-0002 §«Adapter-слой для несовпадающих props»](../adr/0002-headless-architecture.md) задумывал `src/ui/adapters/` как **тонкую обёртку для починки props после регенерации UI**, не как обязательный конверсионный слой между формами данных. Прямая цитата: *«Если шейпы совпадают — adapter = re-export. Если adapter растёт за ~30 строк — переделываем промпт под контракт, не лечим обёртку.»*
 
-## 6. Verification
+Ограничение «UI-компонент только props и type-imports из core» закреплено [ESLint'ом](../../eslint.config.js#L69-L78) с `allowTypeImports: true` — то есть импортировать `LogFilter`/`LogEntry` из `src/core/types/` прямо в `Lv*`-компонент архитектурой **разрешено**.
 
-После декомпозиции:
+Текущий подход (выровнять core под UI, потреблять напрямую) — это не отказ от ADR-0002, а его логическое завершение: после расширения core шейпы совпадают, и адаптер вырождается даже не до re-export'а — до пустоты.
 
-1. `pnpm install` — без ошибок (либо приемлемые peer-warning'и от `@tailwindcss/vite` × Vite 8, аналогичные текущим от `vite-plugin-pwa`).
-2. `pnpm build` — `tsc -b && vite build` должны пройти зелёными. В `dist/assets/` появляется CSS-bundle с обработанным `@import "tailwindcss"` + `.lv-*` правилами.
-3. `pnpm lint` — ESLint без ошибок. Особенно проверяем правила слоёв: новые `Lv*.tsx` не должны импортировать из `hooks/`, `app/`, `worker-client/`, `workers/`. Импорт типов из `core/` допустим (allowTypeImports).
-4. `pnpm dev` → `http://localhost:5173/` — основное приложение всё ещё работает (старый AppShell со старыми FilterBar/LogList/SourcePicker рендерится, prod-flow не сломан). В Network нет запросов к `cdn.tailwindcss.com`.
-5. `pnpm dev` → `http://localhost:5173/?preview=lv` — открывается дев-страница с `<LvApp/>` на mock-данных, выглядит идентично [src/ui/Log Viewer.html](src/ui/Log%20Viewer.html) (открыть рядом для сравнения **до** удаления HTML — взять скриншот заранее).
-6. Прогон по чек-листу регенерации: `git status --porcelain src/hooks/ src/core/ src/workers/ src/app/containers/ src/worker-client/` после коммита декомпозиции должен быть пустым (контракт ADR-0002, см. [docs/adr/0002-headless-architecture.md:80](docs/adr/0002-headless-architecture.md#L80)).
-7. Smoke в браузере: оба дев-режима без ошибок в console (`window.__edit_mode`, drag-handler tweaks, click-away listeners — самые вероятные источники warning'ов).
+**`src/ui/adapters/` остаётся опциональной папкой** на случай:
+- Claude Design регенерирует `LvRow` и переименует `onSelect → onClick` — кладём адаптер с переименованием prop'а.
+- Появится второй потребитель компонентов (storybook, e2e) с другим shape'ом — адаптер.
+- Понадобится cross-tab sync / deep-link с обратной конверсией LogFilter → URL → LogFilter — адаптер.
 
-## 7. Out of scope (следующие итерации)
+В ADR-0010 (см. Phase 1, шаг 11) явно зафиксируем: «По ADR-0002 §Adapter-слой адаптеры — escape hatch, не обязательный слой; при шейп-совпадении они не нужны».
 
-- Замена старого `AppShell.tsx` на новый `LvApp` — требует написания новых хуков (`useTabs`, `useGroupBy`, `useBookmarks`, `useTreeSelection`, `useTimelineRange`, `useTweaks`) и адаптеров под существующие `useLogFilter/useLogWindow/useSelectedEntry`. Отдельный ADR + план.
-- Полная Monaco-интеграция (lazy-loaded editor, themes, FTS-подсветка) — отдельный ADR.
-- Согласование уровней логов: в дизайне 5 (`error/warn/info/debug/trace`), в core 7 (`+fatal/unknown` — [src/core/types/](src/core/types/)). Решается в wiring-итерации, не сейчас.
-- ESLint-правило, форбидящее импорты из `src/dev/` в `src/ui/`/`src/app/`/`src/hooks/` — добавить, когда `src/dev/` появится.
-- Миграция inline-стилей в [src/ui/components/{FilterBar,LogList,SourcePicker}.tsx](src/ui/components/) на Tailwind utility-классы или `.lv-*`. Сейчас они работают, не блокируют. Решается, когда придёт регенерация этих компонентов из Claude Design.
+## 2. Фазированный план
 
-## Critical files
+### Phase 1 — Выровнять core под UI и навязать wiring (P0)
 
-- Создать: `src/ui/styles/lv.css`, ~30 файлов в `src/ui/components/<region>/Lv*.tsx`, `src/ui/utils/lv.ts`, `src/dev/log-data-mock.ts`, `src/dev/lv-preview.tsx`, [docs/adr/0008-tailwind-v4-via-package.md](docs/adr/0008-tailwind-v4-via-package.md).
-- Изменить: [src/main.tsx](src/main.tsx) (импорт `./ui/styles/lv.css`, опциональный preview-роутинг по query), [vite.config.ts](vite.config.ts) (плагин `tailwindcss()`), [package.json](package.json) и [pnpm-lock.yaml](pnpm-lock.yaml) (`tailwindcss`, `@tailwindcss/vite` в devDeps), [docs/adr/README.md](docs/adr/README.md) (запись об ADR-0008).
-- Удалить: `src/ui/Log Viewer.html`, `src/ui/log-app.jsx`, `src/ui/log-viewer.jsx`, `src/ui/log-tree.jsx`, `src/ui/tweaks-panel.jsx`, `src/ui/log-data.js`.
-- Не трогать: [src/App.tsx](src/App.tsx), [src/app/AppShell.tsx](src/app/AppShell.tsx), [src/app/containers/](src/app/containers/), [src/app/providers/](src/app/providers/), [src/hooks/](src/hooks/), [src/core/](src/core/), [src/workers/](src/workers/), [src/worker-client/](src/worker-client/), [src/ui/components/{FilterBar,LogList,SourcePicker}.tsx](src/ui/components/), [src/index.css](src/index.css).
+**Цель:** core получает недостающие поля/операторы; UI потребляет core-типы напрямую (без конверсий); LvApp работает на реальных источниках.
+
+1. **Расширить core:**
+   - [src/core/types/log-filter.ts](../../src/core/types/log-filter.ts):
+     - Добавить `wholeWord: boolean`.
+     - Добавить `services: ReadonlyArray<string> | null`.
+     - Расширить `FieldFilterOp` до `'='|'!='|'~'|'>'|'<'` (вместо `'eq'|'ne'|'contains'`).
+     - Обновить `EMPTY_FILTER`.
+   - [src/core/filter/query.ts](../../src/core/filter/query.ts):
+     - Добавить SQL-генерацию для `services`: `JSON_EXTRACT(fields_json, '$.service') IN (?, ?, ...)`.
+     - Реализовать `fieldFilters` через `JSON_EXTRACT(fields_json, '$.<key>')` со всеми пятью операторами; для `>`/`<` — `CAST(... AS REAL)`.
+     - Реализовать `wholeWord`: для substring — обёртка regex `\b<escaped>\b` через REGEXP UDF (см. шаг ниже) ИЛИ временный fallback `LIKE % <word> %` с пробелами; для FTS — фразовое квотирование `"phrase"`.
+     - regex queryMode пока остаётся silently dropped — закроем в Phase 2 (тогда же доедет REGEXP UDF, и `wholeWord` для substring уже автоматически заработает через regex).
+   - [src/core/filter/query.test.ts](../../src/core/filter/query.test.ts) — обновить тесты под новые операторы и поля.
+
+2. **Удалить дубликаты типов в UI** в [src/ui/contracts/lv-types.ts](../../src/ui/contracts/lv-types.ts):
+   - Убрать `LvFilters`, `LvLogEntry`, `LvLogLevel`, `LvLogKind`, `LvFieldFilter`, `LvFieldFilterOp`.
+   - Оставить чисто-UI типы: `LvCatalogRoot`, `LvFolderNode`, `LvFileNode`, `LvNode`, `LvSourceKind`, `LvSavedSearch`, `LvTweaks*`, `LvRail`, `LvGroup`, `LvGroupBy`, `LvTab`.
+   - Заменить упоминания на `import type { LogFilter, LogEntry, LogLevel, FieldFilter, TimeRange, QueryMode, EntryId, SourceId, SourceRecord, SourceStatus } from '../../core/types/index.ts'`.
+
+3. **Refactor Lv*-компонентов под core-типы:**
+   - `LvRow`, `LvRowDetail`, `LvFilePeek`, `LvBookmarksPanel`, `LvGroupHeader`: `entry.msg → entry.message`, `entry.ts → entry.timestamp`, `entry.line → entry.seq`. Поля `file/path/kind` приходят через новый prop `fileMeta: LvFileNode | null` (lookup в родителе).
+   - `LvFilterBar`: добавить `queryMode`-select (substring/fts/regex). Кнопка regex (бывшая `useRegex`) теперь устанавливает `queryMode='regex'`. `wholeWord` остаётся отдельной кнопкой.
+   - `LvLevelPill`: рендер всех 7 уровней в pill-set (добавить `fatal`, `unknown`).
+   - `LvAddFieldFilter`: новый список операторов (`=`, `!=`, `~`, `>`, `<`).
+   - `LvTimeline`: `range: TimeRange | null` вместо tuple.
+   - `LvViewer`: меняется контракт (см. шаг 5).
+   - `lvApplyFilters` ([src/ui/utils/lv-filter.ts](../../src/ui/utils/lv-filter.ts)) — удалить (фильтрация на сервере).
+   - `lvBuildGroups` — оставить до Phase 2 (тогда уйдёт в координатор).
+   - `lvFmtTime` ([src/ui/utils/lv-format.ts](../../src/ui/utils/lv-format.ts)) — сигнатура `(timestamp: number | null, showDate?) => string`.
+
+4. **Новые UI-only хуки** в [src/hooks/](../../src/hooks/) (Zustand + `localStorage`-persist):
+   - `use-ui-prefs.ts` — tweaks (theme, density, accent, wrap, showDate, timelineOn, queryModeDefault).
+   - `use-bookmarks.ts` — `Set<EntryId>` с persist'ом. Caveat по нестабильности `EntryId` задокументировать в JSDoc.
+   - `use-recent-files.ts` — top-10 selected (`SourceId`).
+   - `use-saved-searches.ts` — массив `LvSavedSearch`.
+   - `use-tabs.ts` — `{ activeTabId, closedTabs, activate(id), close(id), reopen(id) }`.
+
+5. **Виртуализация в `LvViewer`**: портировать `@tanstack/react-virtual` (уже в deps). LvViewer теперь принимает не `entries: LogEntry[]`, а `rowCount: number`, `getRow(i): LogEntry | undefined`, `onVisibleRangeChange(from, to)` — это контракт `useLogWindow`. LvRow остаётся pure.
+
+   Это меняет props-контракт LvViewer однократно; зафиксировать ADR'ом «UI потребляет windowed-данные» (новый ADR Phase 1).
+
+6. **Утилита `buildCatalogTree`** в [src/ui/utils/build-catalog.ts](../../src/ui/utils/build-catalog.ts):
+   - Вход: `SourceRecord[]`.
+   - Выход: `LvCatalogRoot[]` — группировка по `source.kind`, бейджи из `SourceStatus`, флаг `live` для streaming.
+   - Юнит-тест в `*.test.ts`.
+
+7. **Контейнер [src/app/containers/LvAppContainer.tsx](../../src/app/containers/LvAppContainer.tsx):**
+   - Хранит `LogFilter` локально (или через `useUiFilters` — на ваше усмотрение). Источник истины для UI-контролов.
+   - На каждое изменение пушит вниз: `useLogFilter().setFilter(next)`. Без конверсий — UI и core теперь говорят на одном языке.
+   - Локально: `selectedIds: Set<SourceId>`, `activeTabId: SourceId | '__all__'`, `groupBy: string[]` (UI-state).
+   - Связь `selectedIds + activeTabId → filter.sources` — одной строкой:
+     ```ts
+     setFilter(prev => ({
+       ...prev,
+       sources: activeTabId === '__all__' ? [...selectedIds] : [activeTabId],
+     }))
+     ```
+   - Зовёт `useLogWindow`, `useSelectedEntry`, `useSourceController`, `useSourceStatus`, плюс новые `useUiPrefs`, `useBookmarks`, `useRecentFiles`, `useSavedSearches`, `useTabs`.
+   - Собирает props для LvApp: `catalog = buildCatalogTree(sources)`, `filesById = Object.fromEntries(...)`, `getRow / rowCount / setVisibleRange = useLogWindow()`, `bookmarks = useBookmarks().ids`, и т.д.
+
+8. **Скрыть неподдерживаемые kind'ы** в [src/ui/components/sidebar/LvAddSourceMenu.tsx](../../src/ui/components/sidebar/LvAddSourceMenu.tsx). Оставить: `local-static` (→ `directory`), `local-live` (→ `directory` без watcher'а пока), `stream`. Дополнить через titlebar-меню: file (Open File…), text (Paste…), url (Open URL…). Скрыть `remote-ssh`, `cloud`, `k8s`, `bus`, `db`, `snapshot`, `bookmark`.
+
+9. **`src/App.tsx` → `<LvAppContainer/>`**, удалить mock-данные:
+   - Удалить [src/dev/log-data-mock.ts](../../src/dev/log-data-mock.ts).
+   - Старый `App.tsx` с mock-логикой заменяется на тонкую обёртку:
+     ```tsx
+     import { LvAppContainer } from './app/containers/LvAppContainer.tsx';
+     import { WorkerClientProvider } from './app/providers/WorkerClientProvider.tsx';
+     export default () => <WorkerClientProvider><LvAppContainer/></WorkerClientProvider>;
+     ```
+
+10. **Тесты:**
+    - Обновлённый `query.test.ts` (новые операторы, wholeWord, services).
+    - Новый `build-catalog.test.ts`.
+    - Smoke в браузере: загрузить `public/sample.jsonl`, фильтр + раскрытие row + bookmark работают.
+
+11. **ADR:** написать ADR-0010 «LvApp поверх ViewStore: core-типы — единственный источник, UI без адаптеров». Отметит снятие ADR-0009 (`superseded by 0010`).
+
+### Phase 2 — regex и group-by на сервере (P1)
+
+**Цель:** добиваем последние SQL-фичи + серверная группировка/гистограмма.
+
+1. **regex queryMode в SQL:**
+   - REGEXP UDF в [src/workers/indexer/db/open-db.ts](../../src/workers/indexer/db/open-db.ts). SQL: `WHERE message REGEXP ?`.
+   - Расширить `query.ts` под `queryMode='regex'`. После этого `wholeWord` поверх substring чистится через regex `\b...\b`. Тесты.
+2. **`coordinator.getGroupCounts(filter, fields, parent?)` + `coordinator.getHistogram(filter, buckets)`:**
+   - Контракт в [src/core/rpc/coordinator.contract.ts](../../src/core/rpc/coordinator.contract.ts).
+   - SQL: `GROUP BY JSON_EXTRACT(fields_json, '$.' || ?)` + `MIN(ts), MAX(ts), COUNT(*), SUM(level=...)`. Гистограмма — bucket'ы по `ts`.
+   - Хуки `use-group-counts.ts`, `use-histogram.ts`.
+3. **LvViewer:** при активной `groupBy` → `LvGroupHeader`'ы из `useGroupCounts`; разворачивание группы → `useLogWindow` с уточнённым `filter.fieldFilters`.
+4. **LvTimeline:** переключить с клиентского bucket'инга на `useHistogram`.
+5. **Удалить `lvBuildGroups`** — больше не нужен.
+6. **Тесты** на coordinator + indexer.
+
+### Phase 3 — Snapshot-адаптер и live-tail верификация (P2)
+
+1. **Snapshot adapter** в [src/core/sources/](../../src/core/sources/): zip/tar.gz → распаковка в memory (например `fflate`) → каждый файл → file-adapter. ADR на dep.
+2. **Live-tail end-to-end:** локальный WS-эхо (или test endpoint) → `addStream` → `subscribeChanges → version++ → useLogWindow refresh` → UI auto-scroll.
+
+### Phase 4 — Persistence directory-источников (P2)
+
+По [ADR-0006](../adr/0006-persistence-strategy.md):
+1. `coordinator.resumePersistedSources()` + `coordinator.grantPermission(id)`.
+2. UI: при `SourceStatus.kind === 'permission-required'` — кнопка «Grant access» в `LvTreeNode`. Клик → `useSourceController.grantPermission(id)`.
+3. Bookmarks: переход с `EntryId` на стабильный fingerprint (`{sourceId, seq}` хэш + сравнение `raw`-строки на коллизии).
+
+### Phase 5 — Polish (P3)
+
+- `coordinator.exportFiltered(filter, format)` (jsonl/csv) + UI «Export» в File-меню.
+- `coordinator.reIndex(id)`.
+- `coordinator.cancel(taskId)` + UI прогресс-бар (читает `SourceStatus.bytesRead/bytesTotal`).
+- AI-панель: реальная Claude API интеграция (нужен ADR — браузерные запросы к Anthropic из-за CORS требуют проксирования).
+- Alerts engine — отдельный план.
+- Server-side find (с подсветкой за пределами окна).
+
+## 3. Critical files
+
+**Создать (Phase 1):**
+- `src/ui/utils/build-catalog.ts` + `*.test.ts`
+- `src/hooks/use-ui-prefs.ts`
+- `src/hooks/use-bookmarks.ts`
+- `src/hooks/use-recent-files.ts`
+- `src/hooks/use-saved-searches.ts`
+- `src/hooks/use-tabs.ts`
+- `src/app/containers/LvAppContainer.tsx`
+- `docs/adr/0010-lv-on-viewstore-core-types.md`
+
+**Модифицировать (Phase 1, core):**
+- [src/core/types/log-filter.ts](../../src/core/types/log-filter.ts) — `wholeWord`, `services`, расширенный `FieldFilterOp`, `EMPTY_FILTER`.
+- [src/core/filter/query.ts](../../src/core/filter/query.ts) — services-IN, fieldFilters все операторы, wholeWord (через regex или fallback).
+- [src/core/filter/query.test.ts](../../src/core/filter/query.test.ts) — расширенное покрытие.
+
+**Модифицировать (Phase 1, UI):**
+- [src/App.tsx](../../src/App.tsx) → тонкая обёртка `<WorkerClientProvider><LvAppContainer/></WorkerClientProvider>`.
+- [src/ui/contracts/lv-types.ts](../../src/ui/contracts/lv-types.ts) — удалить дубликаты, оставить только UI-only.
+- [src/ui/components/stream/LvViewer.tsx](../../src/ui/components/stream/LvViewer.tsx) — виртуализация + новый props-контракт (rowCount/getRow/setVisibleRange).
+- [src/ui/components/stream/LvRow.tsx](../../src/ui/components/stream/LvRow.tsx), `LvRowDetail.tsx`, `LvFilePeek.tsx`, `LvGroupHeader.tsx` — переименование полей entry, prop `fileMeta`.
+- [src/ui/components/filter/LvFilterBar.tsx](../../src/ui/components/filter/LvFilterBar.tsx) — `queryMode`-select, levels как массив, 7 pill'ов.
+- [src/ui/components/filter/LvLevelPill.tsx](../../src/ui/components/filter/LvLevelPill.tsx) — расширить.
+- [src/ui/components/filter/LvAddFieldFilter.tsx](../../src/ui/components/filter/LvAddFieldFilter.tsx) — новые операторы.
+- [src/ui/components/timeline/LvTimeline.tsx](../../src/ui/components/timeline/LvTimeline.tsx) — `TimeRange` объект.
+- [src/ui/components/sidebar/LvAddSourceMenu.tsx](../../src/ui/components/sidebar/LvAddSourceMenu.tsx) — фильтр поддерживаемых kind'ов.
+- [src/ui/components/panels/LvBookmarksPanel.tsx](../../src/ui/components/panels/LvBookmarksPanel.tsx) — entry.message/timestamp.
+- [src/ui/utils/lv-format.ts](../../src/ui/utils/lv-format.ts) — сигнатура `(timestamp: number | null, showDate?)`.
+
+**Удалить (Phase 1):**
+- [src/dev/log-data-mock.ts](../../src/dev/log-data-mock.ts).
+- [src/ui/utils/lv-filter.ts](../../src/ui/utils/lv-filter.ts) — `lvApplyFilters` устарел; `lvBuildGroups` — в Phase 2.
+- Пометить [docs/adr/0009-mock-default-app.md](../adr/0009-mock-default-app.md) как `superseded by ADR-0010`.
+
+**Модифицировать (Phase 2):**
+- [src/core/rpc/coordinator.contract.ts](../../src/core/rpc/coordinator.contract.ts) — `getGroupCounts`, `getHistogram`.
+- [src/workers/coordinator/coordinator.ts](../../src/workers/coordinator/coordinator.ts) — реализация.
+- [src/workers/indexer/indexer-api.ts](../../src/workers/indexer/indexer-api.ts) — group/histogram SQL.
+- [src/workers/indexer/db/open-db.ts](../../src/workers/indexer/db/open-db.ts) — REGEXP UDF.
+- [src/core/filter/query.ts](../../src/core/filter/query.ts) — regex queryMode.
+
+## 4. Verification
+
+### Phase 1 acceptance
+
+- `pnpm dev` стартует, `/` показывает пустое дерево + CTA «Add source».
+- Open File… → выбор `public/sample.jsonl` → дерево показывает файл, badge переходит loading → indexing → done.
+- LvViewer показывает 15 строк из sample-файла; виртуализованный скролл (проверить на синтетическом 100k-jsonl).
+- Toggle level pill `info` (в наборе из 7) → строки `info`-уровня скрываются (фильтрация на сервере).
+- Search query "boot" в substring-режиме → одна строка. Переключение FTS-режима через select.
+- Field-filter chip `service = api-gateway` → entries сужаются. Числовой `duration_ms > 1000` тоже работает.
+- whole-word toggle переключает поведение substring (через regex `\b` после Phase 2; в Phase 1 — через временный fallback с пробелами).
+- Click row → expand, видно raw + JSON fields.
+- Bookmark on a row → reload → bookmark остался (localStorage).
+- Theme/density/accent сохраняются между перезагрузками.
+- `pnpm build`, `pnpm lint`, `pnpm test` зелёные.
+
+### Phase 2 acceptance
+
+- regex query `\bdeadlock\b` ловит точное слово (через REGEXP UDF).
+- groupBy=['trace_id']: заголовки групп с count/levelCounts. Скролл мгновенный.
+- Click на группу → entries (виртуализованно, через `useLogWindow` с уточнённым `fieldFilters`).
+- Multi-level groupBy ['service', 'trace_id'] — вложенные группы.
+- Timeline: drag-to-select → `filter.timeRange` обновляется, гистограмма перерисовывается из `useHistogram`.
+
+### Phase 3–5
+
+См. соответствующие секции; верификация — отдельными приёмочными чек-листами.
+
+## 5. Out of scope этого плана
+
+- Реальные адаптеры для `remote-ssh`, `cloud`, `k8s`, `bus`, `db` — каждый требует ADR (CORS/proxy/auth).
+- Реализация Alerts engine.
+- Cross-tab sync ViewStore.
+- Multi-window support.
+- Offline-first для cloud-источников.
+
+## 6. Замечания по плановой работе с UI и Playwright MCP
+
+Запросить prod-снапшот UI через Playwright MCP в этой сессии не получилось — соответствующие tool'ы (`browser_*` / `playwright_*`) не загружены, хотя `.mcp.json` сконфигурирован. На будущих итерациях при доступности MCP — добавить smoke-сценарий: «открыть `/`, добавить sample.jsonl, проверить badge'и переходят, фильтры работают, скриншот сохраняется в `docs/assets/`». Это автоматизирует регрессию после каждой фазы. Сейчас — ручная верификация в DevTools.

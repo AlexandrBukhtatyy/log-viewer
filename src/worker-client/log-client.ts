@@ -2,6 +2,8 @@ import * as Comlink from 'comlink';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { CoordinatorApi } from '../core/rpc/coordinator.contract.ts';
 import type {
+  CloudProvider,
+  DbDialect,
   EntryId,
   LogEntry,
   LogFilter,
@@ -39,6 +41,42 @@ export interface ViewActions {
     headers?: Readonly<Record<string, string>>,
   ) => Promise<SourceId>;
   addStream: (url: string, transport?: 'ws' | 'sse') => Promise<SourceId>;
+  // Phase 1 stub-source actions — payload reaches coordinator but the adapter
+  // throws "not implemented" on open(); UI sees a `SourceStatus.kind === 'error'`
+  // until each integration ADR replaces the stub. See core/sources/stub-adapters.ts.
+  addRemoteSsh: (params: {
+    name?: string;
+    host: string;
+    user?: string;
+    paths?: ReadonlyArray<string>;
+    keyPath?: string;
+  }) => Promise<SourceId>;
+  addCloud: (params: {
+    name?: string;
+    provider: CloudProvider;
+    query?: string;
+    region?: string;
+  }) => Promise<SourceId>;
+  addK8s: (params: {
+    name?: string;
+    cluster: string;
+    namespace?: string;
+    pod?: string;
+    container?: string;
+  }) => Promise<SourceId>;
+  addBus: (params: {
+    name?: string;
+    broker: string;
+    topic: string;
+    group?: string;
+  }) => Promise<SourceId>;
+  addDb: (params: {
+    name?: string;
+    dialect: DbDialect;
+    url: string;
+    query: string;
+  }) => Promise<SourceId>;
+  addSnapshot: (file: File) => Promise<SourceId>;
   removeSource: (id: SourceId) => Promise<void>;
   clearAll: () => Promise<void>;
   getEntry: (id: EntryId) => Promise<LogEntry | null>;
@@ -174,6 +212,50 @@ export const createLogClient = (): ViewStore => {
         }
         return api.addSource({ kind: 'stream', name, transport: t, url });
       },
+      addRemoteSsh: async ({ name, host, user, paths, keyPath }) =>
+        api.addSource({
+          kind: 'remote-ssh',
+          name: name ?? (user ? `${user}@${host}` : host),
+          host,
+          user,
+          paths,
+          keyPath,
+        }),
+      addCloud: async ({ name, provider, query, region }) =>
+        api.addSource({
+          kind: 'cloud',
+          name: name ?? `${provider}${region ? ' · ' + region : ''}`,
+          provider,
+          query,
+          region,
+        }),
+      addK8s: async ({ name, cluster, namespace, pod, container }) =>
+        api.addSource({
+          kind: 'k8s',
+          name: name ?? `k8s · ${cluster}${namespace ? '/' + namespace : ''}`,
+          cluster,
+          namespace,
+          pod,
+          container,
+        }),
+      addBus: async ({ name, broker, topic, group }) =>
+        api.addSource({
+          kind: 'bus',
+          name: name ?? `${broker} · ${topic}`,
+          broker,
+          topic,
+          group,
+        }),
+      addDb: async ({ name, dialect, url, query }) =>
+        api.addSource({
+          kind: 'db',
+          name: name ?? `${dialect} · ${url}`,
+          dialect,
+          url,
+          query,
+        }),
+      addSnapshot: async (file) =>
+        api.addSource({ kind: 'snapshot', name: file.name, archive: file }),
       removeSource: async (id) => {
         await api.removeSource(id);
       },

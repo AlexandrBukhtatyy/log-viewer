@@ -67,6 +67,60 @@ const buildLogSource = (input: LogSourceInput, id: SourceId): LogSource => {
         transport: input.transport,
         url: input.url,
       };
+    case 'remote-ssh':
+      return {
+        kind: 'remote-ssh',
+        id,
+        name: input.name,
+        host: input.host,
+        user: input.user,
+        paths: input.paths,
+        keyPath: input.keyPath,
+      };
+    case 'cloud':
+      return {
+        kind: 'cloud',
+        id,
+        name: input.name,
+        provider: input.provider,
+        query: input.query,
+        region: input.region,
+      };
+    case 'k8s':
+      return {
+        kind: 'k8s',
+        id,
+        name: input.name,
+        cluster: input.cluster,
+        namespace: input.namespace,
+        pod: input.pod,
+        container: input.container,
+      };
+    case 'bus':
+      return {
+        kind: 'bus',
+        id,
+        name: input.name,
+        broker: input.broker,
+        topic: input.topic,
+        group: input.group,
+      };
+    case 'db':
+      return {
+        kind: 'db',
+        id,
+        name: input.name,
+        dialect: input.dialect,
+        url: input.url,
+        query: input.query,
+      };
+    case 'snapshot':
+      return {
+        kind: 'snapshot',
+        id,
+        name: input.name,
+        archive: input.archive,
+      };
   }
 };
 
@@ -106,6 +160,15 @@ const placeholderFromIndexed = (rec: IndexedSourceRecord): LogSource | null => {
         url: typeof meta.url === 'string' ? meta.url : '',
       };
     }
+    // Stub-kinds — not persisted (their adapters throw on open). If they
+    // appear in indexer state from a future ADR, restore them here.
+    case 'remote-ssh':
+    case 'cloud':
+    case 'k8s':
+    case 'bus':
+    case 'db':
+    case 'snapshot':
+      return null;
   }
 };
 

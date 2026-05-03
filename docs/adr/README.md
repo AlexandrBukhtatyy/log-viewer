@@ -90,4 +90,5 @@ flowchart LR
 - [0006. Persistence strategy: дифференцированная по типу источника](0006-persistence-strategy.md) — accepted
 - [0007. State management: Zustand поверх чистого core-store класса](0007-state-management-zustand.md) — accepted
 - [0008. Tailwind v4 как dev-зависимость (а не CDN)](0008-tailwind-v4-via-package.md) — proposed
-- [0009. Mock-default app: переходное состояние UI без worker-привязки](0009-mock-default-app.md) — proposed
+- [0009. Mock-default app: переходное состояние UI без worker-привязки](0009-mock-default-app.md) — superseded by [0010](0010-lv-on-viewstore-core-types.md)
+- [0010. LvApp поверх ViewStore: core-типы — единственный источник, UI без адаптеров](0010-lv-on-viewstore-core-types.md) — proposed

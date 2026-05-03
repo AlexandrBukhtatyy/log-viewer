@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { LvFieldFilter, LvFilters, LvLogLevel } from '../../contracts/lv-types.ts';
+import type { FieldFilter, LogFilter, LogLevel } from '../../../core/types/index.ts';
 
 interface AiMessage {
   readonly id: string;
@@ -24,19 +24,18 @@ const SUGGESTIONS: Suggestion[] = [
 
 export type LvAiFilterPatch = Partial<{
   query: string;
-  useRegex: boolean;
   caseSensitive: boolean;
   wholeWord: boolean;
-  levels: Set<LvLogLevel>;
-  fieldFilters: LvFieldFilter[];
+  levels: ReadonlyArray<LogLevel> | null;
+  fieldFilters: ReadonlyArray<FieldFilter>;
 }>;
 
 export interface LvAiPanelProps {
   readonly fileCount: number;
   readonly lineCount: number;
-  readonly filters: LvFilters;
+  readonly filters: LogFilter;
   onRunFilter: (patch: LvAiFilterPatch) => void;
-  onJumpTo: (target: { fileId: string; line?: number }) => void;
+  onJumpTo: (target: { sourceId: string; line?: number }) => void;
   onComplete?: (prompt: string) => Promise<string>;
 }
 
@@ -86,7 +85,7 @@ export const LvAiPanel = ({
               Всплеск начинается в{' '}
               <a
                 className="lv-ai-link"
-                onClick={() => onJumpTo({ fileId: 'billing-json' })}
+                onClick={() => onJumpTo({ sourceId: 'billing-json' })}
               >
                 billing.json.log:14:28:02
               </a>{' '}
@@ -108,8 +107,7 @@ export const LvAiPanel = ({
               onClick={() =>
                 onRunFilter({
                   query: 'pool exhausted',
-                  useRegex: false,
-                  levels: new Set<LvLogLevel>(['error', 'warn']),
+                  levels: ['error', 'warn'] as ReadonlyArray<LogLevel>,
                 })
               }
             >
@@ -135,21 +133,21 @@ export const LvAiPanel = ({
             <button
               type="button"
               className="lv-ai-src"
-              onClick={() => onJumpTo({ fileId: 'billing-json' })}
+              onClick={() => onJumpTo({ sourceId: 'billing-json' })}
             >
               billing.json.log
             </button>
             <button
               type="button"
               className="lv-ai-src"
-              onClick={() => onJumpTo({ fileId: 'access-log' })}
+              onClick={() => onJumpTo({ sourceId: 'access-log' })}
             >
               access.log
             </button>
             <button
               type="button"
               className="lv-ai-src"
-              onClick={() => onJumpTo({ fileId: 'billing-trace' })}
+              onClick={() => onJumpTo({ sourceId: 'billing-trace' })}
             >
               billing.trace.log
             </button>

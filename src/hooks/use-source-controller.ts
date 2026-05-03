@@ -1,6 +1,10 @@
 import { useCallback } from 'react';
 import { useViewStore } from '../app/providers/view-store-context.ts';
-import type { SourceId } from '../core/types/index.ts';
+import type {
+  CloudProvider,
+  DbDialect,
+  SourceId,
+} from '../core/types/index.ts';
 
 export interface UseSourceController {
   addFile: (file: File) => Promise<SourceId>;
@@ -11,6 +15,42 @@ export interface UseSourceController {
     headers?: Readonly<Record<string, string>>,
   ) => Promise<SourceId>;
   addStream: (url: string, transport?: 'ws' | 'sse') => Promise<SourceId>;
+  // Phase 1 stubs — coordinator routes to a not-implemented adapter; the resulting
+  // source surfaces as `SourceStatus.kind === 'error'` until each integration ADR
+  // ships its real adapter (see core/sources/stub-adapters.ts).
+  addRemoteSsh: (params: {
+    name?: string;
+    host: string;
+    user?: string;
+    paths?: ReadonlyArray<string>;
+    keyPath?: string;
+  }) => Promise<SourceId>;
+  addCloud: (params: {
+    name?: string;
+    provider: CloudProvider;
+    query?: string;
+    region?: string;
+  }) => Promise<SourceId>;
+  addK8s: (params: {
+    name?: string;
+    cluster: string;
+    namespace?: string;
+    pod?: string;
+    container?: string;
+  }) => Promise<SourceId>;
+  addBus: (params: {
+    name?: string;
+    broker: string;
+    topic: string;
+    group?: string;
+  }) => Promise<SourceId>;
+  addDb: (params: {
+    name?: string;
+    dialect: DbDialect;
+    url: string;
+    query: string;
+  }) => Promise<SourceId>;
+  addSnapshot: (file: File) => Promise<SourceId>;
   removeSource: (id: SourceId) => Promise<void>;
   clearAll: () => Promise<void>;
 }
@@ -45,6 +85,31 @@ export const useSourceController = (): UseSourceController => {
     [store],
   );
 
+  const addRemoteSsh = useCallback<UseSourceController['addRemoteSsh']>(
+    (params) => store.getState().addRemoteSsh(params),
+    [store],
+  );
+  const addCloud = useCallback<UseSourceController['addCloud']>(
+    (params) => store.getState().addCloud(params),
+    [store],
+  );
+  const addK8s = useCallback<UseSourceController['addK8s']>(
+    (params) => store.getState().addK8s(params),
+    [store],
+  );
+  const addBus = useCallback<UseSourceController['addBus']>(
+    (params) => store.getState().addBus(params),
+    [store],
+  );
+  const addDb = useCallback<UseSourceController['addDb']>(
+    (params) => store.getState().addDb(params),
+    [store],
+  );
+  const addSnapshot = useCallback<UseSourceController['addSnapshot']>(
+    (file) => store.getState().addSnapshot(file),
+    [store],
+  );
+
   const removeSource = useCallback(
     (id: SourceId) => store.getState().removeSource(id),
     [store],
@@ -61,6 +126,12 @@ export const useSourceController = (): UseSourceController => {
     addText,
     addUrl,
     addStream,
+    addRemoteSsh,
+    addCloud,
+    addK8s,
+    addBus,
+    addDb,
+    addSnapshot,
     removeSource,
     clearAll,
   };

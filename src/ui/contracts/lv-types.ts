@@ -1,5 +1,26 @@
-export type LvLogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace';
+// UI-only types. Everything that maps to core (LogLevel/LogEntry/LogFilter/
+// FieldFilter/TimeRange/QueryMode/SourceId/EntryId/SourceRecord/SourceStatus)
+// is imported as `import type` from '../../core/types/index.ts' — direct
+// consumption, no adapter layer (see ADR-0002 §Adapter-слой and the plan
+// in docs/plans/replicated-cooking-muffin.md §1.6).
 
+import type { LogEntry, LogLevel } from '../../core/types/index.ts';
+
+// Tweaks shape lives next to its persistence hook; re-exported here for
+// ergonomic UI imports. Same for LvSavedSearch (hooks/use-saved-searches.ts).
+// This keeps `hooks/` from importing `ui/`, satisfying the ADR-0002 layer
+// boundary in eslint.config.js.
+export type {
+  LvTweaks,
+  LvTweakTheme,
+  LvTweakDensity,
+} from '../../hooks/use-ui-prefs.ts';
+export type { LvSavedSearch } from '../../hooks/use-saved-searches.ts';
+
+/**
+ * Visual classification of a log file in the sidebar tree (drives icon/badge).
+ * Distinct from core's parser kinds — this is a presentation concept.
+ */
 export type LvLogKind =
   | 'app'
   | 'json'
@@ -9,6 +30,12 @@ export type LvLogKind =
   | 'stacktrace'
   | 'text';
 
+/**
+ * "Add source" menu options. Broader than core/sources/ (which currently has
+ * 5 adapters: file/directory/text/url/stream); the rest are UI-only labels —
+ * either mapped to existing adapters by container or hidden in Phase 1
+ * (see plan §1.5).
+ */
 export type LvSourceKind =
   | 'local-static'
   | 'local-live'
@@ -20,22 +47,6 @@ export type LvSourceKind =
   | 'snapshot'
   | 'db'
   | 'bookmark';
-
-export interface LvLogEntry {
-  id: string;
-  fileId: string;
-  file: string;
-  path: string;
-  line: number;
-  ts: string;
-  level: LvLogLevel;
-  service: string;
-  msg: string;
-  kind: LvLogKind;
-  fields: Record<string, unknown>;
-  raw: string;
-  stack?: string[];
-}
 
 export interface LvFileNode {
   id: string;
@@ -66,46 +77,7 @@ export interface LvFolderNode {
 }
 
 export type LvNode = LvFileNode | LvFolderNode;
-
 export type LvCatalogRoot = LvFolderNode & { root: true };
-
-export interface LvSavedSearch {
-  id: string;
-  name: string;
-  query: string;
-  levels: LvLogLevel[];
-}
-
-export type LvFieldFilterOp = '=' | '!=' | '>' | '<' | '~';
-
-export interface LvFieldFilter {
-  key: string;
-  op: LvFieldFilterOp;
-  value: string;
-}
-
-export interface LvFilters {
-  levels: Set<LvLogLevel>;
-  services: Set<string>;
-  query: string;
-  useRegex: boolean;
-  caseSensitive: boolean;
-  wholeWord: boolean;
-  timeRange: [number, number] | null;
-  fieldFilters: LvFieldFilter[];
-}
-
-export type LvTweakTheme = 'dark' | 'light';
-export type LvTweakDensity = 'compact' | 'comfortable';
-
-export interface LvTweaks {
-  theme: LvTweakTheme;
-  density: LvTweakDensity;
-  wrap: boolean;
-  showDate: boolean;
-  accent: string;
-  timelineOn: boolean;
-}
 
 export type LvRail = 'files' | 'search' | 'bookmarks' | 'alerts' | 'ai';
 
@@ -123,15 +95,19 @@ export interface LvGroupPathSegment {
   key: string;
 }
 
+/**
+ * Client-side group built by lvBuildGroups. Used in Phase 1; in Phase 2 the
+ * coordinator API takes over (`getGroupCounts`) and this type can shrink.
+ */
 export interface LvGroup {
   field: string;
   key: string;
   depth: number;
-  entries: LvLogEntry[];
+  entries: LogEntry[];
   children?: LvGroup[];
   minTs: number;
   maxTs: number;
-  levels: Partial<Record<LvLogLevel, number>>;
+  levels: Partial<Record<LogLevel, number>>;
   path: LvGroupPathSegment[];
 }
 

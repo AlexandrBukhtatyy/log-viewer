@@ -1,21 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { LvLogEntry, LvLogLevel } from '../../contracts/lv-types.ts';
+import type { LogEntry, LogLevel, TimeRange } from '../../../core/types/index.ts';
 
 interface Bucket {
+  fatal: number;
   error: number;
   warn: number;
   info: number;
   debug: number;
   trace: number;
+  unknown: number;
   total: number;
 }
 
-const emptyBucket = (): Bucket => ({ error: 0, warn: 0, info: 0, debug: 0, trace: 0, total: 0 });
+const emptyBucket = (): Bucket => ({
+  fatal: 0,
+  error: 0,
+  warn: 0,
+  info: 0,
+  debug: 0,
+  trace: 0,
+  unknown: 0,
+  total: 0,
+});
 
 export interface LvTimelineProps {
-  readonly entries: ReadonlyArray<LvLogEntry>;
-  readonly range: [number, number] | null;
-  onRangeChange: (range: [number, number] | null) => void;
+  readonly entries: ReadonlyArray<LogEntry>;
+  readonly range: TimeRange | null;
+  onRangeChange: (range: TimeRange | null) => void;
   readonly height?: number;
 }
 
@@ -37,16 +48,18 @@ export const LvTimeline = ({ entries, range, onRangeChange, height = 64 }: LvTim
     let lo = Infinity;
     let hi = -Infinity;
     for (const e of entries) {
-      const t = new Date(e.ts).getTime();
-      if (t < lo) lo = t;
-      if (t > hi) hi = t;
+      if (e.timestamp === null) continue;
+      if (e.timestamp < lo) lo = e.timestamp;
+      if (e.timestamp > hi) hi = e.timestamp;
     }
+    if (!isFinite(lo) || !isFinite(hi))
+      return { buckets: [] as Bucket[], min: 0, max: 0, maxCount: 0 };
     const B = 80;
     const step = Math.max(1, (hi - lo) / B);
     const out: Bucket[] = Array.from({ length: B }, emptyBucket);
     for (const e of entries) {
-      const t = new Date(e.ts).getTime();
-      const i = Math.min(B - 1, Math.floor((t - lo) / step));
+      if (e.timestamp === null) continue;
+      const i = Math.min(B - 1, Math.floor((e.timestamp - lo) / step));
       const lvl = e.level as keyof Omit<Bucket, 'total'>;
       out[i]![lvl] = (out[i]![lvl] ?? 0) + 1;
       out[i]!.total++;
@@ -59,8 +72,12 @@ export const LvTimeline = ({ entries, range, onRangeChange, height = 64 }: LvTim
   const [drag, setDrag] = useState<{ x0: number; x1: number } | null>(null);
   const bucketW = w / Math.max(1, buckets.length);
 
-  const selStart = range && max !== min ? ((range[0] - min) / (max - min)) * w : null;
-  const selEnd = range && max !== min ? ((range[1] - min) / (max - min)) * w : null;
+  const rangeFrom = range?.from ?? null;
+  const rangeTo = range?.to ?? null;
+  const selStart =
+    rangeFrom !== null && max !== min ? ((rangeFrom - min) / (max - min)) * w : null;
+  const selEnd =
+    rangeTo !== null && max !== min ? ((rangeTo - min) / (max - min)) * w : null;
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!ref.current) return;
@@ -85,7 +102,7 @@ export const LvTimeline = ({ entries, range, onRangeChange, height = 64 }: LvTim
       const t0 = min + (a / w) * (max - min);
       const t1 = min + (b / w) * (max - min);
       setDrag(null);
-      onRangeChange([t0, t1]);
+      onRangeChange({ from: t0, to: t1 });
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -101,7 +118,15 @@ export const LvTimeline = ({ entries, range, onRangeChange, height = 64 }: LvTim
 
   const fmt = (t: number) => new Date(t).toISOString().slice(11, 19);
   const segH = (n: number) => (n / Math.max(1, maxCount)) * 100 + '%';
-  const SEG_KEYS: ReadonlyArray<LvLogLevel> = ['error', 'warn', 'info', 'debug', 'trace'];
+  const SEG_KEYS: ReadonlyArray<LogLevel> = [
+    'fatal',
+    'error',
+    'warn',
+    'info',
+    'debug',
+    'trace',
+    'unknown',
+  ];
 
   return (
     <div className="lv-timeline" style={{ height }}>

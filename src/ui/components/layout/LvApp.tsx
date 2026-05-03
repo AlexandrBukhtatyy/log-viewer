@@ -1,18 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import type {
+  LogEntry,
+  LogFilter,
+  LogLevel,
+} from '../../../core/types/index.ts';
 import type {
   LvCatalogRoot,
   LvFileNode,
-  LvFilters,
   LvGroupBy,
-  LvLogEntry,
-  LvLogLevel,
   LvRail,
   LvSavedSearch,
   LvSourceKind,
+  LvTab,
   LvTweaks,
 } from '../../contracts/lv-types.ts';
-import { lvApplyFilters } from '../../utils/lv-filter.ts';
 import { LvIconRail } from '../rail/LvIconRail.tsx';
 import { LvSidebar } from '../sidebar/LvSidebar.tsx';
 import { LvTitlebar } from '../topbar/LvTitlebar.tsx';
@@ -31,166 +33,143 @@ import { LvTweakRadio } from '../tweaks/LvTweakRadio.tsx';
 import { LvTweakColor } from '../tweaks/LvTweakColor.tsx';
 import { LvTweakToggle } from '../tweaks/LvTweakToggle.tsx';
 
-const TWEAK_DEFAULTS: LvTweaks = {
-  theme: 'dark',
-  density: 'compact',
-  wrap: false,
-  showDate: false,
-  accent: '#7aa2f7',
-  timelineOn: true,
-};
+type RenderDetailEditor = (props: {
+  readonly value: string;
+  readonly language: string;
+  readonly theme: 'lv-dark' | 'lv-light';
+  readonly wordWrap: boolean;
+  readonly height: number;
+}) => ReactNode;
 
-const FILTER_DEFAULTS: LvFilters = {
-  query: '',
-  useRegex: false,
-  caseSensitive: false,
-  wholeWord: false,
-  levels: new Set<LvLogLevel>(['error', 'warn', 'info', 'debug']),
-  services: new Set<string>(),
-  timeRange: null,
-  fieldFilters: [],
-};
+export interface LvAppRecentFile {
+  readonly id: string;
+  readonly name: string;
+  readonly path?: string;
+}
+
+export interface LvAppStatusStats {
+  readonly files: number;
+  readonly errors: number;
+  readonly warns: number;
+}
 
 export interface LvAppProps {
+  // Adapted UI data — built by the container from useSourceStatus / useLogWindow.
   readonly catalog: ReadonlyArray<LvCatalogRoot>;
   readonly filesById: Readonly<Record<string, LvFileNode>>;
-  readonly logsByFile: Readonly<Record<string, ReadonlyArray<LvLogEntry>>>;
-  readonly savedSearches: ReadonlyArray<LvSavedSearch>;
+
+  // Windowed entry stream (from useLogWindow).
+  readonly rowCount: number;
+  readonly totalCount: number;
+  getRow: (i: number) => LogEntry | undefined;
+  onVisibleRangeChange: (from: number, to: number) => void;
+  readonly levelCounts: Partial<Record<LogLevel, number>>;
+
+  // Filter — single source of truth lives in the container (or its hook).
+  readonly filter: LogFilter;
+  setFilter: (next: (prev: LogFilter) => LogFilter) => void;
+
+  // Sources / tree selection (UI state).
+  readonly selectedIds: ReadonlySet<string>;
+  setSelectedIds: (next: (prev: Set<string>) => Set<string>) => void;
+  readonly activeTabId: string;
+  setActiveTabId: (id: string) => void;
+  readonly tabs: ReadonlyArray<LvTab>;
+  setClosedTabs: (next: (prev: Set<string>) => Set<string>) => void;
+
+  // Source-controller actions.
   onAddRoot: (sourceType: LvSourceKind) => void;
   onRemoveRoot: (id: string) => void;
   onOpenLocalFile?: () => Promise<void>;
+
+  // Tweaks / UI prefs (persisted in container via useUiPrefs).
+  readonly tweaks: LvTweaks;
+  setTweak: <K extends keyof LvTweaks>(key: K, value: LvTweaks[K]) => void;
+
+  // Bookmarks (persisted via useBookmarks). `bookmarkEntries` carries the
+  // resolved LogEntry for each bookmarked id where currently available.
+  readonly bookmarks: ReadonlySet<string>;
+  toggleBookmark: (id: string) => void;
+  readonly bookmarkEntries: Readonly<Record<string, LogEntry>>;
+
+  // Saved searches.
+  readonly savedSearches: ReadonlyArray<LvSavedSearch>;
+  onSaveSearch: () => void;
+
+  // Recent files.
+  readonly recentFiles: ReadonlyArray<LvAppRecentFile>;
+
+  // Live tail (UI flag — actual streaming handled by stream-source adapter).
+  readonly liveTail: boolean;
+  onToggleLiveTail: () => void;
+
+  // Group-by (UI state — Phase 1 toggles UI, Phase 2 wires to coordinator).
+  readonly groupBy: ReadonlyArray<LvGroupBy>;
+  setGroupBy: (next: LvGroupBy[]) => void;
+
+  // Status bar stats (computed by container).
+  readonly stats: LvAppStatusStats;
+
+  // AI completion plug.
   onAiComplete?: (prompt: string) => Promise<string>;
-  readonly initialSelectedIds?: ReadonlyArray<string>;
-  readonly tweaksPanelOpen?: boolean;
-  onCloseTweaks?: () => void;
-  renderDetailEditor?: (props: {
-    readonly value: string;
-    readonly language: string;
-    readonly theme: 'lv-dark' | 'lv-light';
-    readonly wordWrap: boolean;
-    readonly height: number;
-  }) => ReactNode;
+
+  // Editor slot for LvRowDetail (Monaco; optional).
+  renderDetailEditor?: RenderDetailEditor;
 }
 
 export const LvApp = ({
   catalog,
   filesById,
-  logsByFile,
-  savedSearches: savedSearchesIn,
+  rowCount,
+  totalCount,
+  getRow,
+  onVisibleRangeChange,
+  levelCounts,
+  filter,
+  setFilter,
+  selectedIds,
+  setSelectedIds,
+  activeTabId,
+  setActiveTabId,
+  tabs,
+  setClosedTabs,
   onAddRoot,
   onRemoveRoot,
   onOpenLocalFile,
+  tweaks,
+  setTweak,
+  bookmarks,
+  toggleBookmark,
+  bookmarkEntries,
+  savedSearches,
+  onSaveSearch,
+  recentFiles,
+  liveTail,
+  onToggleLiveTail,
+  groupBy,
+  setGroupBy,
+  stats,
   onAiComplete,
-  initialSelectedIds,
-  tweaksPanelOpen = false,
-  onCloseTweaks,
   renderDetailEditor,
 }: LvAppProps) => {
-  const [tweaks, setTweaks] = useState<LvTweaks>(TWEAK_DEFAULTS);
-  const setTweak = <K extends keyof LvTweaks>(key: K, value: LvTweaks[K]) => {
-    setTweaks((prev) => ({ ...prev, [key]: value }));
-  };
+  // UI-only transient state (modals, side rail).
+  const [rail, setRail] = useState<LvRail>('files');
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [tweaksPanelOpen, setTweaksPanelOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = tweaks.theme;
     document.documentElement.style.setProperty('--lv-accent', tweaks.accent);
   }, [tweaks.theme, tweaks.accent]);
 
-  const [rail, setRail] = useState<LvRail>('files');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    () => new Set(initialSelectedIds ?? []),
-  );
-  const [filters, setFilters] = useState<LvFilters>(() => ({
-    ...FILTER_DEFAULTS,
-    levels: new Set(FILTER_DEFAULTS.levels),
-  }));
-  const [savedSearches, setSavedSearches] =
-    useState<LvSavedSearch[]>(() => [...savedSearchesIn]);
-  const [liveTail, setLiveTail] = useState(false);
-  const [activeTabId, setActiveTabId] = useState('__all__');
-  const [closedTabs, setClosedTabs] = useState<Set<string>>(() => new Set());
-  const [bookmarks, setBookmarks] = useState<Set<string>>(() => new Set());
-  const [cmdOpen, setCmdOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [groupBy, setGroupBy] = useState<LvGroupBy[]>([]);
-
-  const recentFiles = useMemo(() => {
-    return Array.from(selectedIds)
-      .map((id) => filesById[id])
-      .filter((f): f is LvFileNode => !!f)
-      .slice(0, 5)
-      .map((f) => ({ id: f.id, name: f.name, path: f.path }));
-  }, [selectedIds, filesById]);
-
-  const tabs = useMemo(() => {
-    const t: { id: string; name: string; path?: string; kind?: LvFileNode['kind'] }[] = [
-      { id: '__all__', name: `All selected (${selectedIds.size})`, path: '', kind: 'app' },
-    ];
-    Array.from(selectedIds).forEach((id) => {
-      const f = filesById[id];
-      if (!f || closedTabs.has(id)) return;
-      t.push({ id: f.id, name: f.name, path: `/var/log/${f.name}`, kind: f.kind });
-    });
-    return t;
-  }, [selectedIds, closedTabs, filesById]);
-
-  const effectiveActiveTabId = useMemo(() => {
-    if (activeTabId === '__all__') return activeTabId;
-    if (!selectedIds.has(activeTabId) || closedTabs.has(activeTabId)) return '__all__';
-    return activeTabId;
-  }, [activeTabId, selectedIds, closedTabs]);
-
-  const allEntries = useMemo<Record<string, LvLogEntry>>(() => {
-    const m: Record<string, LvLogEntry> = {};
-    for (const arr of Object.values(logsByFile)) {
-      for (const e of arr) m[e.id] = e;
-    }
-    return m;
-  }, [logsByFile]);
-
-  const stats = useMemo(() => {
-    let errors = 0;
-    let warns = 0;
-    let combined: LvLogEntry[] = [];
-    for (const id of selectedIds) {
-      const arr = logsByFile[id] ?? [];
-      combined = combined.concat(arr as LvLogEntry[]);
-      for (const e of arr) {
-        if (e.level === 'error') errors++;
-        else if (e.level === 'warn') warns++;
-      }
-    }
-    const result = lvApplyFilters(combined, filters).length;
-    return { total: combined.length, errors, warns, result, files: selectedIds.size };
-  }, [selectedIds, filters, logsByFile]);
-
-  const onBookmark = (id: string) =>
-    setBookmarks((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-
-  const onSaveSearch = () => {
-    const name = `Custom ${savedSearches.length + 1}`;
-    const q = filters.query || '(no query)';
-    setSavedSearches((s) => [
-      ...s,
-      {
-        id: `custom-${Date.now()}`,
-        name,
-        query: q,
-        levels: Array.from(filters.levels) as LvLogLevel[],
-      },
-    ]);
-  };
+  const lineCount = totalCount;
 
   const runCommand = (id: string) => {
     switch (id) {
       case 'toggle-live':
-        setLiveTail((v) => !v);
+        onToggleLiveTail();
         break;
       case 'toggle-timeline':
         setTweak('timelineOn', !tweaks.timelineOn);
@@ -211,7 +190,17 @@ export const LvApp = ({
         setGroupBy([]);
         break;
       case 'clear-filters':
-        setFilters({ ...FILTER_DEFAULTS, levels: new Set(FILTER_DEFAULTS.levels) });
+        setFilter(() => ({
+          query: '',
+          queryMode: 'substring',
+          caseSensitive: false,
+          wholeWord: false,
+          levels: null,
+          services: null,
+          timeRange: null,
+          sources: null,
+          fieldFilters: [],
+        }));
         break;
       case 'theme-toggle':
         setTweak('theme', tweaks.theme === 'dark' ? 'light' : 'dark');
@@ -220,7 +209,7 @@ export const LvApp = ({
         setTweak('density', tweaks.density === 'compact' ? 'comfortable' : 'compact');
         break;
       case 'select-all':
-        setSelectedIds(new Set(Object.keys(filesById)));
+        setSelectedIds(() => new Set(Object.keys(filesById)));
         break;
     }
   };
@@ -238,7 +227,7 @@ export const LvApp = ({
       }
       if (e.ctrlKey && e.altKey && (e.key === 'l' || e.key === 'L')) {
         e.preventDefault();
-        setLiveTail((v) => !v);
+        onToggleLiveTail();
       }
       if (e.ctrlKey && e.altKey && (e.key === 'd' || e.key === 'D')) {
         e.preventDefault();
@@ -248,18 +237,10 @@ export const LvApp = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [tweaks.theme]);
-
-  const lineCount = Object.values(logsByFile)
-    .filter((_, i) => Array.from(selectedIds)[i] !== undefined)
-    .reduce((s, arr) => s + arr.length, 0);
+  }, [tweaks.theme, setTweak, onToggleLiveTail]);
 
   const aiFileCount = selectedIds.size;
-  const aiLineCount = Array.from(selectedIds).reduce(
-    (s, id) => s + (logsByFile[id]?.length ?? 0),
-    0,
-  );
-  void lineCount;
+  const aiLineCount = lineCount;
 
   const leftPanel =
     rail === 'files' ? (
@@ -274,53 +255,48 @@ export const LvApp = ({
     ) : rail === 'search' ? (
       <LvSearchPanel
         onRun={(q) => {
-          setFilters((f) => ({ ...f, query: q }));
+          setFilter((f) => ({ ...f, query: q }));
           setRail('files');
         }}
         savedSearches={savedSearches}
         onApplyPreset={(p) => {
-          setFilters((f) => ({ ...f, query: p.query, levels: new Set(p.levels) }));
+          setFilter((f) => ({ ...f, query: p.query, levels: p.levels.length ? p.levels : null }));
           setRail('files');
         }}
       />
     ) : rail === 'bookmarks' ? (
       <LvBookmarksPanel
         bookmarks={bookmarks}
-        allEntries={allEntries}
+        allEntries={bookmarkEntries}
+        filesById={filesById}
         onJump={(e) => {
           setSelectedIds((s) => {
             const n = new Set(s);
-            n.add(e.fileId);
+            n.add(e.sourceId);
             return n;
           });
-          setActiveTabId(e.fileId);
+          setActiveTabId(e.sourceId);
           setRail('files');
         }}
-        onRemove={(id) =>
-          setBookmarks((s) => {
-            const n = new Set(s);
-            n.delete(id);
-            return n;
-          })
-        }
+        onRemove={(id) => toggleBookmark(id)}
       />
     ) : rail === 'ai' ? (
       <LvAiPanel
         fileCount={aiFileCount}
         lineCount={aiLineCount}
-        filters={filters}
+        filters={filter}
         onComplete={onAiComplete}
         onRunFilter={(patch) => {
-          setFilters((f) => ({ ...f, ...patch }));
+          setFilter((f) => ({ ...f, ...patch }));
           setRail('files');
         }}
         onJumpTo={(target) => {
           setSelectedIds((s) => {
             const n = new Set(s);
-            n.add(target.fileId);
+            n.add(target.sourceId);
             return n;
           });
-          setActiveTabId(target.fileId);
+          setActiveTabId(target.sourceId);
           setRail('files');
         }}
       />
@@ -370,17 +346,21 @@ export const LvApp = ({
         />
         {leftPanel}
         <LvViewer
-          selectedFileIds={selectedIds}
-          logsByFile={logsByFile}
+          rowCount={rowCount}
+          totalCount={totalCount}
+          getRow={getRow}
+          onVisibleRangeChange={onVisibleRangeChange}
+          hasSources={selectedIds.size > 0}
           filesById={filesById}
-          filters={filters}
-          setFilters={(updater) => setFilters((prev) => updater(prev))}
+          filter={filter}
+          setFilter={setFilter}
+          levelCounts={levelCounts}
           savedSearches={savedSearches}
           onSaveSearch={onSaveSearch}
           liveTail={liveTail}
-          onToggleLiveTail={() => setLiveTail((v) => !v)}
+          onToggleLiveTail={onToggleLiveTail}
           tabs={tabs}
-          activeTabId={effectiveActiveTabId}
+          activeTabId={activeTabId}
           onActivateTab={setActiveTabId}
           onCloseTab={(id) =>
             setClosedTabs((s) => {
@@ -390,7 +370,7 @@ export const LvApp = ({
             })
           }
           bookmarks={bookmarks}
-          onBookmark={onBookmark}
+          onBookmark={toggleBookmark}
           tweaks={tweaks}
           timelineOn={tweaks.timelineOn}
           onToggleTimeline={() => setTweak('timelineOn', !tweaks.timelineOn)}
@@ -399,11 +379,7 @@ export const LvApp = ({
           renderDetailEditor={renderDetailEditor}
         />
       </div>
-      <LvStatusBar
-        stats={{ files: stats.files, errors: stats.errors, warns: stats.warns }}
-        liveTail={liveTail}
-        theme={tweaks.theme}
-      />
+      <LvStatusBar stats={stats} liveTail={liveTail} theme={tweaks.theme} />
 
       {cmdOpen && <LvCommandPalette onClose={() => setCmdOpen(false)} onRun={runCommand} />}
 
@@ -418,7 +394,7 @@ export const LvApp = ({
 
       <LvTweaksPanel
         isOpen={tweaksPanelOpen}
-        onClose={() => onCloseTweaks?.()}
+        onClose={() => setTweaksPanelOpen(false)}
         title="Tweaks"
       >
         <LvTweakSection label="Appearance" />

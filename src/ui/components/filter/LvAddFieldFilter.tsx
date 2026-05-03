@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { LvFieldFilter, LvFieldFilterOp } from '../../contracts/lv-types.ts';
+import type { FieldFilter, FieldFilterOp } from '../../../core/types/index.ts';
 
 const SUGGESTED = ['status', 'user_id', 'service', 'trace_id', 'duration_ms', 'method', 'path', 'req_id', 'pod'];
 const SYSTEM = ['$file', '$path', '$source', '$host', '$line', '$root', '$kind', '$ingested_at'];
@@ -7,13 +7,13 @@ const SYSTEM = ['$file', '$path', '$source', '$host', '$line', '$root', '$kind',
 const isSystem = (k: string): boolean => k.startsWith('$');
 
 export interface LvAddFieldFilterProps {
-  onAdd: (filter: LvFieldFilter) => void;
+  onAdd: (filter: FieldFilter) => void;
 }
 
 export const LvAddFieldFilter = ({ onAdd }: LvAddFieldFilterProps) => {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState('status');
-  const [op, setOp] = useState<LvFieldFilterOp>('=');
+  const [op, setOp] = useState<FieldFilterOp>('=');
   const [value, setValue] = useState('500');
 
   const commit = () => {
@@ -54,7 +54,7 @@ export const LvAddFieldFilter = ({ onAdd }: LvAddFieldFilterProps) => {
             <select
               className="lv-field-op"
               value={op}
-              onChange={(e) => setOp(e.target.value as LvFieldFilterOp)}
+              onChange={(e) => setOp(e.target.value as FieldFilterOp)}
             >
               <option value="=">=</option>
               <option value="!=">≠</option>

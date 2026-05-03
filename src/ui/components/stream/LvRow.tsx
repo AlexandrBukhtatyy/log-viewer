@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
+import type { FieldFilter, LogEntry } from '../../../core/types/index.ts';
 import type {
-  LvFieldFilter,
-  LvLogEntry,
+  LvFileNode,
+  LvLogKind,
   LvTweakDensity,
   LvTweakTheme,
 } from '../../contracts/lv-types.ts';
@@ -10,7 +11,9 @@ import { lvHighlight } from '../../utils/lv-highlight.tsx';
 import { LvRowDetail } from './LvRowDetail.tsx';
 
 export interface LvRowProps {
-  readonly entry: LvLogEntry;
+  readonly entry: LogEntry;
+  /** File metadata for entry.sourceId — supplies file name, path and visual kind. */
+  readonly fileMeta: LvFileNode | null;
   readonly index: number;
   readonly density: LvTweakDensity;
   readonly showDate: boolean;
@@ -27,9 +30,9 @@ export interface LvRowProps {
   onSelect: () => void;
   onToggleExpand: () => void;
   onBookmark: () => void;
-  onOpenAtLine: (e: React.MouseEvent<HTMLElement>, entry: LvLogEntry) => void;
-  onContextMenu: (e: React.MouseEvent<HTMLElement>, entry: LvLogEntry) => void;
-  onAddFieldFilter: (ff: LvFieldFilter) => void;
+  onOpenAtLine: (e: React.MouseEvent<HTMLElement>, entry: LogEntry) => void;
+  onContextMenu: (e: React.MouseEvent<HTMLElement>, entry: LogEntry) => void;
+  onAddFieldFilter: (ff: FieldFilter) => void;
   readonly theme?: LvTweakTheme;
   readonly indentPx?: number;
   renderDetailEditor?: (props: {
@@ -41,8 +44,15 @@ export interface LvRowProps {
   }) => ReactNode;
 }
 
+const serviceFromEntry = (entry: LogEntry, fileMeta: LvFileNode | null): string => {
+  const fromFields = (entry.fields as Record<string, unknown>).service;
+  if (typeof fromFields === 'string' && fromFields.length > 0) return fromFields;
+  return fileMeta?.service ?? '—';
+};
+
 export const LvRow = ({
   entry,
+  fileMeta,
   index,
   density,
   showDate,
@@ -81,6 +91,12 @@ export const LvRow = ({
     (indentPx ? ' is-nested' : '') +
     (isFindMatch ? ' is-find-match' : '') +
     (isFindCurrent ? ' is-find-current' : '');
+  const tsTitle =
+    entry.timestamp === null ? '' : new Date(entry.timestamp).toISOString();
+  const fileName = fileMeta?.name ?? '—';
+  const filePath = fileMeta?.path ?? '';
+  const fileKind: LvLogKind | undefined = fileMeta?.kind;
+  const service = serviceFromEntry(entry, fileMeta);
   return (
     <>
       <div
@@ -95,7 +111,7 @@ export const LvRow = ({
         }}
       >
         <span className="lv-row-gutter">
-          {bookmarked ? <span className="lv-bm">●</span> : <span className="lv-ln">{entry.line}</span>}
+          {bookmarked ? <span className="lv-bm">●</span> : <span className="lv-ln">{entry.seq}</span>}
         </span>
         <span className="lv-row-caret">
           <svg
@@ -114,18 +130,18 @@ export const LvRow = ({
             />
           </svg>
         </span>
-        <span className="lv-row-ts" title={entry.ts}>
-          {lvFmtTime(entry.ts, showDate)}
+        <span className="lv-row-ts" title={tsTitle}>
+          {lvFmtTime(entry.timestamp, showDate)}
         </span>
         <span className={`lv-row-lvl lv-level-tag-${entry.level}`}>{entry.level}</span>
-        <span className="lv-row-svc" title={entry.service}>
-          {entry.service}
+        <span className="lv-row-svc" title={service}>
+          {service}
         </span>
-        <span className="lv-row-file" title={entry.path}>
-          {entry.file}
+        <span className="lv-row-file" title={filePath}>
+          {fileName}
         </span>
         <span className={`lv-row-msg${wrap ? ' wrap' : ''}`}>
-          {lvHighlight(entry.msg, query, useRegex, caseSensitive, wholeWord)}
+          {lvHighlight(entry.message, query, useRegex, caseSensitive, wholeWord)}
         </span>
         <span className="lv-row-actions" onClick={(e) => e.stopPropagation()}>
           <button
@@ -170,6 +186,7 @@ export const LvRow = ({
         >
           <LvRowDetail
             entry={entry}
+            kind={fileKind}
             onAddFieldFilter={onAddFieldFilter}
             theme={theme}
             renderEditor={renderDetailEditor}

@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
-import type { LvFileNode, LvLogEntry } from '../../contracts/lv-types.ts';
+import type { LogEntry } from '../../../core/types/index.ts';
+import type { LvFileNode } from '../../contracts/lv-types.ts';
 import { lvHighlight } from '../../utils/lv-highlight.tsx';
 import { LvFileIcon } from '../sidebar/LvFileIcon.tsx';
 
 export interface LvFilePeekProps {
   readonly file: LvFileNode;
-  readonly entries: ReadonlyArray<LvLogEntry>;
+  readonly entries: ReadonlyArray<LogEntry>;
   readonly line: number;
   onClose: () => void;
   readonly query: string;
@@ -46,10 +47,10 @@ export const LvFilePeek = ({
         {entries.map((e) => (
           <div
             key={e.id}
-            data-line={e.line}
-            className={`lv-peek-row lv-level-${e.level}${e.line === line ? ' is-focus' : ''}`}
+            data-line={e.seq}
+            className={`lv-peek-row lv-level-${e.level}${e.seq === line ? ' is-focus' : ''}`}
           >
-            <span className="lv-peek-ln">{e.line}</span>
+            <span className="lv-peek-ln">{e.seq}</span>
             <span className="lv-peek-content">
               {lvHighlight(e.raw, query, useRegex, caseSensitive, wholeWord)}
             </span>

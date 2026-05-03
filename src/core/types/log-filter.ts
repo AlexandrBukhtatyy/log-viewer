@@ -2,7 +2,15 @@ import type { LogEntry, LogLevel, SourceId } from './log-entry.ts';
 
 export type QueryMode = 'substring' | 'fts' | 'regex';
 
-export type FieldFilterOp = 'eq' | 'ne' | 'contains';
+/**
+ * Field-filter operators (UI-natural symbol form):
+ *  '='  — equality (string compare)
+ *  '!=' — inequality
+ *  '~'  — substring (case-insensitive)
+ *  '>'  — numeric greater-than (CAST AS REAL)
+ *  '<'  — numeric less-than
+ */
+export type FieldFilterOp = '=' | '!=' | '~' | '>' | '<';
 
 export interface FieldFilter {
   readonly key: string;
@@ -20,8 +28,19 @@ export interface LogFilter {
   readonly query: string;
   readonly queryMode: QueryMode;
   readonly caseSensitive: boolean;
+  /**
+   * When true, substring/regex queries match only at word boundaries
+   * (\b...\b). For FTS the query is wrapped in phrase quotes.
+   */
+  readonly wholeWord: boolean;
   readonly timeRange: TimeRange | null;
   readonly sources: ReadonlyArray<SourceId> | null;
+  /**
+   * Service filter (parallel to `sources`). Matches any of the listed
+   * service names against `fields.service` extracted from JSON.
+   * `null` — no constraint, `[]` — match nothing.
+   */
+  readonly services: ReadonlyArray<string> | null;
   readonly fieldFilters?: ReadonlyArray<FieldFilter>;
 }
 
@@ -32,6 +51,8 @@ export const EMPTY_FILTER: LogFilter = {
   query: '',
   queryMode: 'substring',
   caseSensitive: false,
+  wholeWord: false,
   timeRange: null,
   sources: null,
+  services: null,
 };
