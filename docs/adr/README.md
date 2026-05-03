@@ -83,3 +83,11 @@ flowchart LR
 ## Index
 
 - [0001. Record architecture decisions](0001-record-architecture-decisions.md) — accepted
+- [0002. Headless architecture: core / hooks / ui / app, container-dumb split](0002-headless-architecture.md) — accepted
+- [0003. Worker-centric topology: coordinator + parser pool + indexer](0003-worker-centric-topology.md) — accepted
+- [0004. Comlink + тонкий custom pool wrapper для RPC main↔worker](0004-comlink-rpc-with-custom-pool.md) — accepted
+- [0005. SQLite (wa-sqlite) + FTS5 в OPFS как индекс/БД для логов](0005-sqlite-fts5-opfs-index.md) — accepted
+- [0006. Persistence strategy: дифференцированная по типу источника](0006-persistence-strategy.md) — accepted
+- [0007. State management: Zustand поверх чистого core-store класса](0007-state-management-zustand.md) — accepted
+- [0008. Tailwind v4 как dev-зависимость (а не CDN)](0008-tailwind-v4-via-package.md) — proposed
+- [0009. Mock-default app: переходное состояние UI без worker-привязки](0009-mock-default-app.md) — proposed
