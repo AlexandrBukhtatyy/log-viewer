@@ -14,6 +14,8 @@ export interface LvTreeNodeProps {
   onRemoveRoot?: (id: string) => void;
   /** Click handler for the "Grant access" button on permission-required files. */
   onGrantPermission?: (id: string) => void;
+  /** Click handler for the in-flight "Cancel" button. */
+  onCancelSource?: (id: string) => void;
 }
 
 const collectFileIds = (node: LvNode, out: string[]): void => {
@@ -30,6 +32,7 @@ export const LvTreeNode = ({
   onToggleFolder,
   onRemoveRoot,
   onGrantPermission,
+  onCancelSource,
 }: LvTreeNodeProps) => {
   const isFolder = node.type === 'folder';
   const open = isFolder ? !!openFolders[node.id] : false;
@@ -111,6 +114,20 @@ export const LvTreeNode = ({
                 +{node.newCount}
               </span>
             ) : null}
+            {node.live && onCancelSource && (
+              <button
+                type="button"
+                className="lv-cancel-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCancelSource(node.id);
+                }}
+                title="Cancel ingest (already-indexed entries are kept)"
+                aria-label="Cancel ingest"
+              >
+                ✕
+              </button>
+            )}
             {node.needsPermission && onGrantPermission && (
               <button
                 type="button"
@@ -169,6 +186,7 @@ export const LvTreeNode = ({
             onToggleFolder={onToggleFolder}
             onRemoveRoot={onRemoveRoot}
             onGrantPermission={onGrantPermission}
+            onCancelSource={onCancelSource}
           />
         ))}
     </>

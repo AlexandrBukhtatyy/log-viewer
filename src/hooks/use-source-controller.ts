@@ -66,6 +66,11 @@ export interface UseSourceController {
    * click) — browsers reject `requestPermission` otherwise.
    */
   grantPermission: (id: SourceId) => Promise<boolean>;
+  /**
+   * Abort the in-flight ingest for a source. Already-indexed entries stay;
+   * status transitions to `done` with the partial entryCount.
+   */
+  cancelSource: (id: SourceId) => Promise<void>;
 }
 
 export const useSourceController = (): UseSourceController => {
@@ -143,6 +148,11 @@ export const useSourceController = (): UseSourceController => {
     [store],
   );
 
+  const cancelSource = useCallback(
+    (id: SourceId) => store.getState().cancelSource(id),
+    [store],
+  );
+
   return {
     addFile,
     addDirectory,
@@ -159,5 +169,6 @@ export const useSourceController = (): UseSourceController => {
     clearAll,
     resumePersistedSources,
     grantPermission,
+    cancelSource,
   };
 };

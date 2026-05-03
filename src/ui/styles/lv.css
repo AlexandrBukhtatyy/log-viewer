@@ -537,6 +537,12 @@ button{font-family:inherit}
 }
 .lv-grant-btn:hover{background:color-mix(in srgb, var(--lv-warn) 22%, transparent)}
 .lv-tree-error{color:var(--lv-error); font-size:11px; flex-shrink:0}
+.lv-cancel-btn{
+  font-size:10px; line-height:1; padding:0 5px; border-radius:3px;
+  border:1px solid var(--lv-border-strong); background:transparent;
+  color:var(--lv-fg-3); cursor:pointer; flex-shrink:0;
+}
+.lv-cancel-btn:hover{color:var(--lv-error); border-color:var(--lv-error)}
 .lv-tree-check{
   width:16px; height:16px; border-radius:4px; border:1px solid var(--lv-border-strong);
   background:var(--lv-bg-2); display:flex; align-items:center; justify-content:center;

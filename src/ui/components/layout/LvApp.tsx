@@ -86,6 +86,7 @@ export interface LvAppProps {
   onRemoveRoot: (id: string) => void;
   onOpenLocalFile?: () => Promise<void>;
   onGrantPermission?: (id: string) => void;
+  onCancelSource?: (id: string) => void;
 
   // Tweaks / UI prefs (persisted in container via useUiPrefs).
   readonly tweaks: LvTweaks;
@@ -152,6 +153,7 @@ export const LvApp = ({
   onRemoveRoot,
   onOpenLocalFile,
   onGrantPermission,
+  onCancelSource,
   tweaks,
   setTweak,
   bookmarks,
@@ -281,6 +283,7 @@ export const LvApp = ({
         onAddRoot={onAddRoot}
         onRemoveRoot={onRemoveRoot}
         onGrantPermission={onGrantPermission}
+        onCancelSource={onCancelSource}
       />
     ) : rail === 'search' ? (
       <LvSearchPanel

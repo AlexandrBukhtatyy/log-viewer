@@ -372,6 +372,15 @@ export const LvAppContainer = () => {
     [sourceCtrl],
   );
 
+  const onCancelSource = useCallback(
+    (id: string) => {
+      void sourceCtrl.cancelSource(id as SourceId).catch((err: unknown) => {
+        console.warn('cancelSource failed', err);
+      });
+    },
+    [sourceCtrl],
+  );
+
   const onRemoveRoot = useCallback(
     (rootId: string) => {
       // Catalog roots have id `lv-root-<lvKind>` — remove every contained file.
@@ -415,6 +424,7 @@ export const LvAppContainer = () => {
       onRemoveRoot={onRemoveRoot}
       onOpenLocalFile={onOpenLocalFile}
       onGrantPermission={onGrantPermission}
+      onCancelSource={onCancelSource}
       tweaks={{
         theme: tweaks.theme,
         density: tweaks.density,

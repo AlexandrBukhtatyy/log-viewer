@@ -92,11 +92,14 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
       onChange();
     }
 
-    if (!signal.aborted) {
-      onStatus({ kind: 'done', entryCount: entriesIndexed });
-    }
+    // Emit `done` even on abort — partial entries are real and indexed; UI
+    // shows the partial count instead of getting stuck on `indexing…`.
+    onStatus({ kind: 'done', entryCount: entriesIndexed });
   } catch (err) {
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      onStatus({ kind: 'done', entryCount: entriesIndexed });
+      return;
+    }
     onStatus({ kind: 'error', error: formatError(err) });
   } finally {
     try {

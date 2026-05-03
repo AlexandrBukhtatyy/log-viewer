@@ -88,6 +88,7 @@ export interface ViewActions {
   resumePersistedSources: () => Promise<ResumeReport>;
   grantPermission: (id: SourceId) => Promise<boolean>;
   exportFiltered: (format: ExportFormat) => Promise<Blob>;
+  cancelSource: (id: SourceId) => Promise<void>;
   getEntry: (id: EntryId) => Promise<LogEntry | null>;
   getGroupCounts: (
     filter: LogFilter,
@@ -284,6 +285,7 @@ export const createLogClient = (): ViewStore => {
       resumePersistedSources: async () => api.resumePersistedSources(),
       grantPermission: async (id) => api.grantPermission(id),
       exportFiltered: async (format) => api.exportFiltered(get().filter, format),
+      cancelSource: async (id) => api.cancel(id as string),
       getEntry: async (id) => api.getEntry(id),
       getGroupCounts: async (filter, field, limit) =>
         api.getGroupCounts(filter, field, limit),

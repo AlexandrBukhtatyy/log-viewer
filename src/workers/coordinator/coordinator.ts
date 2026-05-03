@@ -586,6 +586,17 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       const mime = format === 'csv' ? 'text/csv' : 'application/x-ndjson';
       return new Blob([text], { type: mime });
     },
-    cancel: async () => notImplemented('cancel'),
+    /**
+     * Abort the in-flight ingest for `taskId`. We model `taskId === SourceId`
+     * for now — every long-running task is an ingest pipeline tied to a
+     * source. The aborter trips the adapter's stream; ingest-orchestrator
+     * then surfaces a `done` (clean cancel) or `error` status. No-op for
+     * unknown ids or sources without an active aborter.
+     */
+    cancel: async (taskId) => {
+      const entry = sources.get(taskId as SourceId);
+      if (!entry) return;
+      entry.aborter?.abort();
+    },
   };
 };
