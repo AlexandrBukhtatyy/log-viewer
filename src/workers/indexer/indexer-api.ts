@@ -71,7 +71,10 @@ const serializeSourceMeta = (source: LogSource): string => {
     case 'file':
       return JSON.stringify({ size: source.size });
     case 'directory':
-      return JSON.stringify({ glob: source.glob ?? null });
+      return JSON.stringify({
+        glob: source.glob ?? null,
+        watch: source.watch ?? false,
+      });
     case 'text':
       return JSON.stringify({});
     case 'url':

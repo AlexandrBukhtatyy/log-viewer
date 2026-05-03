@@ -40,7 +40,12 @@ export interface ViewActions {
   selectEntry: (id: EntryId | null) => void;
   setVisibleRange: (from: number, to: number) => void;
   addFile: (file: File) => Promise<SourceId>;
-  addDirectory: () => Promise<SourceId | null>;
+  addDirectory: (opts?: {
+    handle?: FileSystemDirectoryHandle;
+    name?: string;
+    watch?: boolean;
+    glob?: string;
+  }) => Promise<SourceId | null>;
   addText: (name: string, text: string) => Promise<SourceId>;
   addUrl: (
     url: string,
@@ -182,27 +187,31 @@ export const createLogClient = (): ViewStore => {
           size: file.size,
           file,
         }),
-      addDirectory: async () => {
-        // Picker MUST run on main thread under user gesture.
-        if (typeof window === 'undefined' || !window.showDirectoryPicker) {
-          throw new Error(
-            'addDirectory: File System Access API not supported in this browser',
-          );
-        }
-        let handle: FileSystemDirectoryHandle;
-        try {
-          handle = await window.showDirectoryPicker({ mode: 'read' });
-        } catch (err) {
-          // User cancelled the picker — surface as null, not an error.
-          if (err instanceof DOMException && err.name === 'AbortError') {
-            return null;
+      addDirectory: async (opts) => {
+        let handle = opts?.handle ?? null;
+        if (handle === null) {
+          // Picker MUST run on main thread under user gesture.
+          if (typeof window === 'undefined' || !window.showDirectoryPicker) {
+            throw new Error(
+              'addDirectory: File System Access API not supported in this browser',
+            );
           }
-          throw err;
+          try {
+            handle = await window.showDirectoryPicker({ mode: 'read' });
+          } catch (err) {
+            // User cancelled the picker — surface as null, not an error.
+            if (err instanceof DOMException && err.name === 'AbortError') {
+              return null;
+            }
+            throw err;
+          }
         }
         return api.addSource({
           kind: 'directory',
-          name: handle.name,
+          name: opts?.name ?? handle.name,
           handle,
+          glob: opts?.glob,
+          watch: opts?.watch,
         });
       },
       addText: async (name, text) =>

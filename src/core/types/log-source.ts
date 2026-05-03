@@ -14,6 +14,14 @@ export type DirectoryLogSource = {
   readonly name: string;
   readonly handle: FileSystemDirectoryHandle;
   readonly glob?: string;
+  /**
+   * UI hint: this directory was added as a "watched folder" — the user
+   * expects new files / appended bytes to surface live. The current
+   * adapter does not yet implement watching (planned Phase-4 follow-up);
+   * the flag is persisted in metadata so the sidebar tree can put the
+   * source under "Watched folders" vs "Local files".
+   */
+  readonly watch?: boolean;
 };
 
 export type TextLogSource = {
@@ -122,7 +130,13 @@ export type LogSourceKind = LogSource['kind'];
 
 export type LogSourceInput =
   | { kind: 'file'; name: string; size: number; file: File }
-  | { kind: 'directory'; name: string; handle: FileSystemDirectoryHandle; glob?: string }
+  | {
+      kind: 'directory';
+      name: string;
+      handle: FileSystemDirectoryHandle;
+      glob?: string;
+      watch?: boolean;
+    }
   | { kind: 'text'; name: string; text: string }
   | { kind: 'url'; name: string; url: string; headers?: Readonly<Record<string, string>> }
   | { kind: 'stream'; name: string; transport: 'ws' | 'sse'; url: string }

@@ -30,6 +30,10 @@ import { LvAiPanel } from '../panels/LvAiPanel.tsx';
 import { LvAlertsPanel } from '../panels/LvAlertsPanel.tsx';
 import { LvCommandPalette } from '../modals/LvCommandPalette.tsx';
 import { LvShortcutsModal } from '../modals/LvShortcutsModal.tsx';
+import {
+  LvAddSourceModal,
+  type LvAddSourceFormData,
+} from '../sidebar/LvAddSourceModal.tsx';
 import { LvSettingsPopover } from '../settings/LvSettingsPopover.tsx';
 import { LvTweaksPanel } from '../tweaks/LvTweaksPanel.tsx';
 import { LvTweakSection } from '../tweaks/LvTweakSection.tsx';
@@ -85,6 +89,11 @@ export interface LvAppProps {
   onAddRoot: (sourceType: LvSourceKind) => void;
   onRemoveRoot: (id: string) => void;
   onOpenLocalFile?: () => Promise<void>;
+  /**
+   * Submit handler for the unified "Add log source" modal — currently
+   * fires for the local-folder kind only.
+   */
+  onSubmitAddSource?: (data: LvAddSourceFormData) => void;
   onGrantPermission?: (id: string) => void;
   onCancelSource?: (id: string) => void;
 
@@ -152,6 +161,7 @@ export const LvApp = ({
   onAddRoot,
   onRemoveRoot,
   onOpenLocalFile,
+  onSubmitAddSource,
   onGrantPermission,
   onCancelSource,
   tweaks,
@@ -182,6 +192,9 @@ export const LvApp = ({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [tweaksPanelOpen, setTweaksPanelOpen] = useState(false);
+  const [addSourceModal, setAddSourceModal] = useState<
+    { open: true; initialWatch: boolean } | { open: false }
+  >({ open: false });
 
   useEffect(() => {
     document.documentElement.dataset.theme = tweaks.theme;
@@ -273,6 +286,20 @@ export const LvApp = ({
   const aiFileCount = selectedIds.size;
   const aiLineCount = lineCount;
 
+  // For local-folder kinds we open the unified add-source modal; everything
+  // else still goes through the legacy prompt-flow in the container.
+  const handleAddRoot = (kind: LvSourceKind) => {
+    if (kind === 'local-static') {
+      setAddSourceModal({ open: true, initialWatch: false });
+      return;
+    }
+    if (kind === 'local-live') {
+      setAddSourceModal({ open: true, initialWatch: true });
+      return;
+    }
+    onAddRoot(kind);
+  };
+
   const leftPanel =
     rail === 'files' ? (
       <LvSidebar
@@ -280,7 +307,7 @@ export const LvApp = ({
         filesById={filesById}
         selectedIds={selectedIds}
         setSelectedIds={(updater) => setSelectedIds((prev) => updater(prev))}
-        onAddRoot={onAddRoot}
+        onAddRoot={handleAddRoot}
         onRemoveRoot={onRemoveRoot}
         onGrantPermission={onGrantPermission}
         onCancelSource={onCancelSource}
@@ -429,6 +456,16 @@ export const LvApp = ({
       />
 
       <LvShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      <LvAddSourceModal
+        open={addSourceModal.open}
+        initialWatch={addSourceModal.open ? addSourceModal.initialWatch : false}
+        onClose={() => setAddSourceModal({ open: false })}
+        onSubmit={(data) => {
+          onSubmitAddSource?.(data);
+          setAddSourceModal({ open: false });
+        }}
+      />
 
       <LvTweaksPanel
         isOpen={tweaksPanelOpen}

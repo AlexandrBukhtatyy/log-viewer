@@ -24,6 +24,21 @@ const streamSource = (id: string, name: string, indexed = 0): SourceRecord => ({
   status: { kind: 'streaming', entriesIndexed: indexed },
 });
 
+const directorySource = (
+  id: string,
+  name: string,
+  watch = false,
+): SourceRecord => ({
+  source: {
+    kind: 'directory',
+    id: id as SourceId,
+    name,
+    handle: {} as unknown as FileSystemDirectoryHandle,
+    watch,
+  },
+  status: { kind: 'done', entryCount: 0 },
+});
+
 const k8sSource = (id: string, name: string): SourceRecord => ({
   source: {
     kind: 'k8s',
@@ -63,6 +78,27 @@ describe('buildCatalogTree', () => {
     const tree = buildCatalogTree([fileSource('s-1', 'a.log')]);
     const file = tree[0]!.children[0] as { count?: number };
     expect(file.count).toBe(0);
+  });
+
+  it('static directories land under "Local files"', () => {
+    const tree = buildCatalogTree([directorySource('s-1', 'logs', false)]);
+    expect(tree).toHaveLength(1);
+    expect(tree[0]!.source).toBe('local-static');
+  });
+
+  it('watched directories land under "Watched folders"', () => {
+    const tree = buildCatalogTree([directorySource('s-1', 'logs', true)]);
+    expect(tree).toHaveLength(1);
+    expect(tree[0]!.source).toBe('local-live');
+  });
+
+  it('mixes static and watched directories into separate roots', () => {
+    const tree = buildCatalogTree([
+      directorySource('s-1', 'static-logs', false),
+      directorySource('s-2', 'live-logs', true),
+    ]);
+    const sorted = tree.map((r) => r.source).sort();
+    expect(sorted).toEqual(['local-live', 'local-static']);
   });
 });
 

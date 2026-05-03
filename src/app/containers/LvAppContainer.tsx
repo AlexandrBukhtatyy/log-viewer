@@ -300,13 +300,38 @@ export const LvAppContainer = () => {
     }
   }, [sourceCtrl]);
 
+  // Submit handler for the LvAddSourceModal — currently only fires for the
+  // local-folder kind. Folder picker is owned by the modal; this just does
+  // the RPC.
+  const onSubmitAddSource = useCallback(
+    async (data: {
+      handle: FileSystemDirectoryHandle;
+      name: string;
+      watch: boolean;
+      glob: string | null;
+    }) => {
+      try {
+        await sourceCtrl.addDirectory({
+          handle: data.handle,
+          name: data.name,
+          watch: data.watch,
+          glob: data.glob ?? undefined,
+        });
+      } catch (e) {
+        console.warn('addDirectory failed', e);
+      }
+    },
+    [sourceCtrl],
+  );
+
   const onAddRoot = useCallback(
     async (kind: LvSourceKind) => {
       try {
         switch (kind) {
           case 'local-static':
           case 'local-live':
-            await sourceCtrl.addDirectory();
+            // Handled by LvAddSourceModal → onSubmitAddSource. LvApp won't
+            // forward these kinds here, but we keep the no-op for safety.
             break;
           case 'stream': {
             const url = promptOrEmpty('WebSocket / SSE URL:', 'wss://example/');
@@ -423,6 +448,7 @@ export const LvAppContainer = () => {
       onAddRoot={onAddRoot}
       onRemoveRoot={onRemoveRoot}
       onOpenLocalFile={onOpenLocalFile}
+      onSubmitAddSource={onSubmitAddSource}
       onGrantPermission={onGrantPermission}
       onCancelSource={onCancelSource}
       tweaks={{

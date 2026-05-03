@@ -9,7 +9,12 @@ import type {
 
 export interface UseSourceController {
   addFile: (file: File) => Promise<SourceId>;
-  addDirectory: () => Promise<SourceId | null>;
+  addDirectory: (opts?: {
+    handle?: FileSystemDirectoryHandle;
+    name?: string;
+    watch?: boolean;
+    glob?: string;
+  }) => Promise<SourceId | null>;
   addText: (name: string, text: string) => Promise<SourceId>;
   addUrl: (
     url: string,
@@ -81,8 +86,8 @@ export const useSourceController = (): UseSourceController => {
     [store],
   );
 
-  const addDirectory = useCallback(
-    () => store.getState().addDirectory(),
+  const addDirectory = useCallback<UseSourceController['addDirectory']>(
+    (opts) => store.getState().addDirectory(opts),
     [store],
   );
 

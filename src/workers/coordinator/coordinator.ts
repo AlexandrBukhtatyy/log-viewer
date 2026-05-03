@@ -48,6 +48,7 @@ const buildLogSource = (input: LogSourceInput, id: SourceId): LogSource => {
         name: input.name,
         handle: input.handle,
         glob: input.glob,
+        watch: input.watch,
       };
     case 'text':
       return { kind: 'text', id, name: input.name, text: input.text };
@@ -205,11 +206,16 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         if (rec.kind === 'directory') {
           const persisted = handleByIdx.get(rec.id);
           if (persisted && persisted.kind === 'directory') {
+            const meta = rec.metaJson
+              ? (JSON.parse(rec.metaJson) as { glob?: string; watch?: boolean })
+              : {};
             logSource = {
               kind: 'directory',
               id: rec.id,
               name: rec.name,
               handle: persisted.handle as FileSystemDirectoryHandle,
+              glob: meta.glob,
+              watch: meta.watch,
             };
           }
         } else {

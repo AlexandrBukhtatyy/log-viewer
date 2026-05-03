@@ -1,4 +1,5 @@
 import type {
+  LogSource,
   LogSourceKind,
   SourceRecord,
   SourceStatus,
@@ -33,6 +34,16 @@ const CORE_TO_LV: Record<LogSourceKind, LvSourceKind> = {
   bus: 'bus',
   db: 'db',
   snapshot: 'snapshot',
+};
+
+/**
+ * Map a core source to its sidebar tree section. Mostly identity via
+ * CORE_TO_LV, but `directory` splits by the `watch` flag — watched folders
+ * land under "Watched folders", static ones under "Local files".
+ */
+const lvKindOf = (source: LogSource): LvSourceKind => {
+  if (source.kind === 'directory' && source.watch) return 'local-live';
+  return CORE_TO_LV[source.kind];
 };
 
 const ROOT_LABEL: Record<LvSourceKind, string> = {
@@ -95,7 +106,7 @@ export const buildCatalogTree = (
 ): LvCatalogRoot[] => {
   const buckets = new Map<LvSourceKind, LvFileNode[]>();
   for (const rec of sources) {
-    const lvKind = CORE_TO_LV[rec.source.kind];
+    const lvKind = lvKindOf(rec.source);
     const list = buckets.get(lvKind) ?? [];
     list.push(fileNodeFromSource(rec));
     buckets.set(lvKind, list);

@@ -301,6 +301,40 @@ button{font-family:inherit}
   border-top:1px solid var(--lv-border);
   display:flex; align-items:center; gap:6px;
 }
+.lv-modal-ft-actions{justify-content:flex-end; gap:8px}
+
+/* "Add log source" modal — generic form layout reusable for future kinds. */
+.lv-add-src-modal{width:480px; max-width:calc(100vw - 32px)}
+.lv-form-row{display:flex; align-items:center; gap:10px; padding:6px 0}
+.lv-form-row .lv-form-label{
+  width:80px; flex-shrink:0; font-size:11px; color:var(--lv-fg-2); font-weight:500;
+}
+.lv-form-input{
+  flex:1; min-width:0;
+  background:var(--lv-bg-2); border:1px solid var(--lv-border);
+  border-radius:4px; padding:5px 8px; font:inherit; font-size:12px;
+  color:var(--lv-fg); outline:none;
+}
+.lv-form-input:focus{border-color:var(--lv-accent)}
+.lv-form-input:disabled{opacity:.6; cursor:not-allowed}
+.lv-form-folder{flex:1; display:flex; align-items:center; gap:8px; min-width:0}
+.lv-form-folder-name{
+  flex:1; min-width:0; font-size:12px; color:var(--lv-fg-2);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.lv-form-folder-name.is-empty{color:var(--lv-fg-3); font-style:italic}
+.lv-form-toggle{
+  flex:1; display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12px;
+}
+.lv-form-toggle input[type="checkbox"]{margin:0}
+.lv-form-toggle-hint{color:var(--lv-fg-3); font-size:11px}
+.lv-form-error{
+  margin-left:90px; margin-top:4px; font-size:11px; color:var(--lv-error);
+}
+.lv-btn-secondary{background:transparent; border:1px solid var(--lv-border-strong); color:var(--lv-fg-2)}
+.lv-btn-secondary:hover{background:var(--lv-bg-2); color:var(--lv-fg)}
+.lv-btn:disabled{opacity:.4; cursor:not-allowed}
+.lv-btn:disabled:hover{background:var(--lv-accent); color:#0a0e1a}
 
 .lv-shortcuts-sec{padding:10px 0; border-bottom:1px solid var(--lv-border)}
 .lv-shortcuts-sec:last-child{border-bottom:0}
