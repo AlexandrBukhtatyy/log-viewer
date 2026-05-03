@@ -13,6 +13,10 @@ dist-ssr
 dev-dist
 *.local
 
+# Tooling caches
+.pnpm-store
+.playwright-mcp
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

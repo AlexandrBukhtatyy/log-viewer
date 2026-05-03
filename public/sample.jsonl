@@ -1,0 +1,15 @@
+{"ts":"2026-05-02T10:00:00.123Z","level":"info","msg":"server boot","port":3000,"env":"prod"}
+{"ts":"2026-05-02T10:00:01.450Z","level":"debug","msg":"connecting to postgres","host":"db-1"}
+{"ts":"2026-05-02T10:00:02.100Z","level":"info","msg":"db connected"}
+{"ts":"2026-05-02T10:00:03.200Z","level":"warn","msg":"slow query detected","queryMs":345,"sql":"SELECT * FROM users"}
+{"ts":"2026-05-02T10:00:04.000Z","level":"error","msg":"failed to load config","file":"/etc/cfg.json","err":"ENOENT"}
+{"ts":"2026-05-02T10:00:05.500Z","level":"info","msg":"retry succeeded","attempt":2}
+{"ts":"2026-05-02T10:00:06.700Z","level":"info","msg":"request handled","path":"/api/users","status":200,"ms":12}
+{"ts":"2026-05-02T10:00:07.800Z","level":"warn","msg":"deprecation: legacy /v1 endpoint","caller":"client-x"}
+{"ts":"2026-05-02T10:00:08.900Z","level":"error","msg":"unhandled exception","stack":"TypeError: bar","reqId":"r-42"}
+{"ts":"2026-05-02T10:00:10.000Z","level":"fatal","msg":"out of memory","heapMB":1024}
+plain text line without JSON, level should be unknown
+{"ts":"2026-05-02T10:00:11.111Z","level":"info","msg":"recovery start"}
+{"ts":"2026-05-02T10:00:12.222Z","level":"trace","msg":"trace span 1","traceId":"t-1"}
+{"ts":"2026-05-02T10:00:13.333Z","level":"trace","msg":"trace span 2","traceId":"t-1"}
+{"ts":"2026-05-02T10:00:14.444Z","level":"info","msg":"shutdown initiated","reason":"sigterm"}

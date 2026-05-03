@@ -1,0 +1,195 @@
+import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import type { Database } from '@sqlite.org/sqlite-wasm';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { buildClause, ORDER_BY_DEFAULT } from '../../../core/filter/query.ts';
+import { EMPTY_FILTER } from '../../../core/types/log-filter.ts';
+import { applyMigrations, TARGET_SCHEMA_VERSION } from './migrations.ts';
+
+let sqlite3Mod: Awaited<ReturnType<typeof sqlite3InitModule>> | null = null;
+
+const init = async () => {
+  if (sqlite3Mod === null) {
+    sqlite3Mod = await sqlite3InitModule();
+  }
+  return sqlite3Mod;
+};
+
+const openMemoryDb = async (): Promise<Database> => {
+  const sqlite3 = await init();
+  // ':memory:' VFS — no OPFS required, works under Node test runtime.
+  const db = new sqlite3.oo1.DB(':memory:');
+  applyMigrations(db);
+  return db;
+};
+
+const insertSource = (db: Database, id: string, kind: string, name: string) =>
+  db.exec({
+    sql: 'INSERT INTO source (id, kind, name) VALUES (?, ?, ?)',
+    bind: [id, kind, name],
+  });
+
+const insertEntry = (
+  db: Database,
+  id: string,
+  sourceId: string,
+  seq: number,
+  ts: number | null,
+  level: string,
+  message: string,
+) =>
+  db.exec({
+    sql: `INSERT INTO entry (id, source_id, seq, ts, level, message, raw, fields_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    bind: [id, sourceId, seq, ts, level, message, message, null],
+  });
+
+const readUserVersion = (db: Database): number => {
+  const rows = db.exec({
+    sql: 'PRAGMA user_version',
+    rowMode: 'array',
+    returnValue: 'resultRows',
+  }) as unknown as ReadonlyArray<ReadonlyArray<number>>;
+  return rows[0]?.[0] ?? 0;
+};
+
+describe('indexer/db', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  describe('applyMigrations', () => {
+    it('migrates fresh DB up to TARGET_SCHEMA_VERSION', async () => {
+      const db = await openMemoryDb();
+      expect(readUserVersion(db)).toBe(TARGET_SCHEMA_VERSION);
+    });
+
+    it('is idempotent on already-migrated DB', async () => {
+      const db = await openMemoryDb();
+      const before = readUserVersion(db);
+      expect(() => applyMigrations(db)).not.toThrow();
+      expect(readUserVersion(db)).toBe(before);
+    });
+
+    it('creates entry and source tables (v1)', async () => {
+      const db = await openMemoryDb();
+      const tables = db.exec({
+        sql: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+        rowMode: 'array',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<ReadonlyArray<string>>;
+      const names = tables.map((t) => t[0]);
+      expect(names).toContain('entry');
+      expect(names).toContain('source');
+    });
+
+    it('creates FTS5 virtual table (v2)', async () => {
+      const db = await openMemoryDb();
+      const tables = db.exec({
+        sql: "SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name LIKE 'entry_fts%'",
+        rowMode: 'array',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<ReadonlyArray<string>>;
+      // entry_fts virtual table comes with shadow tables (entry_fts_data, _idx etc.)
+      const names = tables.map((t) => t[0]);
+      expect(names).toContain('entry_fts');
+    });
+  });
+
+  describe('buildClause integration', () => {
+    it('level filter via WHERE IN narrows results', async () => {
+      const db = await openMemoryDb();
+      insertSource(db, 's1', 'file', 'a.log');
+      insertEntry(db, 'e1', 's1', 0, null, 'info', 'hello');
+      insertEntry(db, 'e2', 's1', 1, null, 'error', 'boom');
+      insertEntry(db, 'e3', 's1', 2, null, 'warn', 'beware');
+
+      const { joinSql, whereSql, params } = buildClause({
+        ...EMPTY_FILTER,
+        levels: ['error', 'warn'],
+      });
+      const rows = db.exec({
+        sql: `SELECT COUNT(*) AS n FROM entry ${joinSql} ${whereSql}`,
+        bind: [...params],
+        rowMode: 'object',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<Record<string, number>>;
+      expect(rows[0]?.n).toBe(2);
+    });
+
+    it('FTS query via JOIN matches one entry', async () => {
+      const db = await openMemoryDb();
+      insertSource(db, 's1', 'file', 'a.log');
+      insertEntry(db, 'e1', 's1', 0, null, 'info', 'connection refused');
+      insertEntry(db, 'e2', 's1', 1, null, 'info', 'login success');
+      insertEntry(db, 'e3', 's1', 2, null, 'error', 'connection timeout');
+
+      const { joinSql, whereSql, params } = buildClause({
+        ...EMPTY_FILTER,
+        query: 'connection',
+        queryMode: 'fts',
+      });
+      const rows = db.exec({
+        sql: `SELECT entry.id AS id FROM entry ${joinSql} ${whereSql} ${ORDER_BY_DEFAULT}`,
+        bind: [...params],
+        rowMode: 'object',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<Record<string, string>>;
+      const ids = rows.map((r) => r.id);
+      expect(ids).toEqual(['e1', 'e3']);
+    });
+
+    it('substring LIKE works case-insensitively by default', async () => {
+      const db = await openMemoryDb();
+      insertSource(db, 's1', 'file', 'a.log');
+      insertEntry(db, 'e1', 's1', 0, null, 'info', 'Lookup TIMEOUT');
+      insertEntry(db, 'e2', 's1', 1, null, 'info', 'all good');
+
+      const { joinSql, whereSql, params } = buildClause({
+        ...EMPTY_FILTER,
+        query: 'timeout',
+        queryMode: 'substring',
+      });
+      const rows = db.exec({
+        sql: `SELECT COUNT(*) AS n FROM entry ${joinSql} ${whereSql}`,
+        bind: [...params],
+        rowMode: 'object',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<Record<string, number>>;
+      expect(rows[0]?.n).toBe(1);
+    });
+
+    it('time range bounds limit by entry.ts', async () => {
+      const db = await openMemoryDb();
+      insertSource(db, 's1', 'file', 'a.log');
+      insertEntry(db, 'e1', 's1', 0, 1000, 'info', 'a');
+      insertEntry(db, 'e2', 's1', 1, 2000, 'info', 'b');
+      insertEntry(db, 'e3', 's1', 2, 3000, 'info', 'c');
+
+      const { whereSql, params } = buildClause({
+        ...EMPTY_FILTER,
+        timeRange: { from: 1500, to: 2500 },
+      });
+      const rows = db.exec({
+        sql: `SELECT entry.id AS id FROM entry ${whereSql} ${ORDER_BY_DEFAULT}`,
+        bind: [...params],
+        rowMode: 'object',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<Record<string, string>>;
+      expect(rows.map((r) => r.id)).toEqual(['e2']);
+    });
+
+    it('ORDER BY puts NULL timestamps last', async () => {
+      const db = await openMemoryDb();
+      insertSource(db, 's1', 'file', 'a.log');
+      insertEntry(db, 'e1', 's1', 0, null, 'info', 'no-ts');
+      insertEntry(db, 'e2', 's1', 1, 1000, 'info', 'with-ts');
+
+      const rows = db.exec({
+        sql: `SELECT entry.id AS id FROM entry ${ORDER_BY_DEFAULT}`,
+        rowMode: 'object',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<Record<string, string>>;
+      expect(rows.map((r) => r.id)).toEqual(['e2', 'e1']);
+    });
+  });
+});
