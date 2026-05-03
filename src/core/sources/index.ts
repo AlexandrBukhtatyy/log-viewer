@@ -1,6 +1,7 @@
 import type { LogSourceAdapterFactory } from './source-adapter.ts';
 import { createDirectoryAdapter } from './directory-adapter.ts';
 import { createFileAdapter } from './file-adapter.ts';
+import { createSnapshotAdapter } from './snapshot-adapter.ts';
 import { createStreamAdapter } from './stream-adapter.ts';
 import { createTextAdapter } from './text-adapter.ts';
 import { createUrlAdapter } from './url-adapter.ts';
@@ -10,7 +11,6 @@ import {
   createDbAdapter,
   createK8sAdapter,
   createRemoteSshAdapter,
-  createSnapshotAdapter,
 } from './stub-adapters.ts';
 import type { LogSourceKind } from '../types/log-source.ts';
 
@@ -18,6 +18,7 @@ export { createLineSplitter } from './line-splitter.ts';
 export type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
 export { createDirectoryAdapter } from './directory-adapter.ts';
 export { createFileAdapter } from './file-adapter.ts';
+export { createSnapshotAdapter } from './snapshot-adapter.ts';
 export { createStreamAdapter } from './stream-adapter.ts';
 export { createTextAdapter } from './text-adapter.ts';
 export { createUrlAdapter } from './url-adapter.ts';
@@ -27,7 +28,6 @@ export {
   createDbAdapter,
   createK8sAdapter,
   createRemoteSshAdapter,
-  createSnapshotAdapter,
 } from './stub-adapters.ts';
 
 /**

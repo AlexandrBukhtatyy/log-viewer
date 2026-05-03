@@ -12,7 +12,6 @@ import type {
   K8sLogSource,
   LogSource,
   RemoteSshLogSource,
-  SnapshotLogSource,
 } from '../types/log-source.ts';
 import type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
 
@@ -68,11 +67,4 @@ export const createDbAdapter: LogSourceAdapterFactory = (source) =>
     'db',
     source as DbLogSource,
     'db source: adapter not implemented yet (Loki/ClickHouse/BigQuery query integrations are separate ADRs)',
-  );
-
-export const createSnapshotAdapter: LogSourceAdapterFactory = (source) =>
-  stubAdapter(
-    'snapshot',
-    source as SnapshotLogSource,
-    'snapshot source: adapter not implemented yet (zip/tar.gz extraction lands in Phase 3 — see plan §3)',
   );

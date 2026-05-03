@@ -93,3 +93,4 @@ flowchart LR
 - [0009. Mock-default app: переходное состояние UI без worker-привязки](0009-mock-default-app.md) — superseded by [0010](0010-lv-on-viewstore-core-types.md)
 - [0010. LvApp поверх ViewStore: core-типы — единственный источник, UI без адаптеров](0010-lv-on-viewstore-core-types.md) — proposed
 - [0011. Server-side aggregates (group/histogram) и regex queryMode через REGEXP UDF](0011-server-side-aggregations-and-regex.md) — proposed
+- [0012. Snapshot-адаптер: zip / tar / tar.gz через fflate](0012-snapshot-adapter-fflate.md) — proposed
