@@ -5,7 +5,6 @@ import type {
   LvNode,
   LvSourceKind,
 } from '../../contracts/lv-types.ts';
-import { LvAddSourceMenu } from './LvAddSourceMenu.tsx';
 import { LvTreeNode } from './LvTreeNode.tsx';
 
 export interface LvSidebarProps {
@@ -95,7 +94,15 @@ export const LvSidebar = ({
   return (
     <aside className="lv-sidebar">
       <div className="lv-sb-cta">
-        <LvAddSourceMenu onPick={(srcType) => onAddRoot(srcType)} primaryLabel="Add source" />
+        <button
+          type="button"
+          className="lv-add-src-btn"
+          onClick={() => onAddRoot('local-static')}
+          title="Add log source"
+        >
+          <span className="lv-add-src-plus" aria-hidden="true">＋</span>
+          <span>Add source</span>
+        </button>
       </div>
       <div className="lv-sb-search">
         <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
