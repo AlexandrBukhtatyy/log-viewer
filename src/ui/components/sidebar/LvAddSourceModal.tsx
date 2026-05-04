@@ -120,6 +120,24 @@ export const LvAddSourceModal = ({
           </div>
 
           <div className="lv-form-row">
+            <label className="lv-form-label">Watch</label>
+            <label className="lv-form-toggle">
+              <input
+                type="checkbox"
+                checked={watch}
+                onChange={(e) => setWatch(e.target.checked)}
+              />
+              <span className="lv-switch" aria-hidden="true">
+                <span className="lv-switch-thumb" />
+              </span>
+              <span>Watch for changes</span>
+              <span className="lv-form-toggle-hint">
+                tail new entries as files grow
+              </span>
+            </label>
+          </div>
+
+          <div className="lv-form-row">
             <label className="lv-form-label">Folder</label>
             <div className="lv-form-folder">
               <button
@@ -154,21 +172,6 @@ export const LvAddSourceModal = ({
                 setNameTouched(true);
               }}
             />
-          </div>
-
-          <div className="lv-form-row">
-            <label className="lv-form-label">&nbsp;</label>
-            <label className="lv-form-toggle">
-              <input
-                type="checkbox"
-                checked={watch}
-                onChange={(e) => setWatch(e.target.checked)}
-              />
-              <span>Watch for changes</span>
-              <span className="lv-form-toggle-hint">
-                tail new entries as files grow
-              </span>
-            </label>
           </div>
 
           <div className="lv-form-row">
