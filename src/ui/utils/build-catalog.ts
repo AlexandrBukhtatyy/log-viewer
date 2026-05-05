@@ -131,7 +131,10 @@ const directoryNode = (
   const flat = fileNodeFromSource(rec);
   if (!tree) return flat;
   // Merge — propagate source-level live/count signals onto the directory's
-  // root folder node, while keeping the walked children intact.
+  // root folder node, while keeping the walked children intact. `sourceKind`
+  // marks this node as "the root of an external source" so LvTreeNode
+  // renders a source-specific icon, distinguishing it from internal
+  // sub-folders.
   return {
     ...tree,
     name: rec.source.name,
@@ -143,6 +146,7 @@ const directoryNode = (
         : undefined,
     live: flat.live,
     progressLabel: flat.progressLabel,
+    sourceKind: lvKindOf(rec.source),
     children: tree.children,
   } satisfies LvFolderNode;
 };

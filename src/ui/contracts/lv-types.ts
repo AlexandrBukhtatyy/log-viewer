@@ -85,6 +85,15 @@ export interface LvFolderNode {
   progressLabel?: string;
   /** True while the source is in loading/indexing/streaming. Used to render a spinner. */
   live?: boolean;
+  /**
+   * Set when the folder represents the root of an external log source
+   * (a directory the user opened, not an internal sub-folder). Used by
+   * LvTreeNode to render a source-specific icon (`LvSourceIcon`) instead
+   * of the generic folder glyph, so the tree visually distinguishes
+   * "this is where a source begins" from "this is just a sub-folder".
+   * Distinct from `root`, which marks the catalog top-level grouping.
+   */
+  sourceKind?: LvSourceKind;
   children: LvNode[];
 }
 

@@ -68,11 +68,15 @@ export const LvTreeNode = ({
         {node.type === 'folder' ? (
           <>
             <span
-              className={`lv-folder-ico${node.root ? ` lv-src lv-src-${node.source ?? 'local-static'}` : ''}`}
+              className={`lv-folder-ico${
+                node.root || node.sourceKind
+                  ? ` lv-src lv-src-${node.source ?? node.sourceKind ?? 'local-static'}`
+                  : ''
+              }`}
               aria-hidden="true"
             >
-              {node.root ? (
-                <LvSourceIcon source={node.source} />
+              {node.root || node.sourceKind ? (
+                <LvSourceIcon source={node.source ?? node.sourceKind} />
               ) : (
                 <svg viewBox="0 0 14 12" width="14" height="12">
                   <path

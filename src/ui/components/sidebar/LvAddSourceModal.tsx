@@ -102,7 +102,7 @@ export const LvAddSourceModal = ({
       <div
         className="lv-modal lv-add-src-modal"
         role="dialog"
-        aria-label="Add log source"
+        aria-label="Add source"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="lv-modal-hd">
