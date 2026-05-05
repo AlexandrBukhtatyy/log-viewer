@@ -17,6 +17,13 @@ dev-dist
 .pnpm-store
 .playwright-mcp
 
+# Ad-hoc Playwright screenshots from interactive debugging (root-level
+# *.png / *.jpg). UI screenshots that should be committed live under
+# docs/assets/.
+/*.png
+/*.jpg
+/*.jpeg
+
 # Local fixtures (sample log files, ad-hoc dumps)
 .tmp/
 
