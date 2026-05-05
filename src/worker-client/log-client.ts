@@ -110,6 +110,23 @@ export interface ViewActions {
 
 export type ViewStore = StoreApi<ViewState & ViewActions>;
 
+/**
+ * Module-level singleton. `createLogClient` spins up a coordinator worker, an
+ * indexer worker, and a parser pool — all of which take an exclusive lock on
+ * the OPFS SAH-pool VFS. Calling it twice (which React 19 StrictMode does to
+ * useState initializers in dev) leaves a zombie worker and turns the second
+ * pool init into a `NoModificationAllowedError` cascade — symptom: RPCs from
+ * the React-bound store hang because that store points at the wrong worker.
+ *
+ * Treat the worker pipeline as application-scoped: one per page load.
+ */
+let singletonStore: ViewStore | null = null;
+export const getOrCreateViewStore = (): ViewStore => {
+  if (singletonStore !== null) return singletonStore;
+  singletonStore = createLogClient();
+  return singletonStore;
+};
+
 export const createLogClient = (): ViewStore => {
   const worker = new Worker(
     new URL('../workers/coordinator/index.ts', import.meta.url),
