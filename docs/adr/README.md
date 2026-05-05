@@ -96,3 +96,4 @@ flowchart LR
 - [0012. Snapshot-адаптер: zip / tar / tar.gz через fflate](0012-snapshot-adapter-fflate.md) — proposed
 - [0013. Directory persistence resume и стабильный bookmark fingerprint](0013-directory-resume-and-bookmark-fingerprint.md) — proposed
 - [0014. Worker lifecycle: lazy singletons + dynamic parser pool](0014-worker-lifecycle.md) — proposed
+- [0015. Directory source: per-file LogLineFrame, fields.file_path, filter.filePaths](0015-directory-tree-and-file-frames.md) — proposed
