@@ -1,22 +1,21 @@
 import type { DirectoryLogSource, LogSource } from '../types/log-source.ts';
 import { createLineSplitter } from './line-splitter.ts';
-import type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
+import type {
+  LogLineFrame,
+  LogSourceAdapter,
+  LogSourceAdapterFactory,
+} from './source-adapter.ts';
+import { walkDirectory } from './walk-directory.ts';
 
 const isDirectorySource = (s: LogSource): s is DirectoryLogSource =>
   s.kind === 'directory';
 
-const DEFAULT_FILE_EXT_RE = /\.(log|jsonl|ndjson|txt|out|err)$/i;
-
-const globToRegex = (glob: string): RegExp => {
-  const escaped = glob
-    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*');
-  return new RegExp(`^${escaped}$`);
-};
-
-const matchFile = (name: string, glob?: string): boolean =>
-  glob ? globToRegex(glob).test(name) : DEFAULT_FILE_EXT_RE.test(name);
-
+/**
+ * Recursively reads every text-like file under the source root and emits
+ * `LogLineFrame` per line tagged with its forward-slash relative path. Walk
+ * order is alphabetical, depth-first; bad files are logged and skipped so
+ * one corrupt entry doesn't kill the whole ingest.
+ */
 export const createDirectoryAdapter: LogSourceAdapterFactory = (source) => {
   if (!isDirectorySource(source)) {
     throw new Error(
@@ -35,27 +34,39 @@ export const createDirectoryAdapter: LogSourceAdapterFactory = (source) => {
       const dir = source.handle;
       const glob = source.glob;
 
-      return new ReadableStream<string>({
+      return new ReadableStream<LogLineFrame>({
         async start(controller) {
           try {
-            for await (const entry of dir.values()) {
+            for await (const entry of walkDirectory(dir, {
+              glob,
+              signal: localSignal,
+            })) {
               if (localSignal.aborted) break;
-              if (entry.kind !== 'file') continue;
-              if (!matchFile(entry.name, glob)) continue;
-              const file = await entry.getFile();
-              const reader = file
-                .stream()
-                .pipeThrough(new TextDecoderStream())
-                .pipeThrough(createLineSplitter())
-                .getReader();
+              if (!entry.file) continue;
+              const { path, handle } = entry.file;
               try {
-                while (!localSignal.aborted) {
-                  const { value, done } = await reader.read();
-                  if (done) break;
-                  if (typeof value === 'string') controller.enqueue(value);
+                const file = await handle.getFile();
+                const reader = file
+                  .stream()
+                  .pipeThrough(new TextDecoderStream())
+                  .pipeThrough(createLineSplitter())
+                  .getReader();
+                try {
+                  while (!localSignal.aborted) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    if (typeof value === 'string') {
+                      controller.enqueue({ path, line: value });
+                    }
+                  }
+                } finally {
+                  await reader.cancel().catch(() => undefined);
                 }
-              } finally {
-                await reader.cancel().catch(() => undefined);
+              } catch (err) {
+                console.warn(
+                  `[directory-adapter] skipping '${path}':`,
+                  err instanceof Error ? err.message : err,
+                );
               }
             }
             if (!localSignal.aborted) controller.close();

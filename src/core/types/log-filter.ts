@@ -41,6 +41,13 @@ export interface LogFilter {
    * `null` — no constraint, `[]` — match nothing.
    */
   readonly services: ReadonlyArray<string> | null;
+  /**
+   * Per-file filter for sources with inner file structure (currently
+   * `directory`/`snapshot`). Matches against `fields.file_path` set by the
+   * ingest pipeline. The sidebar populates this when the user picks
+   * individual files inside a directory tree. `null` — no constraint.
+   */
+  readonly filePaths: ReadonlyArray<string> | null;
   readonly fieldFilters?: ReadonlyArray<FieldFilter>;
 }
 
@@ -55,4 +62,5 @@ export const EMPTY_FILTER: LogFilter = {
   timeRange: null,
   sources: null,
   services: null,
+  filePaths: null,
 };

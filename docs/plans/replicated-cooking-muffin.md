@@ -1,177 +1,131 @@
-# Add-source: модалка вместо `prompt`-цепочки (scope: local folder)
+# Directory source: full tree in sidebar + per-file filtering
 
 ## Context
 
-Сейчас «+ Add source» в [LvSidebar](../../src/ui/components/sidebar/LvSidebar.tsx) открывает popover-меню [LvAddSourceMenu](../../src/ui/components/sidebar/LvAddSourceMenu.tsx) с 9 типами; клик по элементу делает «split» вызов в [LvAppContainer.onAddRoot](../../src/app/containers/LvAppContainer.tsx) → серия `window.prompt` для каждого поля (host, broker, query…) или сразу нативный picker. Это:
+Сейчас `directory`-источник в сайдбаре — **одна leaf-нода** под «Local files». [`buildCatalogTree`](../../src/ui/utils/build-catalog.ts) синтетически кладёт в неё имя `source.name` без любой иерархии. Внутри пайплайна [directory-adapter](../../src/core/sources/directory-adapter.ts) читает только верхний уровень каталога и сливает строки всех файлов в один поток — `entry.source_id` одинаковый, путь-внутри-папки нигде не сохраняется.
 
-- ломает UX (модальные окна браузера, нельзя отменить/исправить введённое значение, нет валидации, нет defaults);
-- даёт неоднородный flow (для directory — picker без расспроса, для остальных — prompt'ы);
-- не позволяет настроить «дополнительные поля» одного источника (glob, watch, name override).
+Пользователь хочет: **дерево источника дублирует структуру каталога** (рекурсивно), и **каждый файл — выбираемый**. Кликнул по файлу — фильтр сужается до строк этого файла; кликнул по папке — toggle всех файлов под ней.
 
-Пользователь хочет единое модальное окно с формой:
-- тип ресурса,
-- наименование (default — путь/имя каталога),
-- путь к каталогу (через FSA picker),
-- переключатель «следить за изменениями»,
-- доп. поля (для directory — `glob`).
-
-**Текущий scope:** только local folder (static + live). Остальные kind'ы (snapshot, stream, ssh, cloud, k8s, bus, db) — продолжают идти через существующий prompt-flow и trogают этот план только косвенно (модалка должна быть готова к расширению, но не реализует их). 
+Критично: вопрос «как распределить фильтрацию между `filter.sources` и `filter.fieldFilters`» — Explore-агент подтвердил, что **fields-based** подход идиоматичнее: `entry.source_id` остаётся одним per-directory, а внутри-папки фильтрация идёт через `JSON_EXTRACT(fields_json, '$.file_path')`. Это сохраняет `removeSource`/reIndex-семантику ([ADR-0006](../adr/0006-persistence-strategy.md)) и `handle-store` без изменений.
 
 ## Recommended approach
 
-### 1. Расширить core под `watch`-флаг
+### 1. Adapter contract: discriminated frames
 
-[src/core/types/log-source.ts](../../src/core/types/log-source.ts):
-
-- `DirectoryLogSource` + соответствующий `LogSourceInput`-вариант получают опциональное `watch?: boolean` рядом с `glob?: string`.
-- Адаптер [createDirectoryAdapter](../../src/core/sources/directory-adapter.ts) сейчас не делает live-tail — флаг записывается, но пока что не влияет на ingest. Это согласовано с [плана Phase 4](../adr/0006-persistence-strategy.md): полноценный watcher живёт в отдельном ADR. Здесь мы фиксируем намерение в shape данных, чтобы UI и дерево источников (Watched folders vs Local files) корректно различали два варианта.
-
-[src/workers/coordinator/coordinator.ts:40-51](../../src/workers/coordinator/coordinator.ts#L40-L51) (`buildLogSource`) — пробрасываем `watch`.
-
-[src/workers/indexer/indexer-api.ts](../../src/workers/indexer/indexer-api.ts) (`serializeSourceMeta` для `directory`) — добавляем `watch` в JSON метаданных, чтобы `placeholderFromIndexed` после reload'а знал, в какую секцию дерева положить.
-
-### 2. Сделать `addDirectory` параметризуемой
-
-[src/worker-client/log-client.ts](../../src/worker-client/log-client.ts) — текущая сигнатура `addDirectory(): Promise<SourceId | null>` сама поднимает picker. Меняем на:
+[`LogSourceAdapter.open(signal)`](../../src/core/sources/source-adapter.ts) сейчас возвращает `ReadableStream<string>` (одна строка). Меняем на:
 
 ```ts
-addDirectory: (opts?: {
-  handle?: FileSystemDirectoryHandle;
-  name?: string;
-  watch?: boolean;
-  glob?: string;
-}) => Promise<SourceId | null>;
-```
-
-- `opts.handle` отсутствует → показываем picker (текущее поведение, для backwards-compat и для File-меню «Open Folder…»).
-- `opts.handle` передан → используем его напрямую (новая ветка для модалки).
-
-[src/hooks/use-source-controller.ts](../../src/hooks/use-source-controller.ts) — синхронизируем сигнатуру.
-
-### 3. Новый компонент `LvAddSourceModal`
-
-`src/ui/components/sidebar/LvAddSourceModal.tsx` — UI-only, props-driven:
-
-```ts
-interface LvAddSourceModalProps {
-  readonly open: boolean;
-  /** Initial source kind (currently only 'local-folder' supported). */
-  readonly kind: 'local-folder';
-  onClose: () => void;
-  onSubmit: (data: {
-    handle: FileSystemDirectoryHandle;
-    name: string;
-    watch: boolean;
-    glob: string | null;
-  }) => void;
+export interface LogLineFrame {
+  /** Relative path inside the source root, or `null` for sources without sub-files. */
+  readonly path: string | null;
+  readonly line: string;
 }
+open: (signal: AbortSignal) => Promise<ReadableStream<LogLineFrame>>;
 ```
 
-Layout (по дизайну, монохром, под существующий стиль `lv-modal`):
+Все 11 адаптеров обновляются:
+- **file/text/url/stream/snapshot** — заворачивают существующий `ReadableStream<string>` в `pipeThrough(mapper)` с `path: null`. Тривиально.
+- **directory-adapter** — главный получатель новой формы (см. §2).
+- **stub'ы (remote-ssh/cloud/k8s/bus/db)** — throw-on-open остаётся; форма frame'а обязательна только когда они реально заведутся.
 
+### 2. Recursive directory walk + per-file path
+
+[directory-adapter.ts](../../src/core/sources/directory-adapter.ts) перепишется:
+
+- `walk(handle, prefix='')` рекурсивно через `for await (const entry of handle.values())`. Подкаталоги → `walk(subHandle, prefix + entry.name + '/')`. Файлы → matching по `glob`/default-extension, читаем stream, эмитим frame'ы `{ path: prefix + entry.name, line }`.
+- Aborter поведение и текущий ext-whitelist (`*.log/jsonl/ndjson/txt/out/err`) сохраняются.
+- При первой ошибке чтения файла — продолжаем с следующим (логируем `console.warn`); не прерываем весь walk. Иначе один сломанный файл уронит ingest всей папки.
+
+### 3. Ingest pipeline: прокидываем `path` в ctx, кладём в `fields.file_path`
+
+[ParseRequestCtx](../../src/core/rpc/parser.contract.ts) расширяется: `filePath?: string`. [ingest-orchestrator](../../src/workers/coordinator/ingest/ingest-orchestrator.ts) теперь:
+
+- Группирует входящий стрим frame'ов **по `path`** перед chunker'ом — каждая batch гомогенна по path. Это либо отдельный `pathChunker(maxLines, maxMs)` (предпочтительно), либо текущий chunker + flush-on-path-change-логика.
+- Передаёт `ctx.filePath = path` в `parserPool.withWorker(p => p.parse(lines, ctx))`.
+- Парсеры ([src/core/parsers/](../../src/core/parsers/)) при создании `LogEntry` заполняют `fields.file_path = ctx.filePath ?? undefined`. Обновятся 3 парсера (json-lines, plain-text, registry-fallback) — однострочно в каждом, переиспользуя один helper `mergeContextFields(fields, ctx)`.
+
+### 4. `LogFilter.filePaths` + SQL
+
+[LogFilter](../../src/core/types/log-filter.ts) получает `filePaths: ReadonlyArray<string> | null` (симметрично `services`). [buildClause](../../src/core/filter/query.ts):
+
+```sql
+JSON_EXTRACT(fields_json, '$.file_path') IN (?, ?, …)
 ```
-┌── Add log source ───────────────────── ✕ ──┐
-│                                            │
-│  Type     [Local folder ▾]                 │  // single-option select (locked); placeholder for future kinds
-│                                            │
-│  Folder   [ Choose folder… ]   <name>      │  // FSA picker; shows handle.name when chosen
-│                                            │
-│  Name     [_______________________________]│  // default = handle.name; editable
-│                                            │
-│  ☐ Watch for changes                       │  // toggle → DirectoryLogSource.watch
-│                                            │
-│  Glob     [_______________________________]│  // optional, placeholder "*.log"
-│                                            │
-│                          [Cancel] [Add]    │
-└────────────────────────────────────────────┘
-```
 
-Поведение:
+`EMPTY_FILTER` обновляется. Тесты в [query.test.ts](../../src/core/filter/query.test.ts) расширяются одним кейсом «filePaths IN clause».
 
-- При open=true рендерится поверх (re-use паттерна `LvShortcutsModal`/`LvCommandPalette`: backdrop + центрированный диалог, Esc и клик по backdrop = Cancel).
-- «Choose folder…» вызывает `window.showDirectoryPicker({ mode: 'read' })`; на success — заполняет handle, и `name` автоматически становится `handle.name` если пользователь его ещё не правил.
-- Кнопка «Add» disabled пока `handle === null`.
-- Submit вызывает `onSubmit({ handle, name, watch, glob: glob.trim() || null })`. Модалка не делает RPC сама — это делает контейнер.
+### 5. UI: дерево из `dirHandle`
 
-CSS — в `src/ui/styles/lv.css`, классы `lv-modal-backdrop`, `lv-modal`, `lv-form-row`, `lv-form-label`, `lv-form-input`, `lv-form-toggle` (часть уже есть из `LvSettingsPopover`/`LvShortcutsModal` — переиспользуем).
+`buildCatalogTree` остаётся sync, но получает второй параметр — кэш `Record<SourceId, LvFolderNode>` с распарсенным деревом каталога. Walk сам — async, делается в контейнере:
 
-### 4. Подключить модалку к LvApp + контейнер
+- Новый хук [`useDirectoryTrees(sources)`](../../src/hooks/) — для каждого `directory`-source с status≠permission-required делает recursive walk `source.handle` (filtered тем же ext-pattern, что и адаптер) и кэширует результат. Walk идёт в main-thread (handle live в main + worker; для UI достаточно main). При смене source-set — invalidate соответствующих кэшей.
+- LvFileNode.id для файла внутри директории = `${sourceId}::${relativePath}`. Существующий `selectedIds: Set<string>` остаётся плоским, но теперь содержит compound-id'ы.
+- Folder-узлы (synthetic, in-tree) генерируются walk'ом как `LvFolderNode` с `id = ${sourceId}::${prefix}` (с trailing `/`), и `children` — file/folder-узлы внутри.
+- Корневой узел самого источника — folder с id = source.id (без `::`). Toggle на нём = toggle всех вложенных file-id'ов; см. существующий [`collectFileIds`](../../src/ui/components/sidebar/LvTreeNode.tsx#L19-L21) — он уже рекурсивно собирает ids под node.
 
-[src/ui/components/layout/LvApp.tsx](../../src/ui/components/layout/LvApp.tsx) — держит `addSourceModal: { open: boolean; kind: 'local-folder' } | null` в локальном state (по аналогии с `cmdOpen`, `settingsOpen`). Открытие триггерит `runCommand('open-add-source')` или прямо из обработчика клика по «+ Add source».
+### 6. Container: maps `selectedIds` → `filter.sources` + `filter.filePaths`
 
-LvAddSourceMenu клик — сегодня вызывает `onAddRoot(kind)`. Поведение перепрошиваем в LvApp:
-- Для `kind ∈ {'local-static', 'local-live'}` — открываем модалку (с предвыбранным watch-флагом: `local-static` → false, `local-live` → true).
-- Для остальных kind'ов — пропускаем дальше в `onAddRoot` (старый prompt-flow остаётся как был).
-
-В `LvSidebar` основная кнопка «+ Add source» (split-button main click) сейчас сразу вызывает `pick('local-static')`. После изменения — открывает модалку (через тот же путь).
-
-[LvAppContainer.onAddRoot](../../src/app/containers/LvAppContainer.tsx) — для `local-static`/`local-live` остаётся пустой default (модалка делает submit, контейнер ловит через новый callback `onSubmitAddSource`):
+[LvAppContainer](../../src/app/containers/LvAppContainer.tsx) §`filter` useMemo:
 
 ```ts
-const onSubmitAddSource = useCallback(
-  async (data: { handle, name, watch, glob }) => {
-    await sourceCtrl.addDirectory({
-      handle: data.handle,
-      name: data.name,
-      watch: data.watch,
-      glob: data.glob ?? undefined,
-    });
-  },
-  [sourceCtrl],
-);
-```
-
-### 5. Дерево источников: `local-live` ↔ `directory.watch`
-
-[src/ui/utils/build-catalog.ts](../../src/ui/utils/build-catalog.ts) — `CORE_TO_LV` сейчас маппит `directory → 'local-static'` для всех. Меняем на функцию:
-
-```ts
-const lvKindOf = (source: LogSource): LvSourceKind => {
-  if (source.kind === 'directory' && source.watch) return 'local-live';
-  return CORE_TO_LV[source.kind];
+const sourcesSet = new Set<SourceId>();
+const filePaths: string[] = [];
+for (const id of selectedIds) {
+  const sep = id.indexOf('::');
+  if (sep === -1) {
+    sourcesSet.add(id as SourceId);
+  } else {
+    sourcesSet.add(id.slice(0, sep) as SourceId);
+    filePaths.push(id.slice(sep + 2));
+  }
+}
+return {
+  ...coreFilter,
+  sources: sourcesSet.size === 0 ? null : [...sourcesSet],
+  filePaths: filePaths.length === 0 ? null : filePaths,
 };
 ```
 
-После reload'а `placeholderFromIndexed` восстанавливает source из metaJson — туда и приедет `watch`.
+Если в `filePaths` есть значение `''` (пустой prefix, выбран folder-узел самого корня) — оно уходит и фильтр расширяется до всех файлов под source: эквивалент null. Контейнер чистит такие записи перед записью в фильтр.
 
-### 6. Тесты
+### 7. Persistence
 
-- `build-catalog.test.ts` — добавить кейс «directory with `watch:true` лежит в `Watched folders`-корне».
-- `LvAddSourceModal.test.tsx` (новый, vitest + @testing-library) — тест на open/close, default name = handle.name, disabled до выбора folder, submit-payload форма. FSA picker — мокаем глобально.
-- Smoke в браузере: клик «+ Add source» открывает модалку; «Choose folder…» открывает picker; sample-папка добавляется и индексируется; повторное открытие через Watched folders работает.
+[handle-store](../../src/workers/coordinator/handles/handle-store.ts) и `serializeSourceMeta` ([indexer-api.ts](../../src/workers/indexer/indexer-api.ts)) **не меняются** — directory-handle всё ещё единственная сущность. После reload `placeholderFromIndexed` восстанавливает source как раньше; UI снова делает walk и строит дерево.
 
-## Critical files
+### Critical files
 
 **Modify:**
-- [src/core/types/log-source.ts](../../src/core/types/log-source.ts) — `watch?: boolean` в DirectoryLogSource + DirectoryLogSourceInput.
-- [src/workers/coordinator/coordinator.ts](../../src/workers/coordinator/coordinator.ts) — пробросить watch в `buildLogSource` и `placeholderFromIndexed`.
-- [src/workers/indexer/indexer-api.ts](../../src/workers/indexer/indexer-api.ts) — `watch` в `serializeSourceMeta`.
-- [src/worker-client/log-client.ts](../../src/worker-client/log-client.ts) — расширенный `addDirectory(opts?)`.
-- [src/hooks/use-source-controller.ts](../../src/hooks/use-source-controller.ts) — sync signature.
-- [src/ui/utils/build-catalog.ts](../../src/ui/utils/build-catalog.ts) — `lvKindOf` с веткой `directory.watch`.
-- [src/ui/utils/build-catalog.test.ts](../../src/ui/utils/build-catalog.test.ts) — кейс watch.
-- [src/ui/components/sidebar/LvSidebar.tsx](../../src/ui/components/sidebar/LvSidebar.tsx) — onAddRoot перенаправляет local-* в модалку.
-- [src/ui/components/layout/LvApp.tsx](../../src/ui/components/layout/LvApp.tsx) — state модалки + render.
-- [src/app/containers/LvAppContainer.tsx](../../src/app/containers/LvAppContainer.tsx) — onSubmitAddSource callback.
-- [src/ui/styles/lv.css](../../src/ui/styles/lv.css) — стили формы.
+- [src/core/sources/source-adapter.ts](../../src/core/sources/source-adapter.ts) — `LogLineFrame`, новый `open`-return.
+- [src/core/sources/directory-adapter.ts](../../src/core/sources/directory-adapter.ts) — recursive walk + per-line `path`.
+- [src/core/sources/file-adapter.ts](../../src/core/sources/file-adapter.ts), [text-adapter.ts](../../src/core/sources/text-adapter.ts), [url-adapter.ts](../../src/core/sources/url-adapter.ts), [stream-adapter.ts](../../src/core/sources/stream-adapter.ts), [snapshot-adapter.ts](../../src/core/sources/snapshot-adapter.ts) — wrap-в-frame `{ path: null, line }`.
+- [src/core/rpc/parser.contract.ts](../../src/core/rpc/parser.contract.ts) — `ParseRequestCtx.filePath?: string`.
+- [src/core/parsers/](../../src/core/parsers/) (3 файла + registry) — `entry.fields.file_path` из ctx.
+- [src/core/types/log-filter.ts](../../src/core/types/log-filter.ts) — `filePaths`, `EMPTY_FILTER`.
+- [src/core/filter/query.ts](../../src/core/filter/query.ts) — IN-clause; [query.test.ts](../../src/core/filter/query.test.ts) — кейс.
+- [src/workers/coordinator/ingest/ingest-orchestrator.ts](../../src/workers/coordinator/ingest/ingest-orchestrator.ts) — group-by-path chunker.
+- [src/ui/utils/build-catalog.ts](../../src/ui/utils/build-catalog.ts) — принимает `directoryTrees: Record<SourceId, LvFolderNode>`, инлайнит детьми.
+- [src/ui/components/sidebar/LvTreeNode.tsx](../../src/ui/components/sidebar/LvTreeNode.tsx) — `collectFileIds` уже работает; `toggleSelect` принимает compound-id (без change).
+- [src/app/containers/LvAppContainer.tsx](../../src/app/containers/LvAppContainer.tsx) — splitting `selectedIds` → sources + filePaths; интеграция `useDirectoryTrees`.
 
 **Create:**
-- `src/ui/components/sidebar/LvAddSourceModal.tsx`.
-- `src/ui/components/sidebar/LvAddSourceModal.test.tsx`.
+- `src/hooks/use-directory-trees.ts` — async walk + кэш.
+- `src/core/sources/walk-directory.ts` — extracted helper (используется и адаптером, и хуком).
 
-**Out of scope (отложено отдельным ADR/планом):**
-- Реальный watcher для `directory.watch` (полный live-tail на изменения файлов в каталоге).
-- Перевод остальных source-kinds (snapshot, stream, ssh, cloud, k8s, bus, db) на эту модалку — модалка спроектирована расширяемой, но реализуется только local-folder сейчас.
-- ADR на `watch`-семантику адаптера — опционально, если поведение разъедется со static-веткой; в текущей итерации флаг хранится без эффекта на ingest.
+### Verification
 
-## Verification
-
-1. `npx tsc -b`, `pnpm lint`, `pnpm test --run` — все зелёные (новый модал-тест + обновлённый build-catalog тест).
-2. `pnpm build` — bundle растёт незначительно (новый компонент ~3-4 KiB gz).
-3. Browser smoke (Playwright):
-   - открыть `/`, кликнуть «+ Add source» → модалка открыта.
-   - кликнуть «Choose folder…» → нативный FSA picker (моком в тесте; вручную — выбрать `public/`).
-   - после выбора имя автозаполняется, кнопка «Add» становится active.
-   - Submit → каталог появляется в дереве под «Local files».
-   - Повторно: тот же flow с галочкой «Watch for changes» → каталог попадает под «Watched folders», `directory.watch === true`.
+1. `npx tsc -b`, `pnpm lint`, `pnpm test --run` — все зелёные. Новый кейс в `query.test.ts`. Существующие adapter-тесты (line-splitter / snapshot) обновляются под frame-form.
+2. `pnpm build` — bundle растёт незначительно (≤1 KiB gz).
+3. Browser smoke (через `.tmp/demo_logs/` или OPFS-mock):
+   - Положить структуру `demo/{a.log, sub/b.log, sub/sub2/c.log}`. Open Folder → демо.
+   - Сайдбар: «Local files → demo → a.log; sub/ → b.log; sub2/ → c.log». Развернуть.
+   - Кликнуть на `a.log` → row-stream показывает только строки из `a.log` (из `app.log`). Status-bar `1 file`.
+   - Кликнуть на папку `sub/` → выбраны `b.log` + `c.log`; row-stream — их строки.
+   - Снять выбор всех → пустой stream.
+   - Reload → структура дерева восстанавливается walk'ом из persisted handle.
    - 0 console errors.
+
+### Out of scope
+
+- Watcher (live tail на изменения в директории) — отдельный план/ADR.
+- Drag-rename / move внутри дерева — read-only adapter.
+- Большие каталоги (10k+ файлов) — walk на main thread может занять секунды; при необходимости перенесём в worker отдельным шагом.

@@ -102,6 +102,14 @@ describe('buildClause', () => {
     expect(built.params).toEqual(['\\b(?:foo|bar)\\b']);
   });
 
+  it('filePaths filter generates JSON_EXTRACT IN clause', () => {
+    const built = buildClause(f({ filePaths: ['app.log', 'sub/b.log'] }));
+    expect(built.whereSql).toBe(
+      "WHERE JSON_EXTRACT(fields_json, '$.file_path') IN (?, ?)",
+    );
+    expect(built.params).toEqual(['app.log', 'sub/b.log']);
+  });
+
   it('services filter generates JSON_EXTRACT IN clause', () => {
     const built = buildClause(f({ services: ['api-gateway', 'billing'] }));
     expect(built.whereSql).toBe(

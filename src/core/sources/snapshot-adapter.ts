@@ -1,7 +1,10 @@
 import { gunzipSync, unzipSync } from 'fflate';
 import type { LogSource, SnapshotLogSource } from '../types/log-source.ts';
-import { createLineSplitter } from './line-splitter.ts';
-import type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
+import type {
+  LogLineFrame,
+  LogSourceAdapter,
+  LogSourceAdapterFactory,
+} from './source-adapter.ts';
 
 const isSnapshotSource = (s: LogSource): s is SnapshotLogSource =>
   s.kind === 'snapshot';
@@ -136,7 +139,11 @@ export const createSnapshotAdapter: LogSourceAdapterFactory = (source) => {
       }
 
       const decoder = new TextDecoder('utf-8', { fatal: false });
-      const stream = new ReadableStream<string>({
+      // Decode each archive member separately so the per-file `path` is
+      // attached to every line. Content is already fully in memory after
+      // fflate, so a TransformStream-based line splitter would only add
+      // pipe-overhead — split on `\n` directly.
+      return new ReadableStream<LogLineFrame>({
         start(controller) {
           for (const f of textFiles) {
             if (signal.aborted) {
@@ -144,15 +151,16 @@ export const createSnapshotAdapter: LogSourceAdapterFactory = (source) => {
               return;
             }
             const text = decoder.decode(f.bytes);
-            // Append a trailing newline if the file didn't end with one so
-            // entries from adjacent archive members don't run together.
-            controller.enqueue(text.endsWith('\n') ? text : `${text}\n`);
+            const lines = text.split('\n');
+            // Drop the trailing empty if the file ended with `\n`.
+            if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+            for (const line of lines) {
+              controller.enqueue({ path: f.name, line });
+            }
           }
           controller.close();
         },
       });
-
-      return stream.pipeThrough(createLineSplitter());
     },
     close: async () => {
       /* in-memory; nothing to release */

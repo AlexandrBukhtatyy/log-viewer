@@ -1,6 +1,9 @@
 import type * as Comlink from 'comlink';
 import type { IndexerApi } from '../../../core/rpc/indexer.contract.ts';
-import type { LogSourceAdapter } from '../../../core/sources/source-adapter.ts';
+import type {
+  LogLineFrame,
+  LogSourceAdapter,
+} from '../../../core/sources/source-adapter.ts';
 import type { LogSource, SourceStatus } from '../../../core/types/log-source.ts';
 import type { ParserPool } from '../pool/parser-pool.ts';
 
@@ -37,7 +40,7 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
 
   onStatus({ kind: 'loading' });
 
-  let lineStream: ReadableStream<string>;
+  let lineStream: ReadableStream<LogLineFrame>;
   try {
     lineStream = await adapter.open(signal);
   } catch (err) {
@@ -65,11 +68,12 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
     while (true) {
       if (signal.aborted) break;
 
-      const { value: lines, done } = await reader.read();
+      const { value: batch, done } = await reader.read();
       if (done) break;
-      if (lines.length === 0) continue;
+      if (batch === undefined || batch.lines.length === 0) continue;
+      const { lines, path } = batch;
 
-      // Detect parser on the first non-empty chunk.
+      // Detect parser on the first non-empty batch.
       if (parserId === null) {
         const sample = lines.slice(0, SAMPLE_LINES_FOR_DETECT);
         parserId = await parserPool.withWorker((p) => p.detectParser(sample));
@@ -84,6 +88,7 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
           sourceId: source.id,
           startSeq,
           parserId: detectedParserId,
+          filePath: path ?? undefined,
         }),
       );
 

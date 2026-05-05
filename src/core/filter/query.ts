@@ -66,6 +66,14 @@ export const buildClause = (filter: LogFilter): BuiltClause => {
     params.push(...filter.services);
   }
 
+  if (filter.filePaths && filter.filePaths.length > 0) {
+    const placeholders = filter.filePaths.map(() => '?').join(', ');
+    conds.push(
+      `JSON_EXTRACT(fields_json, '$.file_path') IN (${placeholders})`,
+    );
+    params.push(...filter.filePaths);
+  }
+
   if (filter.timeRange) {
     if (filter.timeRange.from !== null) {
       conds.push('ts >= ?');

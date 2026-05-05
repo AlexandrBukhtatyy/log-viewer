@@ -1,6 +1,10 @@
 import type { FileLogSource, LogSource } from '../types/log-source.ts';
 import { createLineSplitter } from './line-splitter.ts';
-import type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
+import {
+  tagLineStream,
+  type LogSourceAdapter,
+  type LogSourceAdapterFactory,
+} from './source-adapter.ts';
 
 const isFileSource = (s: LogSource): s is FileLogSource => s.kind === 'file';
 
@@ -19,10 +23,11 @@ export const createFileAdapter: LogSourceAdapterFactory = (source) => {
 
       // file.stream() → Uint8Array → text → lines.
       // No await file.text() — we rely entirely on streaming so multi-GB files don't blow memory.
-      return source.file
+      const lines = source.file
         .stream()
         .pipeThrough(new TextDecoderStream())
         .pipeThrough(createLineSplitter());
+      return tagLineStream(lines, null);
     },
     close: async () => {
       aborter?.abort();

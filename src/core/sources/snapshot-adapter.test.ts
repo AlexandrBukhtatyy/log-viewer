@@ -23,7 +23,7 @@ const collect = async (
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
-    lines.push(value);
+    lines.push(value.line);
   }
   await adapter.close();
   return lines;

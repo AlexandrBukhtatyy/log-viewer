@@ -21,3 +21,6 @@ export type { UseHistogram } from './use-histogram.ts';
 
 export { useExport } from './use-export.ts';
 export type { UseExport } from './use-export.ts';
+
+export { useDirectoryTrees } from './use-directory-trees.ts';
+export type { UseDirectoryTrees } from './use-directory-trees.ts';

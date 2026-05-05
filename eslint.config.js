@@ -12,9 +12,10 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 // paths like '../../hooks/use-log-window.ts' contain '/hooks/' as a segment, so
 // '**/hooks/**' matches them. NPM specifiers (e.g. 'react') are matched as-is.
 
-const FORBID_LAYER = (layers, message) => ({
+const FORBID_LAYER = (layers, message, opts = {}) => ({
   group: layers.flatMap((layer) => [`**/${layer}/**`, `**/${layer}`]),
   message,
+  ...(opts.allowTypeImports ? { allowTypeImports: true } : {}),
 })
 const FORBID_PKG = (pkgs, message) => ({
   group: pkgs,
@@ -85,7 +86,8 @@ const RULES_HOOKS = {
       patterns: [
         FORBID_LAYER(
           ['ui', 'workers'],
-          'hooks/ talk to worker-client + core, never directly to ui or workers (ADR-0002).',
+          'hooks/ talk to worker-client + core, never directly to ui or workers at runtime (ADR-0002). Type-only imports are allowed — useDirectoryTrees, for example, returns LvFolderNode shapes.',
+          { allowTypeImports: true },
         ),
       ],
     },

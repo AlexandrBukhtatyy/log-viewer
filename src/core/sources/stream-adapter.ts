@@ -1,5 +1,9 @@
 import type { LogSource, StreamLogSource } from '../types/log-source.ts';
-import type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
+import {
+  tagLineStream,
+  type LogSourceAdapter,
+  type LogSourceAdapterFactory,
+} from './source-adapter.ts';
 
 const isStreamSource = (s: LogSource): s is StreamLogSource =>
   s.kind === 'stream';
@@ -138,7 +142,7 @@ export const createStreamAdapter: LogSourceAdapterFactory = (source) => {
         { once: true },
       );
 
-      return new ReadableStream<string>({
+      const lineStream = new ReadableStream<string>({
         start(c) {
           controller = c;
           flushQueue();
@@ -151,6 +155,7 @@ export const createStreamAdapter: LogSourceAdapterFactory = (source) => {
           closeConn();
         },
       });
+      return tagLineStream(lineStream, null);
     },
     close: async () => {
       aborter?.abort();

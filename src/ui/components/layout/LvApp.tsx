@@ -236,6 +236,7 @@ export const LvApp = ({
           services: null,
           timeRange: null,
           sources: null,
+          filePaths: null,
           fieldFilters: [],
         }));
         break;

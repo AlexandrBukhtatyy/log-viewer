@@ -28,16 +28,27 @@ export const parserApi: ParserApi = {
       ? (registry.pickById(ctx.parserId) ?? registry.pick(lines))
       : registry.pick(lines);
 
+    // For sources with inner file structure (directory / snapshot), the
+    // adapter tags every frame with a relative `path`, and the orchestrator
+    // groups frames by path before calling parse(). We attach the path to
+    // entry.fields.file_path here, after the parser runs, so every parser
+    // implementation gets it for free without per-parser plumbing.
+    const filePath = ctx.filePath;
+    const tag = (entry: LogEntry): LogEntry =>
+      filePath === undefined
+        ? entry
+        : { ...entry, fields: { ...entry.fields, file_path: filePath } };
+
     const result: LogEntry[] = [];
     for (const line of lines) {
       if (line === '') continue;
       const { entry } = primary.parseLine(line, parseCtx);
       if (entry !== null) {
-        result.push(entry);
+        result.push(tag(entry));
         continue;
       }
       const fallback = registry.parseAny(line, parseCtx);
-      if (fallback !== null) result.push(fallback);
+      if (fallback !== null) result.push(tag(fallback));
     }
     return result;
   },

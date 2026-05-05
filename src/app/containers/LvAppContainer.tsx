@@ -15,6 +15,7 @@ import { useLogFilter } from '../../hooks/use-log-filter.ts';
 import { useLogWindow } from '../../hooks/use-log-window.ts';
 import { useSourceController } from '../../hooks/use-source-controller.ts';
 import { useSourceStatus } from '../../hooks/use-source-status.ts';
+import { useDirectoryTrees } from '../../hooks/use-directory-trees.ts';
 import { useUiPrefs } from '../../hooks/use-ui-prefs.ts';
 import { useBookmarks } from '../../hooks/use-bookmarks.ts';
 import { useRecentFiles } from '../../hooks/use-recent-files.ts';
@@ -85,7 +86,11 @@ export const LvAppContainer = () => {
   const { totalCount, filteredCount, getRow, setVisibleRange } = useLogWindow();
 
   // UI state — selection, tabs, group-by, live tail.
-  const [selectedIds, setSelectedIdsState] = useState<Set<SourceId>>(() => new Set());
+  // `selectedIds` may contain plain `SourceId` strings *and* compound ids
+  // shaped as `<sourceId>::<relativePath>` (or `…::<path>/` for folders) when
+  // the user picks individual files inside a directory tree (see
+  // `useDirectoryTrees`). The `filter` useMemo below splits them apart.
+  const [selectedIds, setSelectedIdsState] = useState<Set<string>>(() => new Set());
   const [activeTabId, setActiveTabId] = useState<string>('__all__');
   const [closedTabs, setClosedTabsState] = useState<Set<string>>(() => new Set());
   const [groupBy, setGroupBy] = useState<LvGroupBy[]>([]);
@@ -93,9 +98,7 @@ export const LvAppContainer = () => {
 
   const setSelectedIds = useCallback(
     (updater: (prev: Set<string>) => Set<string>) => {
-      setSelectedIdsState(
-        (prev) => updater(prev as Set<string>) as Set<SourceId>,
-      );
+      setSelectedIdsState((prev) => updater(prev));
     },
     [],
   );
@@ -106,37 +109,78 @@ export const LvAppContainer = () => {
     [],
   );
 
-  // Effective filter — combine stored coreFilter with sources derived from
-  // selection. UI components read this; ViewStore receives this via the sync
-  // effect below.
+  /**
+   * Project the user's selection (a flat `Set<string>` that mixes plain
+   * source-ids and compound `<sourceId>::<relPath>` ids) onto the core
+   * filter shape. Compound ids contribute their relative path to
+   * `filter.filePaths`; the source itself always lands in `filter.sources`.
+   *
+   * Folder-level compound ids (`…::sub/`) keep their trailing slash — those
+   * become an `IN` predicate on `JSON_EXTRACT($.file_path)` and would never
+   * match (file paths have no trailing slash). To select all files under a
+   * folder the UI explodes the folder into its file ids upstream
+   * (LvTreeNode toggle); this function only translates whatever is in
+   * `selectedIds` to SQL inputs.
+   */
+  const splitSelection = useCallback(
+    (
+      ids: Iterable<string>,
+      restrictToSource: string | null,
+    ): { sources: SourceId[]; filePaths: string[] } => {
+      const sourcesSet = new Set<string>();
+      const paths: string[] = [];
+      for (const id of ids) {
+        const sep = id.indexOf('::');
+        const sid = sep === -1 ? id : id.slice(0, sep);
+        if (restrictToSource !== null && sid !== restrictToSource) continue;
+        sourcesSet.add(sid);
+        if (sep !== -1) {
+          const path = id.slice(sep + 2);
+          // Skip folder-level ids and the empty path; they're either UX
+          // indicators ("everything under this folder") or root sentinels.
+          if (path !== '' && !path.endsWith('/')) paths.push(path);
+        }
+      }
+      return {
+        sources: [...sourcesSet] as SourceId[],
+        filePaths: paths,
+      };
+    },
+    [],
+  );
+
+  // Effective filter — combine stored coreFilter with sources/filePaths
+  // derived from selection. UI components read this; ViewStore receives this
+  // via the sync effect below.
   const filter = useMemo<LogFilter>(() => {
-    const sourcesArr =
-      activeTabId === '__all__'
-        ? (Array.from(selectedIds) as SourceId[])
-        : ([activeTabId as SourceId]);
+    const restrict = activeTabId === '__all__' ? null : activeTabId;
+    const { sources: sourcesArr, filePaths } = splitSelection(selectedIds, restrict);
     return {
       ...coreFilter,
       sources: sourcesArr.length === 0 ? null : sourcesArr,
+      filePaths: filePaths.length === 0 ? null : filePaths,
     };
-  }, [coreFilter, selectedIds, activeTabId]);
+  }, [coreFilter, selectedIds, activeTabId, splitSelection]);
 
   const setFilter = useCallback(
     (next: (prev: LogFilter) => LogFilter) => {
       setCoreFilter((prev) => {
-        const sourcesArr =
-          activeTabId === '__all__'
-            ? (Array.from(selectedIds) as SourceId[])
-            : ([activeTabId as SourceId]);
+        const restrict = activeTabId === '__all__' ? null : activeTabId;
+        const { sources: sourcesArr, filePaths } = splitSelection(
+          selectedIds,
+          restrict,
+        );
         const effectivePrev: LogFilter = {
           ...prev,
           sources: sourcesArr.length === 0 ? null : sourcesArr,
+          filePaths: filePaths.length === 0 ? null : filePaths,
         };
         const computed = next(effectivePrev);
-        // Strip sources — they're derived from selection, not stored.
-        return { ...computed, sources: null };
+        // Strip sources/filePaths — they're derived from selection.
+        return { ...computed, sources: null, filePaths: null };
       });
     },
-    [activeTabId, selectedIds],
+    [activeTabId, selectedIds, splitSelection],
   );
 
   // Push effective filter to ViewStore (writes a Zustand store outside React's
@@ -175,7 +219,11 @@ export const LvAppContainer = () => {
   );
 
   // Catalog + filesById from live SourceRecord[].
-  const catalog = useMemo(() => buildCatalogTree(sources), [sources]);
+  const { trees: directoryTrees } = useDirectoryTrees(sources);
+  const catalog = useMemo(
+    () => buildCatalogTree(sources, directoryTrees),
+    [sources, directoryTrees],
+  );
   const filesById = useMemo(() => filesByIdFromSources(sources), [sources]);
 
   // Tabs: __all__ + one tab per selected (non-closed) source.

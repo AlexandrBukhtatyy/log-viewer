@@ -1,6 +1,10 @@
 import type { LogSource, TextLogSource } from '../types/log-source.ts';
 import { createLineSplitter } from './line-splitter.ts';
-import type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
+import {
+  tagLineStream,
+  type LogSourceAdapter,
+  type LogSourceAdapterFactory,
+} from './source-adapter.ts';
 
 const isTextSource = (s: LogSource): s is TextLogSource => s.kind === 'text';
 
@@ -19,7 +23,7 @@ export const createTextAdapter: LogSourceAdapterFactory = (source) => {
           controller.close();
         },
       });
-      return stream.pipeThrough(createLineSplitter());
+      return tagLineStream(stream.pipeThrough(createLineSplitter()), null);
     },
     close: async () => {
       /* nothing to clean up */

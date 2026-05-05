@@ -1,6 +1,10 @@
 import type { LogSource, UrlLogSource } from '../types/log-source.ts';
 import { createLineSplitter } from './line-splitter.ts';
-import type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
+import {
+  tagLineStream,
+  type LogSourceAdapter,
+  type LogSourceAdapterFactory,
+} from './source-adapter.ts';
 
 const isUrlSource = (s: LogSource): s is UrlLogSource => s.kind === 'url';
 
@@ -29,9 +33,10 @@ export const createUrlAdapter: LogSourceAdapterFactory = (source) => {
       if (response.body === null) {
         throw new Error(`url-adapter: response body is null for ${source.url}`);
       }
-      return response.body
+      const lines = response.body
         .pipeThrough(new TextDecoderStream())
         .pipeThrough(createLineSplitter());
+      return tagLineStream(lines, null);
     },
     close: async () => {
       aborter?.abort();

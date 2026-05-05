@@ -9,6 +9,7 @@ import type {
   LvFileNode,
   LvFolderNode,
   LvLogKind,
+  LvNode,
   LvSourceKind,
 } from '../contracts/lv-types.ts';
 
@@ -101,26 +102,64 @@ const fileNodeFromSource = (record: SourceRecord): LvFileNode => ({
     record.status.kind === 'error' ? record.status.error.message : undefined,
 });
 
+/**
+ * For a `directory` source, return its real file tree if `useDirectoryTrees`
+ * has finished walking the handle; otherwise fall back to the flat file
+ * node. The returned folder keeps source-derived flags (live, count,
+ * needsPermission, …) on its top-level metadata so the UI's
+ * "Local files / Watched folders" root still surfaces ingest status.
+ */
+const directoryNode = (
+  rec: SourceRecord,
+  directoryTrees: Readonly<Record<string, LvFolderNode>>,
+): LvNode => {
+  const tree = directoryTrees[rec.source.id];
+  const flat = fileNodeFromSource(rec);
+  if (!tree) return flat;
+  // Merge — propagate source-level live/count signals onto the directory's
+  // root folder node, while keeping the walked children intact.
+  return {
+    ...tree,
+    name: rec.source.name,
+    open: tree.open ?? true,
+    status: flat.live
+      ? 'streaming'
+      : rec.status.kind === 'permission-required'
+        ? 'permission-required'
+        : undefined,
+    children: tree.children,
+  } satisfies LvFolderNode;
+};
+
 export const buildCatalogTree = (
   sources: ReadonlyArray<SourceRecord>,
+  directoryTrees: Readonly<Record<string, LvFolderNode>> = {},
 ): LvCatalogRoot[] => {
-  const buckets = new Map<LvSourceKind, LvFileNode[]>();
+  const buckets = new Map<LvSourceKind, LvNode[]>();
   for (const rec of sources) {
     const lvKind = lvKindOf(rec.source);
+    const node: LvNode =
+      rec.source.kind === 'directory'
+        ? directoryNode(rec, directoryTrees)
+        : fileNodeFromSource(rec);
     const list = buckets.get(lvKind) ?? [];
-    list.push(fileNodeFromSource(rec));
+    list.push(node);
     buckets.set(lvKind, list);
   }
   const roots: LvCatalogRoot[] = [];
-  for (const [lvKind, files] of buckets) {
+  for (const [lvKind, children] of buckets) {
     const folder: LvFolderNode = {
       id: `lv-root-${lvKind}`,
       type: 'folder',
       name: ROOT_LABEL[lvKind],
       source: lvKind,
       open: true,
-      status: files.some((f) => f.live) ? 'streaming' : undefined,
-      children: files,
+      status: children.some(
+        (c) => c.type === 'file' && c.live,
+      )
+        ? 'streaming'
+        : undefined,
+      children,
     };
     roots.push(folder as LvCatalogRoot);
   }
