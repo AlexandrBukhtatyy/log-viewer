@@ -328,14 +328,29 @@ export const LvAppContainer = () => {
     return out;
   }, [histogramData]);
 
-  const stats = useMemo(
-    () => ({
+  const stats = useMemo(() => {
+    let ingestingSources = 0;
+    let ingestingEntries = 0;
+    for (const r of sources) {
+      if (
+        r.status.kind === 'loading' ||
+        r.status.kind === 'indexing' ||
+        r.status.kind === 'streaming'
+      ) {
+        ingestingSources++;
+        if (r.status.kind === 'indexing' || r.status.kind === 'streaming') {
+          ingestingEntries += r.status.entriesIndexed;
+        }
+      }
+    }
+    return {
       files: selectedIds.size,
       errors: (levelCounts.error ?? 0) + (levelCounts.fatal ?? 0),
       warns: levelCounts.warn ?? 0,
-    }),
-    [selectedIds, levelCounts],
-  );
+      ingestingSources,
+      ingestingEntries,
+    };
+  }, [selectedIds, levelCounts, sources]);
 
   // File-pickers / per-kind add-source dispatch.
   const onOpenLocalFile = useCallback(async () => {

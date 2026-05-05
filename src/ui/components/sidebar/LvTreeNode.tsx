@@ -84,6 +84,18 @@ export const LvTreeNode = ({
               )}
             </span>
             <span className="lv-tree-label">{node.name}</span>
+            {node.live && (
+              <span
+                className="lv-spinner"
+                title={node.progressLabel ?? 'Ingesting…'}
+                aria-label={node.progressLabel ?? 'Ingesting'}
+              />
+            )}
+            {node.progressLabel && (
+              <span className="lv-tree-progress" title={node.progressLabel}>
+                {node.progressLabel}
+              </span>
+            )}
             {node.root && <LvRootBadge node={node} />}
             {folderState !== 'none' && (
               <span className={`lv-tree-pick lv-tree-pick-${folderState}`} aria-label="selected">
@@ -108,8 +120,19 @@ export const LvTreeNode = ({
           <>
             <LvFileIcon kind={node.kind} />
             <span className="lv-tree-label">{node.name}</span>
-            {node.live && <span className="lv-file-pulse" title="Live" />}
-            {node.newCount ? (
+            {node.live && (
+              <span
+                className="lv-spinner"
+                title={node.progressLabel ?? 'Ingesting…'}
+                aria-label={node.progressLabel ?? 'Ingesting'}
+              />
+            )}
+            {node.progressLabel && (
+              <span className="lv-tree-progress" title={node.progressLabel}>
+                {node.progressLabel}
+              </span>
+            )}
+            {!node.progressLabel && node.newCount ? (
               <span className="lv-file-new" title={`${node.newCount} new`}>
                 +{node.newCount}
               </span>

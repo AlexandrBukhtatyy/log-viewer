@@ -59,6 +59,8 @@ export interface LvAppStatusStats {
   readonly files: number;
   readonly errors: number;
   readonly warns: number;
+  readonly ingestingSources?: number;
+  readonly ingestingEntries?: number;
 }
 
 export interface LvAppProps {

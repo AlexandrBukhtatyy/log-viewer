@@ -84,6 +84,19 @@ const newCountOf = (status: SourceStatus): number | undefined => {
   return undefined;
 };
 
+const progressLabelOf = (status: SourceStatus): string | undefined => {
+  if (status.kind === 'loading') return 'loading…';
+  if (status.kind === 'indexing') {
+    const n = status.entriesIndexed;
+    return n > 0 ? `indexing ${n.toLocaleString()}` : 'indexing…';
+  }
+  if (status.kind === 'streaming') {
+    const n = status.entriesIndexed;
+    return n > 0 ? `streaming ${n.toLocaleString()}` : 'streaming…';
+  }
+  return undefined;
+};
+
 const statusLabel = (status: SourceStatus): string | undefined => {
   if (status.kind === 'idle') return undefined;
   return status.kind;
@@ -100,6 +113,7 @@ const fileNodeFromSource = (record: SourceRecord): LvFileNode => ({
   needsPermission: record.status.kind === 'permission-required',
   errorMessage:
     record.status.kind === 'error' ? record.status.error.message : undefined,
+  progressLabel: progressLabelOf(record.status),
 });
 
 /**
@@ -127,6 +141,8 @@ const directoryNode = (
       : rec.status.kind === 'permission-required'
         ? 'permission-required'
         : undefined,
+    live: flat.live,
+    progressLabel: flat.progressLabel,
     children: tree.children,
   } satisfies LvFolderNode;
 };

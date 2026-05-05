@@ -570,6 +570,25 @@ button{font-family:inherit}
   color:var(--lv-fg-3); cursor:pointer; flex-shrink:0;
 }
 .lv-cancel-btn:hover{color:var(--lv-error); border-color:var(--lv-error)}
+
+/* Spinner — used in tree rows next to a node and in the status bar
+   ingest indicator. CSS-only border-rotate, no extra DOM. */
+@keyframes lv-spin {
+  to { transform: rotate(360deg); }
+}
+.lv-spinner{
+  display:inline-block; width:11px; height:11px; flex-shrink:0;
+  border:1.5px solid color-mix(in srgb, var(--lv-accent) 30%, transparent);
+  border-top-color:var(--lv-accent);
+  border-radius:50%;
+  animation:lv-spin 0.8s linear infinite;
+}
+.lv-tree-progress{
+  font-size:10px; color:var(--lv-fg-3); font-variant-numeric:tabular-nums;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  max-width:140px; flex-shrink:0;
+}
+.lv-status-ingest{color:var(--lv-accent); font-variant-numeric:tabular-nums}
 .lv-tree-check{
   width:16px; height:16px; border-radius:4px; border:1px solid var(--lv-border-strong);
   background:var(--lv-bg-2); display:flex; align-items:center; justify-content:center;

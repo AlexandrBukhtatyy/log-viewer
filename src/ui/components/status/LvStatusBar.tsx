@@ -4,6 +4,10 @@ export interface LvStatusBarStats {
   readonly files: number;
   readonly errors: number;
   readonly warns: number;
+  /** Sources currently ingesting (loading/indexing/streaming). 0 = idle. */
+  readonly ingestingSources?: number;
+  /** Sum of `entriesIndexed` across all currently-ingesting sources. */
+  readonly ingestingEntries?: number;
 }
 
 export interface LvStatusBarProps {
@@ -12,7 +16,10 @@ export interface LvStatusBarProps {
   readonly theme: LvTweakTheme;
 }
 
-export const LvStatusBar = ({ stats, liveTail, theme }: LvStatusBarProps) => (
+export const LvStatusBar = ({ stats, liveTail, theme }: LvStatusBarProps) => {
+  const ingesting = stats.ingestingSources ?? 0;
+  const ingested = stats.ingestingEntries ?? 0;
+  return (
   <div className="lv-status">
     <span className="lv-status-item lv-status-app">
       <span className="lv-status-app-name">Log Viewer</span>
@@ -20,6 +27,22 @@ export const LvStatusBar = ({ stats, liveTail, theme }: LvStatusBarProps) => (
     </span>
 
     <div style={{ flex: 1 }} />
+
+    {ingesting > 0 && (
+      <>
+        <span
+          className="lv-status-item lv-status-ingest"
+          title={`${ingesting} source${ingesting !== 1 ? 's' : ''} ingesting`}
+        >
+          <span className="lv-spinner" aria-hidden="true" />
+          <span>
+            indexing
+            {ingested > 0 ? ` · ${ingested.toLocaleString()} entries` : '…'}
+          </span>
+        </span>
+        <span className="lv-status-sep" />
+      </>
+    )}
 
     {liveTail && (
       <>
@@ -59,4 +82,5 @@ export const LvStatusBar = ({ stats, liveTail, theme }: LvStatusBarProps) => (
     <span className="lv-status-sep" />
     <span className="lv-status-item">{theme === 'dark' ? 'Dark' : 'Light'}</span>
   </div>
-);
+  );
+};
