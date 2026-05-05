@@ -175,8 +175,16 @@ const placeholderFromIndexed = (rec: IndexedSourceRecord): LogSource | null => {
 
 export interface CoordinatorDeps {
   readonly parserPool: ParserPool;
-  readonly indexer: Comlink.Remote<IndexerApi>;
-  readonly indexerOpening: Promise<OpenReport>;
+  /**
+   * Lazy accessor for the indexer worker. The worker + SQLite/OPFS pool are
+   * not spawned until a coordinator method first calls this — see ADR-0014
+   * for lifecycle invariants. The returned `proxy` and `opening` are stable
+   * (memoized in `index.ts`).
+   */
+  readonly getIndexer: () => {
+    proxy: Comlink.Remote<IndexerApi>;
+    opening: Promise<OpenReport>;
+  };
   readonly adapterFactories: Partial<Record<LogSourceKind, LogSourceAdapterFactory>>;
   /** Awaited inside methods that touch handles; keeps Comlink.expose synchronous. */
   readonly handleStoreOpening: Promise<HandleStore>;
@@ -193,10 +201,10 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   const hydratePersisted = async (): Promise<void> => {
     if (persistedHydrationPromise !== null) return persistedHydrationPromise;
     persistedHydrationPromise = (async () => {
-      await deps.indexerOpening;
+      await deps.getIndexer().opening;
       const handleStore = await deps.handleStoreOpening;
       const [indexed, handles] = await Promise.all([
-        deps.indexer.listSources(),
+        deps.getIndexer().proxy.listSources(),
         handleStore.list(),
       ]);
       const handleByIdx = new Map(handles.map((h) => [h.sourceId, h]));
@@ -285,7 +293,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       source,
       adapter,
       parserPool: deps.parserPool,
-      indexer: deps.indexer,
+      indexer: deps.getIndexer().proxy,
       signal: aborter.signal,
       onStatus: (status) => {
         const entry = sources.get(source.id);
@@ -316,8 +324,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     version++;
     if (pendingFilteredCount !== null) return; // coalesce concurrent change events
     pendingFilteredCount = (async () => {
-      await deps.indexerOpening;
-      return deps.indexer.count(activeFilter);
+      await deps.getIndexer().opening;
+      return deps.getIndexer().proxy.count(activeFilter);
     })();
     pendingFilteredCount
       .then((filteredCount) => {
@@ -339,8 +347,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       const me = `coordinator:${WORKER_ID}`;
       const [parsers, indexerPing, db] = await Promise.all([
         deps.parserPool.pingAll(),
-        deps.indexer.ping(),
-        deps.indexerOpening.then(
+        deps.getIndexer().proxy.ping(),
+        deps.getIndexer().opening.then(
           (r) => ({ ok: true as const, ...r }),
           (e: unknown) => ({
             ok: false as const,
@@ -362,7 +370,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     },
 
     addSource: async (input) => {
-      await deps.indexerOpening;
+      await deps.getIndexer().opening;
       if (!deps.adapterFactories[input.kind]) {
         throw new Error(
           `addSource: no adapter for source kind '${input.kind}' (probably not implemented yet)`,
@@ -371,7 +379,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       const id = newSourceId();
       const source = buildLogSource(input, id);
 
-      await deps.indexer.upsertSource(source);
+      await deps.getIndexer().proxy.upsertSource(source);
 
       // Persist handle for sources that can be revived after reload.
       if (source.kind === 'directory') {
@@ -391,7 +399,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     },
 
     removeSource: async (id) => {
-      await deps.indexerOpening;
+      await deps.getIndexer().opening;
       const entry = sources.get(id);
       if (entry) {
         entry.aborter?.abort();
@@ -400,7 +408,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       persistedRecords.delete(id);
       const handleStore = await deps.handleStoreOpening;
       await Promise.all([
-        deps.indexer.removeSource(id),
+        deps.getIndexer().proxy.removeSource(id),
         handleStore.delete(id),
       ]);
       emitStatus();
@@ -420,32 +428,32 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     getFilter: async () => activeFilter,
 
     getRange: async (from, to) => {
-      await deps.indexerOpening;
-      return deps.indexer.search(activeFilter, from, to);
+      await deps.getIndexer().opening;
+      return deps.getIndexer().proxy.search(activeFilter, from, to);
     },
 
     getCount: async () => {
-      await deps.indexerOpening;
+      await deps.getIndexer().opening;
       const [total, filtered] = await Promise.all([
-        deps.indexer.count(EMPTY_FILTER),
-        deps.indexer.count(activeFilter),
+        deps.getIndexer().proxy.count(EMPTY_FILTER),
+        deps.getIndexer().proxy.count(activeFilter),
       ]);
       return { total, filtered };
     },
 
     getEntry: async (id: EntryId) => {
-      await deps.indexerOpening;
-      return deps.indexer.getEntry(id);
+      await deps.getIndexer().opening;
+      return deps.getIndexer().proxy.getEntry(id);
     },
 
     getGroupCounts: async (filter, field, limit) => {
-      await deps.indexerOpening;
-      return deps.indexer.groupCounts(filter, field, limit);
+      await deps.getIndexer().opening;
+      return deps.getIndexer().proxy.groupCounts(filter, field, limit);
     },
 
     getHistogram: async (filter, bucketCount) => {
-      await deps.indexerOpening;
-      return deps.indexer.histogram(filter, bucketCount);
+      await deps.getIndexer().opening;
+      return deps.getIndexer().proxy.histogram(filter, bucketCount);
     },
 
     listSources: async () => {
@@ -542,8 +550,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     },
 
     estimateStorage: async () => {
-      await deps.indexerOpening;
-      const size = await deps.indexer.estimateSize();
+      await deps.getIndexer().opening;
+      const size = await deps.getIndexer().proxy.estimateSize();
       let quota = 0;
       try {
         const est = await navigator.storage?.estimate?.();
@@ -559,27 +567,27 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     },
 
     clearAll: async () => {
-      await deps.indexerOpening;
+      await deps.getIndexer().opening;
       for (const entry of sources.values()) {
         entry.aborter?.abort();
       }
       sources.clear();
       persistedRecords.clear();
       const handleStore = await deps.handleStoreOpening;
-      await Promise.all([deps.indexer.clearAll(), handleStore.clearAll()]);
+      await Promise.all([deps.getIndexer().proxy.clearAll(), handleStore.clearAll()]);
       emitStatus();
       emitChange();
     },
 
     clearSource: async (id) => {
-      await deps.indexerOpening;
+      await deps.getIndexer().opening;
       const entry = sources.get(id);
       entry?.aborter?.abort();
       sources.delete(id);
       persistedRecords.delete(id);
       const handleStore = await deps.handleStoreOpening;
       await Promise.all([
-        deps.indexer.removeSource(id),
+        deps.getIndexer().proxy.removeSource(id),
         handleStore.delete(id),
       ]);
       emitStatus();
@@ -587,8 +595,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     },
 
     exportFiltered: async (filter, format) => {
-      await deps.indexerOpening;
-      const text = await deps.indexer.exportFiltered(filter, format);
+      await deps.getIndexer().opening;
+      const text = await deps.getIndexer().proxy.exportFiltered(filter, format);
       const mime = format === 'csv' ? 'text/csv' : 'application/x-ndjson';
       return new Blob([text], { type: mime });
     },

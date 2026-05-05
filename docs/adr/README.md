@@ -95,3 +95,4 @@ flowchart LR
 - [0011. Server-side aggregates (group/histogram) и regex queryMode через REGEXP UDF](0011-server-side-aggregations-and-regex.md) — proposed
 - [0012. Snapshot-адаптер: zip / tar / tar.gz через fflate](0012-snapshot-adapter-fflate.md) — proposed
 - [0013. Directory persistence resume и стабильный bookmark fingerprint](0013-directory-resume-and-bookmark-fingerprint.md) — proposed
+- [0014. Worker lifecycle: lazy singletons + dynamic parser pool](0014-worker-lifecycle.md) — proposed

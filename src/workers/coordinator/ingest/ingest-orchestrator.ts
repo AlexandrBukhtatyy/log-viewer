@@ -72,17 +72,20 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
       // Detect parser on the first non-empty chunk.
       if (parserId === null) {
         const sample = lines.slice(0, SAMPLE_LINES_FOR_DETECT);
-        parserId = await parserPool.next().detectParser(sample);
+        parserId = await parserPool.withWorker((p) => p.detectParser(sample));
       }
 
       const startSeq = seq;
       seq += lines.length;
 
-      const entries = await parserPool.next().parse(lines, {
-        sourceId: source.id,
-        startSeq,
-        parserId,
-      });
+      const detectedParserId = parserId;
+      const entries = await parserPool.withWorker((p) =>
+        p.parse(lines, {
+          sourceId: source.id,
+          startSeq,
+          parserId: detectedParserId,
+        }),
+      );
 
       if (entries.length === 0) continue;
 

@@ -128,15 +128,49 @@ export const getOrCreateViewStore = (): ViewStore => {
 };
 
 export const createLogClient = (): ViewStore => {
-  const worker = new Worker(
-    new URL('../workers/coordinator/index.ts', import.meta.url),
-    { type: 'module' },
-  );
-  const api = Comlink.wrap<CoordinatorApi>(worker);
-
-  let refreshToken = 0;
+  // Lazy coordinator worker. We don't spawn it on store creation — the first
+  // method call (typically `refresh()`) is what brings the pipeline up. This
+  // matches the lifecycle invariant in ADR-0014: nothing runs until the user
+  // (or an action) actually needs it. `armSubscriptions()` is invoked exactly
+  // once on the first `api()` access; it kicks off the status/change
+  // subscriptions and the persisted-source resume in the background, while
+  // the original RPC continues unblocked.
+  let coordinatorWorker: Worker | null = null;
+  let coordinatorApi: Comlink.Remote<CoordinatorApi> | null = null;
   let statusUnsubPromise: Promise<() => void> | null = null;
   let changeUnsubPromise: Promise<() => void> | null = null;
+  const armSubscriptions = (a: Comlink.Remote<CoordinatorApi>): void => {
+    statusUnsubPromise = a.subscribeStatus(
+      Comlink.proxy((records) => {
+        store.setState({ sources: records });
+      }),
+    );
+    changeUnsubPromise = a.subscribeChanges(
+      Comlink.proxy((notice) => {
+        store.setState({
+          version: notice.version,
+          filteredCount: notice.filteredCount,
+        });
+        void store.getState().refresh();
+      }),
+    );
+    void a.resumePersistedSources().catch((err: unknown) => {
+      console.warn('[log-client] resumePersistedSources failed', err);
+    });
+  };
+  const api = (): Comlink.Remote<CoordinatorApi> => {
+    if (coordinatorApi === null) {
+      coordinatorWorker = new Worker(
+        new URL('../workers/coordinator/index.ts', import.meta.url),
+        { type: 'module' },
+      );
+      coordinatorApi = Comlink.wrap<CoordinatorApi>(coordinatorWorker);
+      armSubscriptions(coordinatorApi);
+    }
+    return coordinatorApi;
+  };
+
+  let refreshToken = 0;
 
   const store = createStore<ViewState & ViewActions>((set, get) => {
     const refresh = async (): Promise<void> => {
@@ -144,13 +178,13 @@ export const createLogClient = (): ViewStore => {
       set({ isLoading: true });
       const { filter, windowFrom, windowTo } = get();
       try {
-        await api.setFilter(filter);
+        await api().setFilter(filter);
         const from = Math.max(0, windowFrom - OVERSCAN);
         const to = Math.max(from, windowTo + OVERSCAN);
         const [counts, range] = await Promise.all([
-          api.getCount(),
+          api().getCount(),
           to > from
-            ? api.getRange(from, to)
+            ? api().getRange(from, to)
             : Promise.resolve([] as ReadonlyArray<LogEntry>),
         ]);
         if (token !== refreshToken) return;
@@ -198,7 +232,7 @@ export const createLogClient = (): ViewStore => {
         void refresh();
       },
       addFile: async (file) =>
-        api.addSource({
+        api().addSource({
           kind: 'file',
           name: file.name,
           size: file.size,
@@ -223,7 +257,7 @@ export const createLogClient = (): ViewStore => {
             throw err;
           }
         }
-        return api.addSource({
+        return api().addSource({
           kind: 'directory',
           name: opts?.name ?? handle.name,
           handle,
@@ -232,7 +266,7 @@ export const createLogClient = (): ViewStore => {
         });
       },
       addText: async (name, text) =>
-        api.addSource({ kind: 'text', name, text }),
+        api().addSource({ kind: 'text', name, text }),
       addUrl: async (url, headers) => {
         let name = url;
         try {
@@ -242,7 +276,7 @@ export const createLogClient = (): ViewStore => {
         } catch {
           /* keep raw url as name on invalid URL */
         }
-        return api.addSource({ kind: 'url', name, url, headers });
+        return api().addSource({ kind: 'url', name, url, headers });
       },
       addStream: async (url, transport) => {
         const t: 'ws' | 'sse' =
@@ -255,10 +289,10 @@ export const createLogClient = (): ViewStore => {
         } catch {
           /* keep fallback name */
         }
-        return api.addSource({ kind: 'stream', name, transport: t, url });
+        return api().addSource({ kind: 'stream', name, transport: t, url });
       },
       addRemoteSsh: async ({ name, host, user, paths, keyPath }) =>
-        api.addSource({
+        api().addSource({
           kind: 'remote-ssh',
           name: name ?? (user ? `${user}@${host}` : host),
           host,
@@ -267,7 +301,7 @@ export const createLogClient = (): ViewStore => {
           keyPath,
         }),
       addCloud: async ({ name, provider, query, region }) =>
-        api.addSource({
+        api().addSource({
           kind: 'cloud',
           name: name ?? `${provider}${region ? ' · ' + region : ''}`,
           provider,
@@ -275,7 +309,7 @@ export const createLogClient = (): ViewStore => {
           region,
         }),
       addK8s: async ({ name, cluster, namespace, pod, container }) =>
-        api.addSource({
+        api().addSource({
           kind: 'k8s',
           name: name ?? `k8s · ${cluster}${namespace ? '/' + namespace : ''}`,
           cluster,
@@ -284,7 +318,7 @@ export const createLogClient = (): ViewStore => {
           container,
         }),
       addBus: async ({ name, broker, topic, group }) =>
-        api.addSource({
+        api().addSource({
           kind: 'bus',
           name: name ?? `${broker} · ${topic}`,
           broker,
@@ -292,7 +326,7 @@ export const createLogClient = (): ViewStore => {
           group,
         }),
       addDb: async ({ name, dialect, url, query }) =>
-        api.addSource({
+        api().addSource({
           kind: 'db',
           name: name ?? `${dialect} · ${url}`,
           dialect,
@@ -300,23 +334,23 @@ export const createLogClient = (): ViewStore => {
           query,
         }),
       addSnapshot: async (file) =>
-        api.addSource({ kind: 'snapshot', name: file.name, archive: file }),
+        api().addSource({ kind: 'snapshot', name: file.name, archive: file }),
       removeSource: async (id) => {
-        await api.removeSource(id);
+        await api().removeSource(id);
       },
       clearAll: async () => {
-        await api.clearAll();
+        await api().clearAll();
         set({ selectedId: null, entries: new Map() });
       },
-      resumePersistedSources: async () => api.resumePersistedSources(),
-      grantPermission: async (id) => api.grantPermission(id),
-      exportFiltered: async (format) => api.exportFiltered(get().filter, format),
-      cancelSource: async (id) => api.cancel(id as string),
-      getEntry: async (id) => api.getEntry(id),
+      resumePersistedSources: async () => api().resumePersistedSources(),
+      grantPermission: async (id) => api().grantPermission(id),
+      exportFiltered: async (format) => api().exportFiltered(get().filter, format),
+      cancelSource: async (id) => api().cancel(id as string),
+      getEntry: async (id) => api().getEntry(id),
       getGroupCounts: async (filter, field, limit) =>
-        api.getGroupCounts(filter, field, limit),
+        api().getGroupCounts(filter, field, limit),
       getHistogram: async (filter, bucketCount) =>
-        api.getHistogram(filter, bucketCount),
+        api().getHistogram(filter, bucketCount),
       refresh,
       destroy: () => {
         statusUnsubPromise
@@ -329,35 +363,9 @@ export const createLogClient = (): ViewStore => {
           .catch(() => {
             /* ignore */
           });
-        worker.terminate();
+        coordinatorWorker?.terminate();
       },
     };
-  });
-
-  statusUnsubPromise = api.subscribeStatus(
-    Comlink.proxy((records) => {
-      store.setState({ sources: records });
-    }),
-  );
-
-  changeUnsubPromise = api.subscribeChanges(
-    Comlink.proxy((notice) => {
-      store.setState({
-        version: notice.version,
-        filteredCount: notice.filteredCount,
-      });
-      void store.getState().refresh();
-    }),
-  );
-
-  // Initial fetch — pulls counts (zero) and primes filter on coordinator side.
-  void store.getState().refresh();
-
-  // Auto-resume persisted directory handles. Granted ones go straight back
-  // to ingest; the rest surface as `permission-required` chips that the UI
-  // turns into "Grant access" buttons.
-  void api.resumePersistedSources().catch((err: unknown) => {
-    console.warn('[log-client] resumePersistedSources failed', err);
   });
 
   return store;
