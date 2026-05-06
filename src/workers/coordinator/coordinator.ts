@@ -382,16 +382,29 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
       await deps.getIndexer().proxy.upsertSource(source);
 
-      // Persist handle for sources that can be revived after reload.
+      // Persist handle for sources that can be revived after reload. Errors
+      // here are non-fatal — persistence is just a "resume after reload"
+      // affordance; if it fails (e.g. structured-clone of a native
+      // FileSystemDirectoryHandle hits a browser quirk), we still want the
+      // source to show up in the sidebar and start ingesting in this
+      // session. Past behaviour `await`-ed the put and let it reject the
+      // whole addSource, so a put-failure made the source invisible.
       if (source.kind === 'directory') {
-        const handleStore = await deps.handleStoreOpening;
-        await handleStore.put({
-          sourceId: id,
-          kind: 'directory',
-          name: source.name,
-          handle: source.handle,
-          createdAt: Date.now(),
-        });
+        try {
+          const handleStore = await deps.handleStoreOpening;
+          await handleStore.put({
+            sourceId: id,
+            kind: 'directory',
+            name: source.name,
+            handle: source.handle,
+            createdAt: Date.now(),
+          });
+        } catch (err) {
+          console.warn(
+            `[coordinator] handleStore.put failed for source ${id} (will not survive reload):`,
+            err instanceof Error ? err.message : err,
+          );
+        }
       }
 
       startIngest(source);
