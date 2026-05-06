@@ -151,6 +151,12 @@ const rowToEntry = (row: Record<string, SqlValue>): LogEntry => ({
   message: row.message as string,
   raw: row.raw as string,
   fields: parseFields(row.fields_json),
+  // Phase 5a placeholder: pointer columns aren't in v1+v2 schema yet.
+  // Phase 6 wires these to real entry_v3.byte_start/byte_end and the
+  // file_path column.
+  filePath: '',
+  byteStart: 0,
+  byteEnd: 0,
 });
 
 const ENTRY_COLS_UNQUALIFIED =

@@ -16,7 +16,30 @@ export interface LogEntry {
   readonly seq: number;
   readonly timestamp: number | null;
   readonly level: LogLevel;
+  /** Reconstructed by the read-path on demand from the underlying byte range. */
   readonly message: string;
+  /** Reconstructed by the read-path on demand from the underlying byte range. */
   readonly raw: string;
   readonly fields: Readonly<Record<string, unknown>>;
+  /**
+   * Pointer back to the source's byte storage so the read-path can resolve
+   * `raw`/`message` lazily without keeping the body in SQLite (ADR-0016).
+   * `filePath` semantics:
+   *   - directory: relative path inside the source-handle (`sub/a.log`)
+   *   - file:      `''`
+   *   - opfs-single (text/pasted/snapshot/url): `''`
+   *   - opfs-chunked (stream): chunk-seq stringified (`'0'`, `'1'`, …)
+   */
+  readonly filePath: string;
+  readonly byteStart: number;
+  /** Exclusive; does NOT include trailing `\r\n` / `\n`. */
+  readonly byteEnd: number;
 }
+
+/**
+ * Parser output before the orchestrator stamps in the byte pointer. Parsers
+ * see only the line text — they don't know where the line lives in the
+ * underlying storage. The orchestrator (or parser-worker shim) tags every
+ * record with its `filePath`/`byteStart`/`byteEnd` after the parser returns.
+ */
+export type ParsedRecord = Omit<LogEntry, 'filePath' | 'byteStart' | 'byteEnd'>;

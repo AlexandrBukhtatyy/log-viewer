@@ -1,4 +1,4 @@
-import type { LogEntry } from '../types/log-entry.ts';
+import type { ParsedRecord } from '../types/log-entry.ts';
 import type { LogParser, ParseCtx } from '../types/log-parser.ts';
 
 interface RegisteredParser {
@@ -38,7 +38,7 @@ export class ParserRegistry {
 
   /** Try every registered parser (highest priority first); used as fallback when the
    *  per-source primary declines a particular line. */
-  parseAny(line: string, ctx: ParseCtx): LogEntry | null {
+  parseAny(line: string, ctx: ParseCtx): ParsedRecord | null {
     for (const { parser } of this.entries) {
       if (!parser.canParse(line)) continue;
       const { entry } = parser.parseLine(line, ctx);

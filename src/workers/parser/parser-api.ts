@@ -1,6 +1,10 @@
 import { createDefaultRegistry } from '../../core/parsers/index.ts';
-import type { ParserApi, ParseRequestCtx } from '../../core/rpc/parser.contract.ts';
-import type { LogEntry } from '../../core/types/log-entry.ts';
+import type {
+  ParseLineFrame,
+  ParserApi,
+  ParseRequestCtx,
+} from '../../core/rpc/parser.contract.ts';
+import type { LogEntry, ParsedRecord } from '../../core/types/log-entry.ts';
 import type { ParseCtx } from '../../core/types/log-parser.ts';
 import { newEntryId } from '../../core/util/ids.ts';
 
@@ -17,38 +21,55 @@ const buildCtx = (req: ParseRequestCtx): ParseCtx => {
   };
 };
 
+const samplesFromFrames = (
+  frames: ReadonlyArray<ParseLineFrame>,
+): ReadonlyArray<string> => frames.map((f) => f.line);
+
 export const parserApi: ParserApi = {
   ping: async () => `parser-worker:${WORKER_ID}`,
 
   detectParser: async (sample) => registry.pick(sample).id,
 
-  parse: async (lines, ctx) => {
+  parse: async (frames, ctx) => {
     const parseCtx = buildCtx(ctx);
+    const sample = samplesFromFrames(frames);
     const primary = ctx.parserId
-      ? (registry.pickById(ctx.parserId) ?? registry.pick(lines))
-      : registry.pick(lines);
+      ? (registry.pickById(ctx.parserId) ?? registry.pick(sample))
+      : registry.pick(sample);
 
     // For sources with inner file structure (directory / snapshot), the
     // adapter tags every frame with a relative `path`, and the orchestrator
     // groups frames by path before calling parse(). We attach the path to
-    // entry.fields.file_path here, after the parser runs, so every parser
-    // implementation gets it for free without per-parser plumbing.
+    // entry.fields.file_path here so every parser implementation gets it
+    // for free without per-parser plumbing.
     const filePath = ctx.filePath;
-    const tag = (entry: LogEntry): LogEntry =>
-      filePath === undefined
-        ? entry
-        : { ...entry, fields: { ...entry.fields, file_path: filePath } };
+    const enrich = (
+      record: ParsedRecord,
+      byteStart: number,
+      byteEnd: number,
+    ): LogEntry => ({
+      ...record,
+      fields:
+        filePath === undefined
+          ? record.fields
+          : { ...record.fields, file_path: filePath },
+      filePath: filePath ?? '',
+      byteStart,
+      byteEnd,
+    });
 
     const result: LogEntry[] = [];
-    for (const line of lines) {
-      if (line === '') continue;
-      const { entry } = primary.parseLine(line, parseCtx);
+    for (const frame of frames) {
+      if (frame.line === '') continue;
+      const { entry } = primary.parseLine(frame.line, parseCtx);
       if (entry !== null) {
-        result.push(tag(entry));
+        result.push(enrich(entry, frame.byteStart, frame.byteEnd));
         continue;
       }
-      const fallback = registry.parseAny(line, parseCtx);
-      if (fallback !== null) result.push(tag(fallback));
+      const fallback = registry.parseAny(frame.line, parseCtx);
+      if (fallback !== null) {
+        result.push(enrich(fallback, frame.byteStart, frame.byteEnd));
+      }
     }
     return result;
   },

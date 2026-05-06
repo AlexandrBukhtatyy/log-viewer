@@ -1,4 +1,5 @@
 import type { LogLineFrame } from '../../../core/sources/source-adapter.ts';
+import type { ParseLineFrame } from '../../../core/rpc/parser.contract.ts';
 
 export interface ChunkerOptions {
   /** Flush a batch when it reaches this many lines. */
@@ -14,7 +15,8 @@ export interface LineBatch {
    * chunk-seq stringified for chunked OPFS spools (stream).
    */
   readonly path: string;
-  readonly lines: string[];
+  /** Lines plus their byte ranges in the underlying storage. */
+  readonly lines: ReadonlyArray<ParseLineFrame>;
 }
 
 /**
@@ -36,7 +38,7 @@ export const createChunker = (
   options: ChunkerOptions,
 ): TransformStream<LogLineFrame, LineBatch> => {
   const { maxLines, maxMs } = options;
-  let batch: string[] = [];
+  let batch: ParseLineFrame[] = [];
   let batchPath = '';
   let timer: ReturnType<typeof setTimeout> | null = null;
   let lastController: TransformStreamDefaultController<LineBatch> | null = null;
@@ -61,7 +63,11 @@ export const createChunker = (
         emit();
       }
       if (batch.length === 0) batchPath = frame.path;
-      batch.push(frame.line);
+      batch.push({
+        line: frame.line,
+        byteStart: frame.byteStart,
+        byteEnd: frame.byteEnd,
+      });
       if (batch.length >= maxLines) {
         emit();
       } else if (timer === null) {

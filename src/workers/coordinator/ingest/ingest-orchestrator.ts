@@ -75,7 +75,9 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
 
       // Detect parser on the first non-empty batch.
       if (parserId === null) {
-        const sample = lines.slice(0, SAMPLE_LINES_FOR_DETECT);
+        const sample = lines
+          .slice(0, SAMPLE_LINES_FOR_DETECT)
+          .map((f) => f.line);
         parserId = await parserPool.withWorker((p) => p.detectParser(sample));
       }
 

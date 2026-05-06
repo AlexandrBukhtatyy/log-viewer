@@ -11,6 +11,9 @@ const mkEntry = (overrides: Partial<LogEntry> = {}): LogEntry => ({
   message: 'hello',
   raw: 'hello',
   fields: {},
+  filePath: '',
+  byteStart: 0,
+  byteEnd: 5,
   ...overrides,
 });
 

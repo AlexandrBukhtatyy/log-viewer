@@ -1,4 +1,4 @@
-import type { EntryId, LogEntry, SourceId } from './log-entry.ts';
+import type { EntryId, ParsedRecord, SourceId } from './log-entry.ts';
 
 export interface ParseCtx {
   readonly sourceId: SourceId;
@@ -8,7 +8,13 @@ export interface ParseCtx {
 }
 
 export interface ParseResult {
-  readonly entry: LogEntry | null;
+  /**
+   * `null` when the parser couldn't make sense of the line (and registry
+   * fallback should try the next parser). Pointer fields (`filePath`,
+   * `byteStart`, `byteEnd`) are added by the orchestrator after the parser
+   * runs — see `ParsedRecord`.
+   */
+  readonly entry: ParsedRecord | null;
   readonly confidence: number;
 }
 
