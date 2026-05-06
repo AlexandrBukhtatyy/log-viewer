@@ -2,6 +2,7 @@ import type { SourceId } from '../../../core/types/index.ts';
 import {
   defaultOpfsRoot,
   type OpfsRootProvider,
+  SINGLE_SPOOL_FILE,
   SPOOL_ROOT,
 } from './opfs-spool.ts';
 
@@ -113,7 +114,8 @@ export class OpfsSingleSpoolReader implements SourceBlobReader {
   ): Promise<string> {
     const root = await this.rootProvider.getRoot();
     const spool = await root.getDirectoryHandle(SPOOL_ROOT);
-    const fh = await spool.getFileHandle(`${this.sourceId}.bin`);
+    const sourceDir = await spool.getDirectoryHandle(this.sourceId);
+    const fh = await sourceDir.getFileHandle(SINGLE_SPOOL_FILE);
     const file = await fh.getFile();
     return file.slice(byteStart, byteEnd).text();
   }

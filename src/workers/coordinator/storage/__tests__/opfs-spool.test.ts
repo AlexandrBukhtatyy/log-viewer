@@ -4,6 +4,7 @@ import {
   OpfsChunkedSpoolWriter,
   OpfsSingleSpoolWriter,
   removeSpool,
+  SINGLE_SPOOL_FILE,
   SPOOL_ROOT,
 } from '../opfs-spool.ts';
 import { createMockOpfsRoot } from './mock-opfs.ts';
@@ -23,7 +24,8 @@ describe('OpfsSingleSpoolWriter', () => {
 
     // The spool file actually contains the concatenation we wrote.
     const spool = await (await provider.getRoot()).getDirectoryHandle(SPOOL_ROOT);
-    const fh = await spool.getFileHandle('s1.bin');
+    const sourceDir = await spool.getDirectoryHandle('s1');
+    const fh = await sourceDir.getFileHandle(SINGLE_SPOOL_FILE);
     const file = await fh.getFile();
     expect(await file.text()).toBe('hello world');
   });
@@ -78,7 +80,7 @@ describe('OpfsChunkedSpoolWriter', () => {
 });
 
 describe('removeSpool', () => {
-  it('removes a single-spool file when present', async () => {
+  it('removes a single-spool source dir when present', async () => {
     const provider = createMockOpfsRoot();
     const writer = await OpfsSingleSpoolWriter.open(sid('s1'), provider);
     await writer.write(utf8.encode('x'));
@@ -86,7 +88,7 @@ describe('removeSpool', () => {
 
     await removeSpool(sid('s1'), provider);
     const spool = await (await provider.getRoot()).getDirectoryHandle(SPOOL_ROOT);
-    await expect(spool.getFileHandle('s1.bin')).rejects.toThrow();
+    await expect(spool.getDirectoryHandle('s1')).rejects.toThrow();
   });
 
   it('removes a chunked-spool directory recursively', async () => {

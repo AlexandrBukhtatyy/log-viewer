@@ -77,7 +77,7 @@ interface SourceBlobReader {
 
 Имплементации:
 - **`FsHandleReader`** — directory/file: `getFileHandle(filePath)` → `getFile()` → `Blob.slice(start, end).text()`. Кэширует file handles per `(sourceId, filePath)`.
-- **`OpfsSingleSpoolReader`** — text/pasted/snapshot/url: читает `lv-spool/<sourceId>.bin`, slice'ит.
+- **`OpfsSingleSpoolReader`** — text/pasted/snapshot/url: читает `lv-spool/<sourceId>/data.bin`, slice'ит.
 - **`OpfsChunkedSpoolReader`** — stream: читает `lv-spool/<sourceId>/<chunkSeq>.bin`, slice'ит. `byteStart/byteEnd` — offset'ы **внутри chunk-файла** (не глобальные).
 
 Storage-kind резолвится по `source.kind`:
@@ -132,9 +132,11 @@ class OpfsChunkedSpoolWriter {
 }
 ```
 
-**Single-spool layout**: `lv-spool/<sourceId>.bin`. На `removeSource` — `removeEntry` файла.
+**Унифицированный layout — одна директория на источник**: `lv-spool/<sourceId>/`. Внутри:
+- single-spool: `data.bin` (text/pasted/snapshot/url).
+- chunked-spool: `0.bin`, `1.bin`, … (stream).
 
-**Chunked-spool layout**: директория `lv-spool/<sourceId>/`, внутри `0.bin`, `1.bin`, … . На `removeSource` — рекурсивный `removeEntry(<sourceId>, { recursive: true })`. Расширяется [coordinator.ts:401-416](../../src/workers/coordinator/coordinator.ts#L401-L416).
+На `removeSource` — одна операция `removeEntry(sourceId, { recursive: true })` независимо от режима. Расширяется в [coordinator.ts:401-416](../../src/workers/coordinator/coordinator.ts#L401-L416). Каталог per-source даёт место для будущих артефактов (resume cursor для watch-mode, manifest, sidecar-индексы) без второй конвенции имён.
 
 Почему chunk-per-file для stream:
 - Запись в `<chunkSeq>.bin` не пересекается с уже завершёнными chunk'ами, которые в этот момент читает reader.
@@ -245,10 +247,10 @@ UI продолжает работать с `LogEntry` той же формы (`
    - **DB размер**: до миграции `large.jsonl` 6.5 МБ → SQLite ~10 МБ. После — SQLite ~3-4 МБ.
    - **Чтение**: scroll по `app.log`, строки отображаются (`raw`/`message` подгружаются). Нет ленивых-spinner'ов на каждую row (read batched).
    - **Filter**: `level:error` → ошибки фильтруются (SQL). `query: deadlock` → substring находит на post-filter уровне.
-   - **text/pasted/snapshot**: `Add source` → text → создаётся `lv-spool/<sourceId>.bin` (видно в Application → Origin Private File System → `lv-spool/`). Source отображается, чтение работает.
+   - **text/pasted/snapshot**: `Add source` → text → создаётся `lv-spool/<sourceId>/data.bin` (видно в Application → Origin Private File System → `lv-spool/<sourceId>/`). Source отображается, чтение работает.
    - **stream**: подключиться к WebSocket-моку → push'нуть несколько packet'ов → в `lv-spool/<sourceId>/` появляются `0.bin`, `1.bin`, … . Каждый chunk = отдельный файл. Чтение visible window работает на готовых chunk'ах не блокируя приём новых.
    - **Reload**: persisted handle для directory нужно re-grant; spool остаётся (handle в OPFS не требует разрешения). После reload sources восстанавливаются, чтение работает.
-   - **Remove source**: directory → удаляется только index запись. text/pasted/snapshot → `removeEntry('lv-spool/<sourceId>.bin')`. stream → `removeEntry('lv-spool/<sourceId>', { recursive: true })`.
+   - **Remove source**: directory → удаляется только index запись. text/pasted/snapshot/stream → `removeEntry('lv-spool/<sourceId>', { recursive: true })`.
    - 0 console errors.
 4. Performance baseline (Playwright + `performance.now`): на `large.jsonl`:
    - Ingest время — должно стать **быстрее** (нет FTS-индексации).

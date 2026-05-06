@@ -6,13 +6,22 @@ import type { SourceId } from '../../../core/types/index.ts';
  * `(file_path, byte_start, byte_end)` pointers; at read time the same bytes
  * are sliced back via `OpfsSingleSpoolReader` / `OpfsChunkedSpoolReader`.
  *
- * Layout:
- *   lv-spool/<sourceId>.bin           — single-spool (text/pasted/snapshot/url)
- *   lv-spool/<sourceId>/<seq>.bin     — chunked-spool (stream)
+ * Layout — one directory per source, always:
+ *   lv-spool/<sourceId>/data.bin        — single-spool (text/pasted/snapshot/url)
+ *   lv-spool/<sourceId>/<seq>.bin       — chunked-spool (stream)
  *
- * Why two modes:
- * - One-shot sources push their entire payload at once (or nearly so).
- *   Append-once-into-one-file is the simplest sane layout.
+ * Why per-source directories:
+ * - Removal collapses to a single `removeEntry(sourceId, {recursive:true})`
+ *   regardless of mode.
+ * - Future per-source artefacts (manifest, watch-mode resume cursor,
+ *   index sidecars) can sit alongside `data.bin` / chunk files without a
+ *   second naming convention.
+ * - Resume after reload: enumerate the source's directory to find
+ *   surviving chunks instead of probing flat-file names.
+ *
+ * Why still two writers:
+ * - One-shot sources push the entire payload at once (or nearly so).
+ *   Append-once-into-one-file (`data.bin`) is the simplest sane layout.
  * - Streaming sources push packets continuously while the reader is also
  *   reading earlier bytes for display. Writing into a single growing file
  *   contends on the same `FileSystemWritableFileStream`, while
@@ -20,6 +29,8 @@ import type { SourceId } from '../../../core/types/index.ts';
  */
 
 export const SPOOL_ROOT = 'lv-spool';
+/** File name used by `OpfsSingleSpoolWriter`/`Reader` inside a source's dir. */
+export const SINGLE_SPOOL_FILE = 'data.bin';
 
 /**
  * Indirection for tests: production code uses `navigator.storage.getDirectory()`,
@@ -54,7 +65,8 @@ export class OpfsSingleSpoolWriter {
   ): Promise<OpfsSingleSpoolWriter> {
     const root = await rootProvider.getRoot();
     const spoolDir = await root.getDirectoryHandle(SPOOL_ROOT, { create: true });
-    const fh = await spoolDir.getFileHandle(`${sourceId}.bin`, { create: true });
+    const sourceDir = await spoolDir.getDirectoryHandle(sourceId, { create: true });
+    const fh = await sourceDir.getFileHandle(SINGLE_SPOOL_FILE, { create: true });
     const writer = new OpfsSingleSpoolWriter(sourceId);
     writer.writable = await fh.createWritable({ keepExistingData: false });
     return writer;
@@ -148,6 +160,9 @@ export class OpfsChunkedSpoolWriter {
 /**
  * Best-effort cleanup. Used by `removeSource` in the coordinator. Silent on
  * "not found" — the spool may not exist for handle-based sources.
+ *
+ * With the unified per-source layout this is a single recursive
+ * `removeEntry(sourceId)` regardless of writer mode.
  */
 export const removeSpool = async (
   sourceId: SourceId,
@@ -160,15 +175,8 @@ export const removeSpool = async (
   } catch {
     return;
   }
-  // Try chunked layout first (directory), then single-file.
   try {
     await spoolDir.removeEntry(sourceId, { recursive: true });
-    return;
-  } catch {
-    /* fall through */
-  }
-  try {
-    await spoolDir.removeEntry(`${sourceId}.bin`);
   } catch {
     /* nothing to remove */
   }

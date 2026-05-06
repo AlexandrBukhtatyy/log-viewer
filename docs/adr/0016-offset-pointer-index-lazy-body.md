@@ -37,7 +37,7 @@ Chosen: **C + α + I/II микс**, потому что:
 
 - **Гибрид (C)** даёт точные SQL-фильтры (для UI с фильтр-баром и group-by), и одновременно даёт быстрый timeline через bucket'ы. Дополнительные ~16 байт на запись для bucket'а — приемлемо.
 - **Без FTS5 (α)** убирает дублирование (которое ADR-0005 явно создавал) и снимает крупный stake в OPFS. Поиск свободного текста становится post-filter'ом по уже сокращённому набору. Когда — и если — этот scope станет узким местом, вернёмся за γ отдельным ADR.
-- **Микс хранилища (I + II)**: для **directory/file** — байты в исходном FS-handle, OPFS не трогаем. Для **text/pasted/snapshot/url** — single-spool (I), приходит разово. Для **stream** — chunked-spool (II), потому что append в один файл создаёт contention writer↔reader, а chunk-per-packet снимает блокировку и упрощает LRU-eviction старых пакетов.
+- **Микс хранилища (I + II)**: для **directory/file** — байты в исходном FS-handle, OPFS не трогаем. Для **text/pasted/snapshot/url** — single-spool (I), приходит разово. Для **stream** — chunked-spool (II), потому что append в один файл создаёт contention writer↔reader, а chunk-per-packet снимает блокировку и упрощает LRU-eviction старых пакетов. **Унифицированный layout**: каждый source — отдельный каталог `lv-spool/<sourceId>/`, внутри либо `data.bin` (single), либо `<seq>.bin` (chunked). Удаление source — одна операция `removeEntry(sourceId, { recursive: true })`, и в каталоге есть место для будущих per-source-артефактов (resume cursor, manifest).
 
 ### Schema (упрощённо)
 
@@ -95,7 +95,7 @@ flowchart LR
     Idx -->|"PointerRow[]"| Coord
     Coord -->|"resolve bodies"| Reader["SourceBlobReader"]
     Reader -->|"FsHandleReader"| FS[("FileSystemDirectoryHandle<br/>(local files)")]
-    Reader -->|"OpfsSingleSpoolReader"| OPFS1[("lv-spool/&lt;id&gt;.bin")]
+    Reader -->|"OpfsSingleSpoolReader"| OPFS1[("lv-spool/&lt;id&gt;/data.bin")]
     Reader -->|"OpfsChunkedSpoolReader"| OPFS2[("lv-spool/&lt;id&gt;/0.bin<br/>lv-spool/&lt;id&gt;/1.bin<br/>…")]
   end
 
