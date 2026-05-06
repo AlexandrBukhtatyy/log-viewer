@@ -107,6 +107,7 @@ flowchart LR
 
 ## Links
 
+- [docs/architecture/log-pipeline-sequence.md](../architecture/log-pipeline-sequence.md) — runtime sequence-диаграммы (ingest, read, filter change), как это решение работает в живом пайплайне.
 - [docs/plans/replicated-cooking-muffin.md](../plans/replicated-cooking-muffin.md) — план реализации (9 фаз).
 - [ADR-0005](0005-sqlite-fts5-opfs-index.md) — выбор SQLite+OPFS, остаётся в силе. FTS5-часть и материализация `raw`/`message` заменяется этим ADR.
 - [ADR-0006](0006-persistence-strategy.md) — что переживает reload (handle persistence). Правила не меняются: directory-handle нужно re-grant, OPFS-spool остаётся.
