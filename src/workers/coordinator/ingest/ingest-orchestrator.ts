@@ -88,7 +88,7 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
           sourceId: source.id,
           startSeq,
           parserId: detectedParserId,
-          filePath: path ?? undefined,
+          filePath: path === '' ? undefined : path,
         }),
       );
 

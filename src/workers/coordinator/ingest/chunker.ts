@@ -8,8 +8,12 @@ export interface ChunkerOptions {
 }
 
 export interface LineBatch {
-  /** Path of every line in the batch (null for sources without sub-files). */
-  readonly path: string | null;
+  /**
+   * Path of every line in the batch. Empty string for one-file sources and
+   * single-spool layouts; relative path inside the source for directory; the
+   * chunk-seq stringified for chunked OPFS spools (stream).
+   */
+  readonly path: string;
   readonly lines: string[];
 }
 
@@ -33,7 +37,7 @@ export const createChunker = (
 ): TransformStream<LogLineFrame, LineBatch> => {
   const { maxLines, maxMs } = options;
   let batch: string[] = [];
-  let batchPath: string | null = null;
+  let batchPath = '';
   let timer: ReturnType<typeof setTimeout> | null = null;
   let lastController: TransformStreamDefaultController<LineBatch> | null = null;
 

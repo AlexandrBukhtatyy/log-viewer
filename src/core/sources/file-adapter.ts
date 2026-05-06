@@ -27,7 +27,7 @@ export const createFileAdapter: LogSourceAdapterFactory = (source) => {
         .stream()
         .pipeThrough(new TextDecoderStream())
         .pipeThrough(createLineSplitter());
-      return tagLineStream(lines, null);
+      return tagLineStream(lines, '');
     },
     close: async () => {
       aborter?.abort();

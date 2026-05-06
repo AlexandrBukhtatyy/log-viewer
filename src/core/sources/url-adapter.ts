@@ -36,7 +36,7 @@ export const createUrlAdapter: LogSourceAdapterFactory = (source) => {
       const lines = response.body
         .pipeThrough(new TextDecoderStream())
         .pipeThrough(createLineSplitter());
-      return tagLineStream(lines, null);
+      return tagLineStream(lines, '');
     },
     close: async () => {
       aborter?.abort();

@@ -1,5 +1,5 @@
 import type { DirectoryLogSource, LogSource } from '../types/log-source.ts';
-import { createLineSplitter } from './line-splitter.ts';
+import { createByteLineSplitter } from './byte-line-splitter.ts';
 import type {
   LogLineFrame,
   LogSourceAdapter,
@@ -46,17 +46,20 @@ export const createDirectoryAdapter: LogSourceAdapterFactory = (source) => {
               const { path, handle } = entry.file;
               try {
                 const file = await handle.getFile();
+                // Byte-aware splitter so each frame's byteStart/byteEnd
+                // points back at the same FileSystemFileHandle blob — the
+                // indexer stores those offsets and the read-path slices
+                // them again at display time (ADR-0016).
                 const reader = file
                   .stream()
-                  .pipeThrough(new TextDecoderStream())
-                  .pipeThrough(createLineSplitter())
+                  .pipeThrough(createByteLineSplitter(path))
                   .getReader();
                 try {
                   while (!localSignal.aborted) {
                     const { value, done } = await reader.read();
                     if (done) break;
-                    if (typeof value === 'string') {
-                      controller.enqueue({ path, line: value });
+                    if (value !== undefined) {
+                      controller.enqueue(value);
                     }
                   }
                 } finally {

@@ -23,7 +23,7 @@ export const createTextAdapter: LogSourceAdapterFactory = (source) => {
           controller.close();
         },
       });
-      return tagLineStream(stream.pipeThrough(createLineSplitter()), null);
+      return tagLineStream(stream.pipeThrough(createLineSplitter()), '');
     },
     close: async () => {
       /* nothing to clean up */

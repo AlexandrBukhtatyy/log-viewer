@@ -139,10 +139,12 @@ export const createSnapshotAdapter: LogSourceAdapterFactory = (source) => {
       }
 
       const decoder = new TextDecoder('utf-8', { fatal: false });
-      // Decode each archive member separately so the per-file `path` is
-      // attached to every line. Content is already fully in memory after
-      // fflate, so a TransformStream-based line splitter would only add
-      // pipe-overhead — split on `\n` directly.
+      // Each archive member is its own byte-stream; offsets are relative
+      // to the member, not to the whole archive — that way the read-path
+      // can later resolve any line by (file_path, byte_start, byte_end)
+      // against an OPFS spool of the same member, if the lazy-resolver
+      // ever needs it. For now offsets are computed in-memory; the
+      // ingest path doesn't yet materialize the bytes anywhere.
       return new ReadableStream<LogLineFrame>({
         start(controller) {
           for (const f of textFiles) {
@@ -150,12 +152,32 @@ export const createSnapshotAdapter: LogSourceAdapterFactory = (source) => {
               controller.error(new DOMException('aborted', 'AbortError'));
               return;
             }
-            const text = decoder.decode(f.bytes);
-            const lines = text.split('\n');
-            // Drop the trailing empty if the file ended with `\n`.
-            if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-            for (const line of lines) {
-              controller.enqueue({ path: f.name, line });
+            const bytes = f.bytes;
+            let lineStart = 0;
+            for (let i = 0; i < bytes.byteLength; i++) {
+              if (bytes[i] !== 0x0a) continue;
+              let lineEnd = i;
+              if (lineEnd > lineStart && bytes[lineEnd - 1] === 0x0d) lineEnd -= 1;
+              controller.enqueue({
+                path: f.name,
+                line: decoder.decode(bytes.subarray(lineStart, lineEnd)),
+                byteStart: lineStart,
+                byteEnd: lineEnd,
+              });
+              lineStart = i + 1;
+            }
+            // Trailing line without a final \n.
+            if (lineStart < bytes.byteLength) {
+              let lineEnd = bytes.byteLength;
+              if (bytes[lineEnd - 1] === 0x0d) lineEnd -= 1;
+              if (lineEnd > lineStart) {
+                controller.enqueue({
+                  path: f.name,
+                  line: decoder.decode(bytes.subarray(lineStart, lineEnd)),
+                  byteStart: lineStart,
+                  byteEnd: lineEnd,
+                });
+              }
             }
           }
           controller.close();

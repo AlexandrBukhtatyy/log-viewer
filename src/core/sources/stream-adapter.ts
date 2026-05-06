@@ -155,7 +155,7 @@ export const createStreamAdapter: LogSourceAdapterFactory = (source) => {
           closeConn();
         },
       });
-      return tagLineStream(lineStream, null);
+      return tagLineStream(lineStream, '');
     },
     close: async () => {
       aborter?.abort();

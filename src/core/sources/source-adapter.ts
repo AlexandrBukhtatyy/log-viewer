@@ -1,26 +1,28 @@
 import type { LogSource } from '../types/log-source.ts';
 
 /**
- * One decoded log line as it leaves an adapter.
+ * One decoded log line as it leaves an adapter, with the byte range pointing
+ * back to the storage object so the indexer can later resolve body lazily
+ * without keeping the original text in SQLite (see ADR-0016).
  *
  * - `path` — for `directory` it's the forward-slash relative path from the
- *   directory root (`sub/a.log`); for sources without inner structure
- *   (file/text/url/stream/snapshot) it's `null`.
+ *   directory root (`sub/a.log`); for chunked OPFS spools it's the chunk-seq
+ *   stringified (`'0'`, `'1'`, …); for single-file sources and single-spool
+ *   layouts it's `''`. Always a string.
  * - `byteStart` / `byteEnd` — byte offsets inside the storage object the
- *   `path` resolves to (FS file or OPFS spool/chunk). `byteEnd` is exclusive
- *   and does NOT include trailing `\r\n` / `\n`. **Currently optional** —
- *   adapters that haven't been migrated to the byte-aware splitter omit
- *   these; the indexer treats `undefined` as "no byte pointer, fall back to
- *   storing the body" (legacy behaviour). Phase 4 makes them required.
+ *   `path` resolves to. `byteEnd` is exclusive and does NOT include trailing
+ *   `\r\n` / `\n`. Phase 6 will start writing them into `entry.byte_start /
+ *   byte_end` columns; for now they ride along the pipeline so adapters and
+ *   parsers can be migrated independently.
  *
  * Downstream the orchestrator groups frames by `path`, and `path` ends up in
  * `entry.fields.file_path` for sidebar filtering.
  */
 export interface LogLineFrame {
-  readonly path: string | null;
+  readonly path: string;
   readonly line: string;
-  readonly byteStart?: number;
-  readonly byteEnd?: number;
+  readonly byteStart: number;
+  readonly byteEnd: number;
 }
 
 /**
@@ -41,18 +43,35 @@ export type LogSourceAdapterFactory = (source: LogSource) => LogSourceAdapter;
 
 /**
  * Wrap a `ReadableStream<string>` into a `ReadableStream<LogLineFrame>`,
- * tagging every line with the same `path`. Used by adapters whose source has
- * no inner file structure (path stays `null`). Phase 4 will retire this in
- * favour of byte-line-splitter directly on the raw byte stream.
+ * tagging every line with the same `path` and synthetic byte ranges
+ * computed from each line's UTF-8 byte length plus a single `\n` terminator.
+ *
+ * Synthetic offsets are honest enough for adapters that haven't been ported
+ * to the byte-aware splitter yet — they describe a virtual write of every
+ * emitted line back-to-back. When such an adapter later spools its bytes
+ * into OPFS one line at a time (Phase 5+ for stream/url/etc), the same
+ * offsets line up with the spool layout. Adapters with a real underlying
+ * file (directory, file) skip this helper entirely and pipe their bytes
+ * through `byte-line-splitter` to get genuine offsets.
+ *
+ * `path` is `''` for one-file sources and single-spool OPFS layouts. The
+ * directory adapter always passes a non-empty relative path.
  */
 export const tagLineStream = (
   source: ReadableStream<string>,
-  path: string | null,
-): ReadableStream<LogLineFrame> =>
-  source.pipeThrough(
+  path: string,
+): ReadableStream<LogLineFrame> => {
+  const encoder = new TextEncoder();
+  let cursor = 0;
+  return source.pipeThrough(
     new TransformStream<string, LogLineFrame>({
       transform(line, controller) {
-        controller.enqueue({ path, line });
+        const byteLen = encoder.encode(line).byteLength;
+        const byteStart = cursor;
+        const byteEnd = byteStart + byteLen;
+        cursor = byteEnd + 1; // +1 for the synthetic `\n` terminator
+        controller.enqueue({ path, line, byteStart, byteEnd });
       },
     }),
   );
+};
