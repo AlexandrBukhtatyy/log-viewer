@@ -1,6 +1,7 @@
 import type { Database } from '@sqlite.org/sqlite-wasm';
 import schemaV1Sql from './schema.sql?raw';
 import schemaV2Sql from './schema-v2-fts.sql?raw';
+import schemaV3Sql from './schema-v3-offsets.sql?raw';
 
 interface Migration {
   readonly version: number;
@@ -18,6 +19,17 @@ const MIGRATIONS: ReadonlyArray<Migration> = [
     version: 2,
     up: (db) => {
       db.exec(schemaV2Sql);
+    },
+  },
+  {
+    // v3 (ADR-0016): switch to offset-pointer + minute-bucket index. Drops
+    // FTS5 and the materialised raw/message body from `entry`. Destructive
+    // by design — old rows can't be lifted to the new shape because their
+    // byte positions in the source file weren't recorded. On first start
+    // with v3 active, the coordinator re-ingests every persisted source.
+    version: 3,
+    up: (db) => {
+      db.exec(schemaV3Sql);
     },
   },
 ];

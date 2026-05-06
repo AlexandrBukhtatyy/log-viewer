@@ -33,9 +33,7 @@ describe('buildClause', () => {
   });
 
   it('time range with both bounds', () => {
-    const built = buildClause(
-      f({ timeRange: { from: 1000, to: 2000 } }),
-    );
+    const built = buildClause(f({ timeRange: { from: 1000, to: 2000 } }));
     expect(built.whereSql).toBe('WHERE ts >= ? AND ts <= ?');
     expect(built.params).toEqual([1000, 2000]);
   });
@@ -46,60 +44,23 @@ describe('buildClause', () => {
     expect(built.params).toEqual([1000]);
   });
 
-  it('substring query (case-insensitive default)', () => {
-    const built = buildClause(f({ query: 'error', queryMode: 'substring' }));
-    expect(built.whereSql).toBe(
-      "WHERE LOWER(message) LIKE LOWER(?) ESCAPE '\\'",
-    );
-    expect(built.params).toEqual(['%error%']);
-  });
-
-  it('substring query (case-sensitive)', () => {
-    const built = buildClause(
-      f({ query: 'Error', queryMode: 'substring', caseSensitive: true }),
-    );
-    expect(built.whereSql).toBe("WHERE message LIKE ? ESCAPE '\\'");
-    expect(built.params).toEqual(['%Error%']);
-  });
-
-  it('substring query escapes LIKE-special chars', () => {
-    const built = buildClause(
-      f({ query: '50%_off', queryMode: 'substring', caseSensitive: true }),
-    );
-    expect(built.params).toEqual(['%50\\%\\_off%']);
-  });
-
-  it('FTS query produces JOIN + MATCH', () => {
-    const built = buildClause(
-      f({ query: 'memory OR exception', queryMode: 'fts' }),
-    );
-    expect(built.joinSql).toBe(
-      'JOIN entry_fts ON entry_fts.rowid = entry.rowid',
-    );
-    expect(built.whereSql).toBe('WHERE entry_fts MATCH ?');
-    expect(built.params).toEqual(['memory OR exception']);
-  });
-
-  it('regex queryMode case-insensitive uses regexpi UDF', () => {
-    const built = buildClause(f({ query: 'err.*o', queryMode: 'regex' }));
-    expect(built.whereSql).toBe('WHERE regexpi(?, message)');
-    expect(built.params).toEqual(['err.*o']);
-  });
-
-  it('regex queryMode case-sensitive uses regexp UDF', () => {
-    const built = buildClause(
-      f({ query: 'Err.*o', queryMode: 'regex', caseSensitive: true }),
-    );
-    expect(built.whereSql).toBe('WHERE regexp(?, message)');
-    expect(built.params).toEqual(['Err.*o']);
-  });
-
-  it('regex + wholeWord wraps user pattern in \\b(?:...)\\b', () => {
-    const built = buildClause(
-      f({ query: 'foo|bar', queryMode: 'regex', wholeWord: true }),
-    );
-    expect(built.whereSql).toBe('WHERE regexpi(?, message)');
-    expect(built.params).toEqual(['\\b(?:foo|bar)\\b']);
+  describe('free-text query never enters SQL after ADR-0016', () => {
+    // FTS5 was retired and the body no longer lives in SQLite; the
+    // resolver matches `query`/`queryMode`/`wholeWord`/`caseSensitive`
+    // against decoded body bytes for the visible window. buildClause must
+    // therefore ignore them entirely, regardless of the mode.
+    it.each([
+      'substring',
+      'fts',
+      'regex',
+    ] as const)('queryMode=%s does not contribute to WHERE/JOIN', (mode) => {
+      const built = buildClause(
+        f({ query: 'something', queryMode: mode, wholeWord: true }),
+      );
+      expect(built.joinSql).toBe('');
+      expect(built.whereSql).toBe('');
+      expect(built.params).toEqual([]);
+    });
   });
 
   it('filePaths filter generates JSON_EXTRACT IN clause', () => {
@@ -116,41 +77,6 @@ describe('buildClause', () => {
       "WHERE JSON_EXTRACT(fields_json, '$.service') IN (?, ?)",
     );
     expect(built.params).toEqual(['api-gateway', 'billing']);
-  });
-
-  it('wholeWord substring uses regexpi UDF with \\b…\\b (case-insensitive)', () => {
-    const built = buildClause(
-      f({ query: 'foo', queryMode: 'substring', wholeWord: true }),
-    );
-    expect(built.whereSql).toBe('WHERE regexpi(?, message)');
-    expect(built.params).toEqual(['\\bfoo\\b']);
-  });
-
-  it('wholeWord substring uses regexp UDF when case-sensitive', () => {
-    const built = buildClause(
-      f({
-        query: 'Foo',
-        queryMode: 'substring',
-        wholeWord: true,
-        caseSensitive: true,
-      }),
-    );
-    expect(built.whereSql).toBe('WHERE regexp(?, message)');
-    expect(built.params).toEqual(['\\bFoo\\b']);
-  });
-
-  it('wholeWord substring escapes regex metacharacters in user input', () => {
-    const built = buildClause(
-      f({ query: 'a.b+c', queryMode: 'substring', wholeWord: true }),
-    );
-    expect(built.params).toEqual(['\\ba\\.b\\+c\\b']);
-  });
-
-  it('wholeWord with FTS wraps query in phrase quotes', () => {
-    const built = buildClause(
-      f({ query: 'memory leak', queryMode: 'fts', wholeWord: true }),
-    );
-    expect(built.params).toEqual(['"memory leak"']);
   });
 
   it('fieldFilter `=` produces CAST AS TEXT equality', () => {
@@ -203,7 +129,7 @@ describe('buildClause', () => {
     expect(built.params).toEqual(['$.status', '500']);
   });
 
-  it('combines all clauses with AND', () => {
+  it('combines structural clauses with AND (free-text still excluded)', () => {
     const built = buildClause(
       f({
         levels: ['error'],
@@ -215,15 +141,12 @@ describe('buildClause', () => {
         fieldFilters: [{ key: 'status', op: '>', value: '499' }],
       }),
     );
-    expect(built.joinSql).toBe(
-      'JOIN entry_fts ON entry_fts.rowid = entry.rowid',
-    );
+    expect(built.joinSql).toBe('');
     expect(built.whereSql).toBe(
       'WHERE level IN (?)' +
         ' AND source_id IN (?)' +
         " AND JSON_EXTRACT(fields_json, '$.service') IN (?)" +
         ' AND ts >= ?' +
-        ' AND entry_fts MATCH ?' +
         ' AND CAST(JSON_EXTRACT(fields_json, ?) AS REAL) > CAST(? AS REAL)',
     );
     expect(built.params).toEqual([
@@ -231,24 +154,17 @@ describe('buildClause', () => {
       's-1',
       'billing',
       1000,
-      'fail',
       '$.status',
       '499',
     ]);
   });
-
-  it('empty query string skips query predicate even in fts mode', () => {
-    const built = buildClause(f({ query: '   ', queryMode: 'fts' }));
-    expect(built.joinSql).toBe('');
-    expect(built.whereSql).toBe('');
-  });
 });
 
 describe('ORDER_BY_DEFAULT', () => {
-  it('uses qualified entry.* columns for FTS-JOIN compatibility', () => {
+  it('orders rows by qualified entry.* columns and puts NULL ts last', () => {
     expect(ORDER_BY_DEFAULT).toContain('entry.ts');
     expect(ORDER_BY_DEFAULT).toContain('entry.source_id');
     expect(ORDER_BY_DEFAULT).toContain('entry.seq');
-    expect(ORDER_BY_DEFAULT).toContain('IS NULL'); // null timestamps go last
+    expect(ORDER_BY_DEFAULT).toContain('IS NULL');
   });
 });

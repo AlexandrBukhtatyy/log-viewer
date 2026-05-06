@@ -29,7 +29,47 @@ interface State {
   db: Database;
   insertEntryStmt: PreparedStatement;
   bumpSourceCountStmt: PreparedStatement;
+  upsertMinuteStmt: PreparedStatement;
 }
+
+interface MinuteBucket {
+  readonly sourceId: SourceId;
+  readonly filePath: string;
+  readonly minuteBucket: number;
+  byteStart: number;
+  byteEnd: number;
+  entryCount: number;
+  levelDist: Record<string, number>;
+}
+
+const aggregateMinuteBuckets = (
+  entries: ReadonlyArray<LogEntry>,
+): ReadonlyArray<MinuteBucket> => {
+  const map = new Map<string, MinuteBucket>();
+  for (const e of entries) {
+    if (e.timestamp === null) continue; // entries without ts don't aggregate
+    const minuteBucket = Math.floor(e.timestamp / 60000);
+    const key = `${e.sourceId}|${e.filePath}|${minuteBucket}`;
+    const existing = map.get(key);
+    if (existing === undefined) {
+      map.set(key, {
+        sourceId: e.sourceId,
+        filePath: e.filePath,
+        minuteBucket,
+        byteStart: e.byteStart,
+        byteEnd: e.byteEnd,
+        entryCount: 1,
+        levelDist: { [e.level]: 1 },
+      });
+      continue;
+    }
+    if (e.byteStart < existing.byteStart) existing.byteStart = e.byteStart;
+    if (e.byteEnd > existing.byteEnd) existing.byteEnd = e.byteEnd;
+    existing.entryCount += 1;
+    existing.levelDist[e.level] = (existing.levelDist[e.level] ?? 0) + 1;
+  }
+  return [...map.values()];
+};
 
 let state: State | null = null;
 
@@ -142,35 +182,54 @@ const parseFields = (raw: SqlValue | null | undefined): Readonly<Record<string, 
   return {};
 };
 
+/**
+ * Convert a row from `entry` (schema v3 — pointer-only) into a `LogEntry`
+ * shell. `raw` and `message` are blank — the lazy-resolver in the
+ * coordinator slices them out of the source's blob storage at read time
+ * (ADR-0016). The shell shape stays the same as before so UI consumers
+ * keep working unchanged.
+ */
 const rowToEntry = (row: Record<string, SqlValue>): LogEntry => ({
   id: row.id as EntryId,
   sourceId: row.source_id as SourceId,
   seq: Number(row.seq),
   timestamp: (row.ts as number | null) ?? null,
   level: row.level as LogLevel,
-  message: row.message as string,
-  raw: row.raw as string,
+  message: '',
+  raw: '',
   fields: parseFields(row.fields_json),
-  // Phase 5a placeholder: pointer columns aren't in v1+v2 schema yet.
-  // Phase 6 wires these to real entry_v3.byte_start/byte_end and the
-  // file_path column.
-  filePath: '',
-  byteStart: 0,
-  byteEnd: 0,
+  filePath: (row.file_path as string | null) ?? '',
+  byteStart: Number(row.byte_start ?? 0),
+  byteEnd: Number(row.byte_end ?? 0),
 });
 
 const ENTRY_COLS_UNQUALIFIED =
-  'id, source_id, seq, ts, level, message, raw, fields_json';
-/** Qualified with `entry.` prefix to disambiguate from `entry_fts` in FTS JOIN queries.
- *  Aliases ensure result-row keys are stable regardless of driver behavior. */
+  'id, source_id, seq, ts, level, file_path, byte_start, byte_end, fields_json';
 const ENTRY_COLS_SELECT =
   'entry.id AS id, entry.source_id AS source_id, entry.seq AS seq, ' +
-  'entry.ts AS ts, entry.level AS level, entry.message AS message, ' +
-  'entry.raw AS raw, entry.fields_json AS fields_json';
+  'entry.ts AS ts, entry.level AS level, ' +
+  'entry.file_path AS file_path, entry.byte_start AS byte_start, ' +
+  'entry.byte_end AS byte_end, entry.fields_json AS fields_json';
 
 const INSERT_ENTRY_SQL = `
   INSERT OR IGNORE INTO entry (${ENTRY_COLS_UNQUALIFIED})
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`;
+
+/**
+ * UPSERT into `entry_minute` — one row per (source, file, minute_bucket).
+ * Aggregates are computed by the orchestrator before this call: per-bucket
+ * entry_count, byte_start (min), byte_end (max), level_dist (object).
+ */
+const UPSERT_MINUTE_SQL = `
+  INSERT INTO entry_minute (source_id, file_path, minute_bucket,
+                            byte_start, byte_end, entry_count, level_dist_json)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(source_id, file_path, minute_bucket) DO UPDATE SET
+    byte_start      = MIN(byte_start, excluded.byte_start),
+    byte_end        = MAX(byte_end,   excluded.byte_end),
+    entry_count     = entry_count + excluded.entry_count,
+    level_dist_json = excluded.level_dist_json
 `;
 
 const BUMP_SOURCE_COUNT_SQL = `
@@ -193,6 +252,7 @@ export const indexerApi: IndexerApi = {
       db: opened.db,
       insertEntryStmt: opened.db.prepare(INSERT_ENTRY_SQL),
       bumpSourceCountStmt: opened.db.prepare(BUMP_SOURCE_COUNT_SQL),
+      upsertMinuteStmt: opened.db.prepare(UPSERT_MINUTE_SQL),
     };
     return {
       migrationFrom: opened.migration.from,
@@ -205,6 +265,7 @@ export const indexerApi: IndexerApi = {
     if (state === null) return;
     state.insertEntryStmt.finalize();
     state.bumpSourceCountStmt.finalize();
+    state.upsertMinuteStmt.finalize();
     state.db.close();
     state = null;
   },
@@ -243,7 +304,8 @@ export const indexerApi: IndexerApi = {
 
   insertBatch: async (entries) => {
     if (entries.length === 0) return;
-    const { db, insertEntryStmt, bumpSourceCountStmt } = requireState();
+    const { db, insertEntryStmt, bumpSourceCountStmt, upsertMinuteStmt } =
+      requireState();
 
     db.exec('BEGIN');
     try {
@@ -255,14 +317,16 @@ export const indexerApi: IndexerApi = {
             e.seq,
             e.timestamp,
             e.level,
-            e.message,
-            e.raw,
+            e.filePath,
+            e.byteStart,
+            e.byteEnd,
             JSON.stringify(e.fields),
           ])
           .step();
         insertEntryStmt.reset();
       }
 
+      // Per-source row counters.
       const counts = new Map<SourceId, number>();
       for (const e of entries) {
         counts.set(e.sourceId, (counts.get(e.sourceId) ?? 0) + 1);
@@ -271,6 +335,25 @@ export const indexerApi: IndexerApi = {
       for (const [sid, n] of counts) {
         bumpSourceCountStmt.bind([n, now, sid]).step();
         bumpSourceCountStmt.reset();
+      }
+
+      // Aggregate per (source, file, minute) — drives the timeline /
+      // first-paint without scanning entry rows. Computed in JS and
+      // UPSERTed in one loop to stay cheap on hot batches.
+      const buckets = aggregateMinuteBuckets(entries);
+      for (const b of buckets) {
+        upsertMinuteStmt
+          .bind([
+            b.sourceId,
+            b.filePath,
+            b.minuteBucket,
+            b.byteStart,
+            b.byteEnd,
+            b.entryCount,
+            JSON.stringify(b.levelDist),
+          ])
+          .step();
+        upsertMinuteStmt.reset();
       }
 
       db.exec('COMMIT');
@@ -425,10 +508,16 @@ export const indexerApi: IndexerApi = {
     const pageCount = runScalar(db, 'PRAGMA page_count');
     const pageSize = runScalar(db, 'PRAGMA page_size');
     const total = Number(pageCount ?? 0) * Number(pageSize ?? 0);
+    // After ADR-0016 the index holds only pointers + parsed fields.
+    // Estimate the on-disk pointer cost per source as
+    //   (byte_end - byte_start) is the body's external size, which we
+    //   don't account for here — only what's actually IN sqlite.
+    // 96 bytes is a back-of-envelope per-row index cost (id+columns+
+    // index entries) plus the JSON length.
     const perRows = runRows(
       db,
       `SELECT source_id,
-              SUM(LENGTH(raw) + LENGTH(message) + IFNULL(LENGTH(fields_json), 0)) AS bytes
+              COUNT(*) * 96 + SUM(IFNULL(LENGTH(fields_json), 0)) AS bytes
          FROM entry
         GROUP BY source_id`,
     );
@@ -445,5 +534,6 @@ export const indexerApi: IndexerApi = {
     const { db } = requireState();
     db.exec('DELETE FROM source');
     db.exec('DELETE FROM entry');
+    db.exec('DELETE FROM entry_minute');
   },
 };

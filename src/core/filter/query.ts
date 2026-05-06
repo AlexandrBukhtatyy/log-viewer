@@ -5,7 +5,12 @@ import type {
 } from '../types/log-filter.ts';
 
 export interface BuiltClause {
-  /** "" or "JOIN entry_fts ON entry_fts.rowid = entry.rowid" — for FTS query mode. */
+  /**
+   * Reserved for future JOINs. Empty string today — FTS5 was retired with
+   * ADR-0016 (the body it indexed no longer lives in SQLite). Free-text
+   * substring/regex search resolves on the read-path against the visible
+   * window, not at SQL level.
+   */
   readonly joinSql: string;
   /** "WHERE ..." or empty string when no constraints. */
   readonly whereSql: string;
@@ -14,10 +19,6 @@ export interface BuiltClause {
 
 const escapeLike = (s: string): string =>
   s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-
-/** Escape regex metacharacters so a substring query can be wrapped in \b…\b safely. */
-const escapeRegex = (s: string): string =>
-  s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Translate a `LogFilter` to a SQL JOIN + WHERE clause + bind parameters.
@@ -44,7 +45,9 @@ const escapeRegex = (s: string): string =>
 export const buildClause = (filter: LogFilter): BuiltClause => {
   const conds: string[] = [];
   const params: Array<string | number> = [];
-  let joinSql = '';
+  // FTS5 was retired with ADR-0016 — the body it indexed no longer lives
+  // in SQLite. Reserved for future JOINs against e.g. minute aggregates.
+  const joinSql = '';
 
   if (filter.levels && filter.levels.length > 0) {
     const placeholders = filter.levels.map(() => '?').join(', ');
@@ -85,38 +88,13 @@ export const buildClause = (filter: LogFilter): BuiltClause => {
     }
   }
 
-  const trimmedQuery = filter.query.trim();
-  if (trimmedQuery !== '') {
-    if (filter.queryMode === 'fts') {
-      joinSql = 'JOIN entry_fts ON entry_fts.rowid = entry.rowid';
-      conds.push('entry_fts MATCH ?');
-      params.push(filter.wholeWord ? `"${trimmedQuery}"` : trimmedQuery);
-    } else if (filter.queryMode === 'regex') {
-      // Case sensitivity selects between regexp/regexpi UDFs (see open-db.ts).
-      const fn = filter.caseSensitive ? 'regexp' : 'regexpi';
-      const pattern = filter.wholeWord ? `\\b(?:${trimmedQuery})\\b` : trimmedQuery;
-      conds.push(`${fn}(?, message)`);
-      params.push(pattern);
-    } else {
-      // queryMode === 'substring'.
-      // wholeWord uses regex \b…\b for proper word boundaries (handles
-      // punctuation), with the user's input regex-escaped so it matches
-      // literally. Otherwise — LIKE (with case folding when not caseSensitive).
-      if (filter.wholeWord) {
-        const fn = filter.caseSensitive ? 'regexp' : 'regexpi';
-        conds.push(`${fn}(?, message)`);
-        params.push(`\\b${escapeRegex(trimmedQuery)}\\b`);
-      } else {
-        const pattern = `%${escapeLike(trimmedQuery)}%`;
-        if (filter.caseSensitive) {
-          conds.push("message LIKE ? ESCAPE '\\'");
-        } else {
-          conds.push("LOWER(message) LIKE LOWER(?) ESCAPE '\\'");
-        }
-        params.push(pattern);
-      }
-    }
-  }
+  // Free-text search (`filter.query`) is intentionally NOT pushed into SQL.
+  // After ADR-0016 the body lives outside SQLite (FS handle / OPFS spool),
+  // so substring/regex/whole-word can only be matched once the resolver has
+  // read the bytes for the visible window. The coordinator runs a
+  // post-filter over already-resolved entries — fast enough on a hundred-
+  // line window, and avoids reading every byte of every file just to count
+  // a query that the user is still typing.
 
   if (filter.fieldFilters && filter.fieldFilters.length > 0) {
     for (const ff of filter.fieldFilters) {

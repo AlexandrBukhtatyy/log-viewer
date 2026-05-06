@@ -68,6 +68,28 @@ export class FsHandleReader implements SourceBlobReader {
 }
 
 /**
+ * Reader for sources whose body is an in-memory `File` object — `file`
+ * (user picked a single log file) and `snapshot` (the archive itself,
+ * sliced once per archive member by the archive's own offset table). The
+ * adapter's emitted `byte_start`/`byte_end` are absolute offsets inside
+ * the same `File`, so this reader just slices it directly.
+ */
+export class FileSourceReader implements SourceBlobReader {
+  private readonly file: File;
+  constructor(file: File) {
+    this.file = file;
+  }
+
+  async read(
+    _filePath: string,
+    byteStart: number,
+    byteEnd: number,
+  ): Promise<string> {
+    return this.file.slice(byteStart, byteEnd).text();
+  }
+}
+
+/**
  * Reader for sources whose data lives in a single OPFS spool file. Used for
  * `text` / `pasted` / `snapshot` / `url` sources — anything that arrives as a
  * single payload (or a small number of batched payloads written into the

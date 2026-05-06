@@ -28,6 +28,11 @@ const insertSource = (db: Database, id: string, kind: string, name: string) =>
     bind: [id, kind, name],
   });
 
+/**
+ * Insert a pointer row into the v3 `entry` table. Body is no longer in
+ * SQLite — tests pass `byteEnd - byteStart` to keep the values internally
+ * consistent without forcing every caller to know the schema details.
+ */
 const insertEntry = (
   db: Database,
   id: string,
@@ -35,12 +40,16 @@ const insertEntry = (
   seq: number,
   ts: number | null,
   level: string,
-  message: string,
+  filePath = '',
+  byteStart = 0,
+  byteEnd = 10,
+  fieldsJson: string | null = null,
 ) =>
   db.exec({
-    sql: `INSERT INTO entry (id, source_id, seq, ts, level, message, raw, fields_json)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    bind: [id, sourceId, seq, ts, level, message, message, null],
+    sql: `INSERT INTO entry (id, source_id, seq, ts, level,
+                             file_path, byte_start, byte_end, fields_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    bind: [id, sourceId, seq, ts, level, filePath, byteStart, byteEnd, fieldsJson],
   });
 
 const readUserVersion = (db: Database): number => {
@@ -70,7 +79,7 @@ describe('indexer/db', () => {
       expect(readUserVersion(db)).toBe(before);
     });
 
-    it('creates entry and source tables (v1)', async () => {
+    it('creates entry, source and entry_minute tables', async () => {
       const db = await openMemoryDb();
       const tables = db.exec({
         sql: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
@@ -80,18 +89,42 @@ describe('indexer/db', () => {
       const names = tables.map((t) => t[0]);
       expect(names).toContain('entry');
       expect(names).toContain('source');
+      expect(names).toContain('entry_minute');
     });
 
-    it('creates FTS5 virtual table (v2)', async () => {
+    it('drops entry_fts after v3 (FTS5 is retired by ADR-0016)', async () => {
       const db = await openMemoryDb();
       const tables = db.exec({
-        sql: "SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name LIKE 'entry_fts%'",
+        sql: "SELECT name FROM sqlite_master WHERE name LIKE 'entry_fts%'",
         rowMode: 'array',
         returnValue: 'resultRows',
       }) as unknown as ReadonlyArray<ReadonlyArray<string>>;
-      // entry_fts virtual table comes with shadow tables (entry_fts_data, _idx etc.)
-      const names = tables.map((t) => t[0]);
-      expect(names).toContain('entry_fts');
+      expect(tables.map((t) => t[0])).toEqual([]);
+    });
+
+    it('entry has v3 pointer columns and not raw/message', async () => {
+      const db = await openMemoryDb();
+      const cols = db.exec({
+        sql: 'PRAGMA table_info(entry)',
+        rowMode: 'object',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<Record<string, unknown>>;
+      const names = cols.map((c) => c.name as string);
+      expect(names).toEqual(
+        expect.arrayContaining([
+          'id',
+          'source_id',
+          'seq',
+          'ts',
+          'level',
+          'file_path',
+          'byte_start',
+          'byte_end',
+          'fields_json',
+        ]),
+      );
+      expect(names).not.toContain('raw');
+      expect(names).not.toContain('message');
     });
   });
 
@@ -99,9 +132,9 @@ describe('indexer/db', () => {
     it('level filter via WHERE IN narrows results', async () => {
       const db = await openMemoryDb();
       insertSource(db, 's1', 'file', 'a.log');
-      insertEntry(db, 'e1', 's1', 0, null, 'info', 'hello');
-      insertEntry(db, 'e2', 's1', 1, null, 'error', 'boom');
-      insertEntry(db, 'e3', 's1', 2, null, 'warn', 'beware');
+      insertEntry(db, 'e1', 's1', 0, null, 'info');
+      insertEntry(db, 'e2', 's1', 1, null, 'error');
+      insertEntry(db, 'e3', 's1', 2, null, 'warn');
 
       const { joinSql, whereSql, params } = buildClause({
         ...EMPTY_FILTER,
@@ -116,54 +149,66 @@ describe('indexer/db', () => {
       expect(rows[0]?.n).toBe(2);
     });
 
-    it('FTS query via JOIN matches one entry', async () => {
-      const db = await openMemoryDb();
-      insertSource(db, 's1', 'file', 'a.log');
-      insertEntry(db, 'e1', 's1', 0, null, 'info', 'connection refused');
-      insertEntry(db, 'e2', 's1', 1, null, 'info', 'login success');
-      insertEntry(db, 'e3', 's1', 2, null, 'error', 'connection timeout');
-
-      const { joinSql, whereSql, params } = buildClause({
+    it('free-text query stays out of SQL (resolved on the read-path)', async () => {
+      // Post-ADR-0016: filter.query never produces SQL conds. The resolver
+      // matches it against decoded body bytes for the visible window.
+      const built = buildClause({
         ...EMPTY_FILTER,
         query: 'connection',
-        queryMode: 'fts',
+        queryMode: 'substring',
+      });
+      expect(built.joinSql).toBe('');
+      // No `query`-related conds — only EMPTY_FILTER's other clauses (none).
+      expect(built.whereSql).toBe('');
+      expect(built.params).toEqual([]);
+    });
+
+    it('filePaths filter narrows by JSON_EXTRACT(file_path)', async () => {
+      const db = await openMemoryDb();
+      insertSource(db, 's1', 'directory', 'logs');
+      insertEntry(
+        db,
+        'e1',
+        's1',
+        0,
+        null,
+        'info',
+        'a.log',
+        0,
+        10,
+        JSON.stringify({ file_path: 'a.log' }),
+      );
+      insertEntry(
+        db,
+        'e2',
+        's1',
+        1,
+        null,
+        'info',
+        'b.log',
+        0,
+        10,
+        JSON.stringify({ file_path: 'b.log' }),
+      );
+      const { whereSql, params } = buildClause({
+        ...EMPTY_FILTER,
+        filePaths: ['a.log'],
       });
       const rows = db.exec({
-        sql: `SELECT entry.id AS id FROM entry ${joinSql} ${whereSql} ${ORDER_BY_DEFAULT}`,
+        sql: `SELECT entry.id AS id FROM entry ${whereSql}`,
         bind: [...params],
         rowMode: 'object',
         returnValue: 'resultRows',
       }) as unknown as ReadonlyArray<Record<string, string>>;
-      const ids = rows.map((r) => r.id);
-      expect(ids).toEqual(['e1', 'e3']);
-    });
-
-    it('substring LIKE works case-insensitively by default', async () => {
-      const db = await openMemoryDb();
-      insertSource(db, 's1', 'file', 'a.log');
-      insertEntry(db, 'e1', 's1', 0, null, 'info', 'Lookup TIMEOUT');
-      insertEntry(db, 'e2', 's1', 1, null, 'info', 'all good');
-
-      const { joinSql, whereSql, params } = buildClause({
-        ...EMPTY_FILTER,
-        query: 'timeout',
-        queryMode: 'substring',
-      });
-      const rows = db.exec({
-        sql: `SELECT COUNT(*) AS n FROM entry ${joinSql} ${whereSql}`,
-        bind: [...params],
-        rowMode: 'object',
-        returnValue: 'resultRows',
-      }) as unknown as ReadonlyArray<Record<string, number>>;
-      expect(rows[0]?.n).toBe(1);
+      expect(rows.map((r) => r.id)).toEqual(['e1']);
     });
 
     it('time range bounds limit by entry.ts', async () => {
       const db = await openMemoryDb();
       insertSource(db, 's1', 'file', 'a.log');
-      insertEntry(db, 'e1', 's1', 0, 1000, 'info', 'a');
-      insertEntry(db, 'e2', 's1', 1, 2000, 'info', 'b');
-      insertEntry(db, 'e3', 's1', 2, 3000, 'info', 'c');
+      insertEntry(db, 'e1', 's1', 0, 1000, 'info');
+      insertEntry(db, 'e2', 's1', 1, 2000, 'info');
+      insertEntry(db, 'e3', 's1', 2, 3000, 'info');
 
       const { whereSql, params } = buildClause({
         ...EMPTY_FILTER,
@@ -181,8 +226,8 @@ describe('indexer/db', () => {
     it('ORDER BY puts NULL timestamps last', async () => {
       const db = await openMemoryDb();
       insertSource(db, 's1', 'file', 'a.log');
-      insertEntry(db, 'e1', 's1', 0, null, 'info', 'no-ts');
-      insertEntry(db, 'e2', 's1', 1, 1000, 'info', 'with-ts');
+      insertEntry(db, 'e1', 's1', 0, null, 'info');
+      insertEntry(db, 'e2', 's1', 1, 1000, 'info');
 
       const rows = db.exec({
         sql: `SELECT entry.id AS id FROM entry ${ORDER_BY_DEFAULT}`,

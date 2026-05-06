@@ -24,6 +24,7 @@ import { newSourceId } from '../../core/util/ids.ts';
 import type { HandleStore } from './handles/handle-store.ts';
 import { ingestSource } from './ingest/ingest-orchestrator.ts';
 import type { ParserPool } from './pool/parser-pool.ts';
+import { resolvePointersToEntries } from './read/lazy-resolver.ts';
 
 const WORKER_ID = crypto.randomUUID();
 
@@ -429,7 +430,16 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     getRange: async (from, to) => {
       await deps.getIndexer().opening;
-      return deps.getIndexer().proxy.search(activeFilter, from, to);
+      const pointers = await deps.getIndexer().proxy.search(
+        activeFilter,
+        from,
+        to,
+      );
+      return resolvePointersToEntries(
+        pointers,
+        (id) => sources.get(id)?.source ?? null,
+        deps.parserPool,
+      );
     },
 
     getCount: async () => {
@@ -443,7 +453,14 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     getEntry: async (id: EntryId) => {
       await deps.getIndexer().opening;
-      return deps.getIndexer().proxy.getEntry(id);
+      const ptr = await deps.getIndexer().proxy.getEntry(id);
+      if (ptr === null) return null;
+      const [resolved] = await resolvePointersToEntries(
+        [ptr],
+        (sid) => sources.get(sid)?.source ?? null,
+        deps.parserPool,
+      );
+      return resolved ?? ptr;
     },
 
     getGroupCounts: async (filter, field, limit) => {
@@ -596,7 +613,38 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     exportFiltered: async (filter, format) => {
       await deps.getIndexer().opening;
-      const text = await deps.getIndexer().proxy.exportFiltered(filter, format);
+      // After ADR-0016 the indexer doesn't have raw bodies anymore; the
+      // export must run through the lazy resolver. We page through the
+      // filtered set in chunks so we don't pull a huge result into memory.
+      // 5_000 is a soft window that keeps both the SQL and the resolver
+      // batches reasonable.
+      const PAGE = 5000;
+      const total = await deps.getIndexer().proxy.count(filter);
+      const buildCsv = (await import('../../core/util/export.ts')).buildCsv;
+      const buildJsonl = (await import('../../core/util/export.ts')).buildJsonl;
+      const chunks: string[] = [];
+      let first = true;
+      for (let from = 0; from < total; from += PAGE) {
+        const pointers = await deps.getIndexer().proxy.search(
+          filter,
+          from,
+          from + PAGE,
+        );
+        const resolved = await resolvePointersToEntries(
+          pointers,
+          (id) => sources.get(id)?.source ?? null,
+          deps.parserPool,
+        );
+        if (format === 'csv') {
+          const csv = buildCsv(resolved);
+          // Drop the header on every page after the first.
+          chunks.push(first ? csv : csv.slice(csv.indexOf('\n') + 1));
+        } else {
+          chunks.push(buildJsonl(resolved));
+        }
+        first = false;
+      }
+      const text = chunks.join(format === 'csv' ? '' : '');
       const mime = format === 'csv' ? 'text/csv' : 'application/x-ndjson';
       return new Blob([text], { type: mime });
     },
