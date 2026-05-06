@@ -9,18 +9,13 @@ import type {
   LvFileNode,
   LvFolderNode,
   LvLogKind,
-  LvNode,
   LvSourceKind,
 } from '../contracts/lv-types.ts';
 
 /**
- * Synthetic catalog tree for the sidebar — one root per UI source-kind, each
- * containing the matching live `SourceRecord`s as file nodes. This is a
- * presentation-only mapping; entry data still flows through the core
- * windowed contract (`useLogWindow`).
- *
- * Phase 4 may replace this with directory hierarchy from `dirHandle` for
- * `directory` sources.
+ * Catalog tree for the sidebar — one root per ingested source. Directory
+ * sources expand into a real folder tree (via `directoryTrees`); other
+ * sources stay as a single root file-leaf.
  */
 
 const CORE_TO_LV: Record<LogSourceKind, LvSourceKind> = {
@@ -38,26 +33,13 @@ const CORE_TO_LV: Record<LogSourceKind, LvSourceKind> = {
 };
 
 /**
- * Map a core source to its sidebar tree section. Mostly identity via
- * CORE_TO_LV, but `directory` splits by the `watch` flag — watched folders
- * land under "Watched folders", static ones under "Local files".
+ * Map a core source to its sidebar source-kind for icon selection. Mostly
+ * identity via CORE_TO_LV, but `directory` splits by the `watch` flag —
+ * watched folders use the "Watched folders" glyph, static ones use "Local files".
  */
 const lvKindOf = (source: LogSource): LvSourceKind => {
   if (source.kind === 'directory' && source.watch) return 'local-live';
   return CORE_TO_LV[source.kind];
-};
-
-const ROOT_LABEL: Record<LvSourceKind, string> = {
-  'local-static': 'Local files',
-  'local-live': 'Watched folders',
-  'remote-ssh': 'SSH remotes',
-  stream: 'Streams',
-  cloud: 'Cloud providers',
-  k8s: 'Kubernetes',
-  bus: 'Message buses',
-  db: 'Databases',
-  snapshot: 'Snapshots',
-  bookmark: 'Saved views',
 };
 
 const FILE_KIND: Record<LogSourceKind, LvLogKind> = {
@@ -117,27 +99,28 @@ const fileNodeFromSource = (record: SourceRecord): LvFileNode => ({
 });
 
 /**
- * For a `directory` source, return its real file tree if `useDirectoryTrees`
- * has finished walking the handle; otherwise fall back to the flat file
- * node. The returned folder keeps source-derived flags (live, count,
- * needsPermission, …) on its top-level metadata so the UI's
- * "Local files / Watched folders" root still surfaces ingest status.
+ * For a `directory` source, return its real file tree as a catalog root if
+ * `useDirectoryTrees` has finished walking the handle; otherwise fall back to
+ * the flat file-leaf root. The folder variant keeps source-derived flags
+ * (live, count, needsPermission, …) on its top-level metadata so the sidebar
+ * still surfaces ingest status at the source root.
  */
-const directoryNode = (
+const directoryRoot = (
   rec: SourceRecord,
   directoryTrees: Readonly<Record<string, LvFolderNode>>,
-): LvNode => {
+  lvKind: LvSourceKind,
+): LvCatalogRoot => {
   const tree = directoryTrees[rec.source.id];
   const flat = fileNodeFromSource(rec);
-  if (!tree) return flat;
-  // Merge — propagate source-level live/count signals onto the directory's
-  // root folder node, while keeping the walked children intact. `sourceKind`
-  // marks this node as "the root of an external source" so LvTreeNode
-  // renders a source-specific icon, distinguishing it from internal
-  // sub-folders.
+  if (!tree) {
+    return { ...flat, root: true, source: lvKind };
+  }
   return {
     ...tree,
+    id: rec.source.id,
     name: rec.source.name,
+    root: true,
+    source: lvKind,
     open: tree.open ?? true,
     status: flat.live
       ? 'streaming'
@@ -146,42 +129,23 @@ const directoryNode = (
         : undefined,
     live: flat.live,
     progressLabel: flat.progressLabel,
-    sourceKind: lvKindOf(rec.source),
     children: tree.children,
-  } satisfies LvFolderNode;
+  };
 };
 
 export const buildCatalogTree = (
   sources: ReadonlyArray<SourceRecord>,
   directoryTrees: Readonly<Record<string, LvFolderNode>> = {},
 ): LvCatalogRoot[] => {
-  const buckets = new Map<LvSourceKind, LvNode[]>();
+  const roots: LvCatalogRoot[] = [];
   for (const rec of sources) {
     const lvKind = lvKindOf(rec.source);
-    const node: LvNode =
-      rec.source.kind === 'directory'
-        ? directoryNode(rec, directoryTrees)
-        : fileNodeFromSource(rec);
-    const list = buckets.get(lvKind) ?? [];
-    list.push(node);
-    buckets.set(lvKind, list);
-  }
-  const roots: LvCatalogRoot[] = [];
-  for (const [lvKind, children] of buckets) {
-    const folder: LvFolderNode = {
-      id: `lv-root-${lvKind}`,
-      type: 'folder',
-      name: ROOT_LABEL[lvKind],
-      source: lvKind,
-      open: true,
-      status: children.some(
-        (c) => c.type === 'file' && c.live,
-      )
-        ? 'streaming'
-        : undefined,
-      children,
-    };
-    roots.push(folder as LvCatalogRoot);
+    if (rec.source.kind === 'directory') {
+      roots.push(directoryRoot(rec, directoryTrees, lvKind));
+      continue;
+    }
+    const flat = fileNodeFromSource(rec);
+    roots.push({ ...flat, root: true, source: lvKind });
   }
   return roots;
 };

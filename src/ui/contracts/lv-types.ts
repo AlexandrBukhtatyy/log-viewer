@@ -67,6 +67,10 @@ export interface LvFileNode {
    * `"streaming 42"`. `undefined` when the source is idle/done.
    */
   progressLabel?: string;
+  /** True for catalog top-level file-source roots (LvCatalogRoot file variant). */
+  root?: boolean;
+  /** Source kind for the outlined per-source glyph at root level. */
+  source?: LvSourceKind;
 }
 
 export interface LvFolderNode {
@@ -85,20 +89,19 @@ export interface LvFolderNode {
   progressLabel?: string;
   /** True while the source is in loading/indexing/streaming. Used to render a spinner. */
   live?: boolean;
-  /**
-   * Set when the folder represents the root of an external log source
-   * (a directory the user opened, not an internal sub-folder). Used by
-   * LvTreeNode to render a source-specific icon (`LvSourceIcon`) instead
-   * of the generic folder glyph, so the tree visually distinguishes
-   * "this is where a source begins" from "this is just a sub-folder".
-   * Distinct from `root`, which marks the catalog top-level grouping.
-   */
-  sourceKind?: LvSourceKind;
   children: LvNode[];
 }
 
 export type LvNode = LvFileNode | LvFolderNode;
-export type LvCatalogRoot = LvFolderNode & { root: true };
+/**
+ * Catalog top-level entry — one per ingested source. Renders the outlined
+ * per-source icon (LvSourceIcon) and exposes the "remove source" affordance.
+ * Folder variant is used by directory sources (with their walked tree as
+ * children); file variant is used by single-file sources (file/text/url/…).
+ */
+export type LvCatalogRoot =
+  | (LvFolderNode & { root: true })
+  | (LvFileNode & { root: true });
 
 export type LvRail = 'files' | 'search' | 'bookmarks' | 'alerts' | 'ai';
 

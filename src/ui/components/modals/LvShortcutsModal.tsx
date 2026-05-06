@@ -16,12 +16,22 @@ const SECTIONS: ShortcutSection[] = [
     title: 'General',
     items: [
       { keys: ['⌘', 'K'], label: 'Open command palette' },
-      { keys: ['⇧', '⌘', 'F'], label: 'Search across files' },
       { keys: ['⌘', 'O'], label: 'Open file…' },
       { keys: ['⇧', '⌘', 'O'], label: 'Open folder…' },
       { keys: ['⌘', ','], label: 'Open settings' },
       { keys: ['⌘', 'K', '⌘', 'S'], label: 'Keyboard shortcuts' },
       { keys: ['Esc'], label: 'Close dialog / palette' },
+    ],
+  },
+  {
+    title: 'Sidebar',
+    items: [
+      { keys: ['⌘', 'B'], label: 'Toggle sidebar' },
+      { keys: ['⇧', '⌘', 'E'], label: 'Show Files' },
+      { keys: ['⇧', '⌘', 'F'], label: 'Show Search' },
+      { keys: ['⇧', '⌘', 'B'], label: 'Show Bookmarks' },
+      { keys: ['⇧', '⌘', 'A'], label: 'Show Alerts' },
+      { keys: ['⇧', '⌘', 'L'], label: 'Show AI assistant' },
     ],
   },
   {

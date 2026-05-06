@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
   GroupBucket,
@@ -21,6 +21,7 @@ import type {
 } from '../../contracts/lv-types.ts';
 import { LvIconRail } from '../rail/LvIconRail.tsx';
 import { LvSidebar } from '../sidebar/LvSidebar.tsx';
+import { LvSidebarResizer } from './LvSidebarResizer.tsx';
 import { LvTitlebar } from '../topbar/LvTitlebar.tsx';
 import { LvViewer } from '../stream/LvViewer.tsx';
 import { LvStatusBar } from '../status/LvStatusBar.tsx';
@@ -96,6 +97,8 @@ export interface LvAppProps {
    * fires for the local-folder kind only.
    */
   onSubmitAddSource?: (data: LvAddSourceFormData) => void;
+  /** Names of already-ingested sources — used to validate uniqueness in the modal. */
+  readonly existingSourceNames?: ReadonlySet<string>;
   onGrantPermission?: (id: string) => void;
   onCancelSource?: (id: string) => void;
 
@@ -164,6 +167,7 @@ export const LvApp = ({
   onRemoveRoot,
   onOpenLocalFile,
   onSubmitAddSource,
+  existingSourceNames,
   onGrantPermission,
   onCancelSource,
   tweaks,
@@ -197,6 +201,60 @@ export const LvApp = ({
   const [addSourceModal, setAddSourceModal] = useState<
     { open: true; initialWatch: boolean } | { open: false }
   >({ open: false });
+  // Live sidebar width during a drag — committed to persisted prefs on
+  // mouseup. Initialised from `tweaks.sidebarWidth` so reload restores
+  // the user's pick.
+  const [sidebarWidth, setSidebarWidth] = useState<number>(
+    tweaks.sidebarWidth ?? 260,
+  );
+  // VSCode-style collapse: hides the middle column entirely. Toggle with
+  // Cmd/Ctrl+B or by clicking the currently-active rail icon.
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState<boolean>(
+    tweaks.sidebarCollapsed ?? false,
+  );
+  // Mirror current value in a ref so the keydown listener (registered
+  // once, see useEffect below) can read the latest state without stale
+  // closures — and so toggleSidebar avoids running zustand setState
+  // inside React's render phase.
+  const collapsedRef = useRef(sidebarCollapsed);
+  useEffect(() => {
+    collapsedRef.current = sidebarCollapsed;
+  }, [sidebarCollapsed]);
+  const toggleSidebar = () => {
+    const next = !collapsedRef.current;
+    collapsedRef.current = next;
+    setSidebarCollapsedState(next);
+    setTweak('sidebarCollapsed', next);
+  };
+  const setSidebarCollapsed = (next: boolean) => {
+    collapsedRef.current = next;
+    setSidebarCollapsedState(next);
+    setTweak('sidebarCollapsed', next);
+  };
+  // Mirror `rail` in a ref for the same reason as `collapsedRef`: the
+  // keydown listener captures it once and we want it to stay current
+  // without re-registering on every rail switch.
+  const railRef = useRef(rail);
+  useEffect(() => {
+    railRef.current = rail;
+  }, [rail]);
+  /**
+   * VSCode-style rail toggle: hitting the shortcut for the currently
+   * visible panel collapses the sidebar; hitting any other rail shortcut
+   * (or the same one while collapsed) expands and switches.
+   */
+  const triggerRail = (id: LvRail) => {
+    if (collapsedRef.current) {
+      setSidebarCollapsed(false);
+      setRail(id);
+      return;
+    }
+    if (id === railRef.current) {
+      setSidebarCollapsed(true);
+      return;
+    }
+    setRail(id);
+  };
 
   useEffect(() => {
     document.documentElement.dataset.theme = tweaks.theme;
@@ -268,9 +326,31 @@ export const LvApp = ({
         e.preventDefault();
         setCmdOpen(true);
       }
+      if (meta && !e.shiftKey && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        toggleSidebar();
+      }
+      // VSCode-style rail shortcuts: each maps to one panel. Collapses the
+      // sidebar when the active panel's shortcut is pressed again.
+      if (meta && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
+        e.preventDefault();
+        triggerRail('files');
+      }
       if (meta && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
         e.preventDefault();
-        setRail('search');
+        triggerRail('search');
+      }
+      if (meta && e.shiftKey && (e.key === 'B' || e.key === 'b')) {
+        e.preventDefault();
+        triggerRail('bookmarks');
+      }
+      if (meta && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        triggerRail('alerts');
+      }
+      if (meta && e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+        e.preventDefault();
+        triggerRail('ai');
       }
       if (e.ctrlKey && e.altKey && (e.key === 'l' || e.key === 'L')) {
         e.preventDefault();
@@ -284,6 +364,10 @@ export const LvApp = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+    // toggleSidebar reads/writes via functional setState + a stable
+    // zustand-backed setter, so it doesn't capture stale state — safe
+    // to omit from deps and keep the listener registered once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tweaks.theme, setTweak, onToggleLiveTail]);
 
   const aiFileCount = selectedIds.size;
@@ -400,14 +484,25 @@ export const LvApp = ({
           setRail('files');
         }}
       />
-      <div className="lv-main">
+      <div
+        className={`lv-main${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
+        style={{ ['--lv-sidebar-width' as string]: `${sidebarWidth}px` }}
+      >
         <LvIconRail
           active={rail}
-          onActivate={setRail}
+          collapsed={sidebarCollapsed}
+          onActivate={triggerRail}
           onOpenSettings={() => setSettingsOpen((v) => !v)}
           settingsOpen={settingsOpen}
         />
-        {leftPanel}
+        {!sidebarCollapsed && leftPanel}
+        {!sidebarCollapsed && (
+          <LvSidebarResizer
+            width={sidebarWidth}
+            onResize={setSidebarWidth}
+            onResizeEnd={(w) => setTweak('sidebarWidth', w)}
+          />
+        )}
         <LvViewer
           rowCount={rowCount}
           totalCount={totalCount}
@@ -463,6 +558,7 @@ export const LvApp = ({
       <LvAddSourceModal
         open={addSourceModal.open}
         initialWatch={addSourceModal.open ? addSourceModal.initialWatch : false}
+        existingNames={existingSourceNames}
         onClose={() => setAddSourceModal({ open: false })}
         onSubmit={(data) => {
           onSubmitAddSource?.(data);

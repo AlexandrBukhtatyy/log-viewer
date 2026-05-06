@@ -105,6 +105,12 @@ const SETTINGS_ICON = (
 
 export interface LvIconRailProps {
   readonly active: LvRail;
+  /**
+   * When true the sidebar is collapsed. Active icon is rendered without
+   * the highlight bar (matches VSCode: clicking the active icon hides the
+   * panel; the next click on any rail icon brings it back).
+   */
+  readonly collapsed?: boolean;
   onActivate: (id: LvRail) => void;
   onOpenSettings?: () => void;
   readonly settingsOpen?: boolean;
@@ -112,23 +118,27 @@ export interface LvIconRailProps {
 
 export const LvIconRail = ({
   active,
+  collapsed,
   onActivate,
   onOpenSettings,
   settingsOpen,
 }: LvIconRailProps) => (
   <nav className="lv-rail">
-    {ITEMS.map((it) => (
-      <button
-        type="button"
-        key={it.id}
-        className={`lv-rail-btn${active === it.id ? ' is-active' : ''}`}
-        onClick={() => onActivate(it.id)}
-        title={it.label}
-      >
-        {it.icon}
-        {active === it.id && <span className="lv-rail-active-bar" />}
-      </button>
-    ))}
+    {ITEMS.map((it) => {
+      const showActive = active === it.id && !collapsed;
+      return (
+        <button
+          type="button"
+          key={it.id}
+          className={`lv-rail-btn${showActive ? ' is-active' : ''}`}
+          onClick={() => onActivate(it.id)}
+          title={it.label}
+        >
+          {it.icon}
+          {showActive && <span className="lv-rail-active-bar" />}
+        </button>
+      );
+    })}
     <div style={{ flex: 1 }} />
     <button
       type="button"

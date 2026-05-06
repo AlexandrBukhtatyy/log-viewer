@@ -1,4 +1,4 @@
-import type { LvFolderNode } from '../../contracts/lv-types.ts';
+import type { LvFileNode, LvFolderNode } from '../../contracts/lv-types.ts';
 
 const MAP: Record<string, { label: string; cls: string }> = {
   'local-static': { label: 'LOCAL', cls: 'is-neutral' },
@@ -14,18 +14,24 @@ const MAP: Record<string, { label: string; cls: string }> = {
 };
 
 export interface LvRootBadgeProps {
-  readonly node: LvFolderNode;
+  /** Catalog top-level node — either the directory's walked tree (folder)
+   * or the source's flat root leaf (file). */
+  readonly node: LvFolderNode | LvFileNode;
 }
 
 export const LvRootBadge = ({ node }: LvRootBadgeProps) => {
   const source = node.source ?? 'local-static';
   const base = MAP[source] ?? MAP['local-static']!;
   let label = base.label;
+  // service/status only live on folder roots; file roots fall back to the
+  // generic per-source label.
+  const service = node.type === 'folder' ? node.service : undefined;
+  const status = node.type === 'folder' ? node.status : undefined;
   if (source === 'cloud' || source === 'bus' || source === 'db') {
-    label = (node.service ?? base.label).toUpperCase();
+    label = (service ?? base.label).toUpperCase();
   }
   const showDot =
-    node.status === 'streaming' || source === 'local-live' || source === 'stream';
+    status === 'streaming' || source === 'local-live' || source === 'stream';
   return (
     <span className={`lv-root-badge ${base.cls}`}>
       {showDot && <span className="lv-root-pulse" aria-hidden="true" />}

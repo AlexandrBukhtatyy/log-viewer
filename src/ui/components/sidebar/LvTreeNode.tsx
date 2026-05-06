@@ -50,7 +50,7 @@ export const LvTreeNode = ({
   return (
     <>
       <div
-        className={`lv-tree-row${selected ? ' is-selected' : ''}${node.type === 'folder' && node.root ? ' is-root' : ''}`}
+        className={`lv-tree-row${selected ? ' is-selected' : ''}${node.root ? ' is-root' : ''}`}
         style={{ paddingLeft: 6 + depth * 12 }}
         onClick={() => {
           if (isFolder) onToggleFolder(node.id);
@@ -69,15 +69,20 @@ export const LvTreeNode = ({
           <>
             <span
               className={`lv-folder-ico${
-                node.root || node.sourceKind
-                  ? ` lv-src lv-src-${node.source ?? node.sourceKind ?? 'local-static'}`
+                node.root
+                  ? ` lv-src lv-src-${node.source ?? 'local-static'}`
                   : ''
               }`}
               aria-hidden="true"
             >
-              {node.root || node.sourceKind ? (
-                <LvSourceIcon source={node.source ?? node.sourceKind} />
+              {node.root ? (
+                // Catalog top-level — outlined source-specific glyph.
+                <LvSourceIcon source={node.source} />
               ) : (
+                // Everything inside — solid generic folder, regardless of
+                // whether it's an external source root (`sourceKind`) or an
+                // internal sub-folder. The user reads "outlined = top of
+                // the tree", "filled = inside the tree".
                 <svg viewBox="0 0 14 12" width="14" height="12">
                   <path
                     d="M1 2.2 A1 1 0 0 1 2 1.2 H5.2 L6.8 2.6 H12 A1 1 0 0 1 13 3.6 V10 A1 1 0 0 1 12 11 H2 A1 1 0 0 1 1 10 Z"
@@ -122,7 +127,19 @@ export const LvTreeNode = ({
           </>
         ) : (
           <>
-            <LvFileIcon kind={node.kind} />
+            {node.root ? (
+              // File-source catalog root — outlined source-specific glyph,
+              // matching folder roots. Single-file sources (file/text/url/…)
+              // sit at the top of the tree and read as "the source itself".
+              <span
+                className={`lv-folder-ico lv-src lv-src-${node.source ?? 'local-static'}`}
+                aria-hidden="true"
+              >
+                <LvSourceIcon source={node.source} />
+              </span>
+            ) : (
+              <LvFileIcon kind={node.kind} />
+            )}
             <span className="lv-tree-label">{node.name}</span>
             {node.live && (
               <span
@@ -173,6 +190,7 @@ export const LvTreeNode = ({
                 ⚠
               </span>
             )}
+            {node.root && <LvRootBadge node={node} />}
             <span className="lv-tree-meta">{node.count}</span>
             <span
               className={`lv-tree-check${selected ? ' is-on' : ''}`}
@@ -197,6 +215,19 @@ export const LvTreeNode = ({
                 </svg>
               ) : null}
             </span>
+            {node.root && onRemoveRoot && (
+              <button
+                className="lv-root-x"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveRoot(node.id);
+                }}
+                title="Remove source from workspace"
+                aria-label="Remove source"
+              >
+                ✕
+              </button>
+            )}
           </>
         )}
       </div>

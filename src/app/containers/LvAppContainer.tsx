@@ -225,6 +225,12 @@ export const LvAppContainer = () => {
     [sources, directoryTrees],
   );
   const filesById = useMemo(() => filesByIdFromSources(sources), [sources]);
+  // Snapshot of currently-ingested source display names — feeds the
+  // "Add source" modal's name-uniqueness validator.
+  const existingSourceNames = useMemo(
+    () => new Set(sources.map((r) => r.source.name)),
+    [sources],
+  );
 
   // Tabs: __all__ + one tab per selected (non-closed) source.
   const tabs = useMemo<LvTab[]>(() => {
@@ -471,24 +477,23 @@ export const LvAppContainer = () => {
 
   const onRemoveRoot = useCallback(
     (rootId: string) => {
-      // Catalog roots have id `lv-root-<lvKind>` — remove every contained file.
-      // For now: remove every selected source whose lvKind matches that root.
-      const lvKind = rootId.replace(/^lv-root-/, '');
-      const toRemove: SourceId[] = [];
-      for (const rec of sources) {
-        const recLvKind = rec.source.kind === 'directory' || rec.source.kind === 'file' || rec.source.kind === 'text' ? 'local-static' : rec.source.kind === 'url' ? 'cloud' : rec.source.kind;
-        if (recLvKind === lvKind) toRemove.push(rec.source.id);
-      }
-      for (const id of toRemove) {
-        void sourceCtrl.removeSource(id);
-      }
+      // Each catalog root is a single ingested source — rootId === source.id.
+      // Drop the source plus any selection entries that referenced it
+      // (plain source-id and compound `<sourceId>::<path>` ids).
+      const sid = rootId as SourceId;
+      void sourceCtrl.removeSource(sid);
       setSelectedIds((s) => {
-        const n = new Set(s);
-        for (const id of toRemove) n.delete(id);
+        const n = new Set<string>();
+        const prefix = `${rootId}::`;
+        for (const id of s) {
+          if (id === rootId) continue;
+          if (id.startsWith(prefix)) continue;
+          n.add(id);
+        }
         return n;
       });
     },
-    [sources, sourceCtrl, setSelectedIds],
+    [sourceCtrl, setSelectedIds],
   );
 
   return (
@@ -512,6 +517,7 @@ export const LvAppContainer = () => {
       onRemoveRoot={onRemoveRoot}
       onOpenLocalFile={onOpenLocalFile}
       onSubmitAddSource={onSubmitAddSource}
+      existingSourceNames={existingSourceNames}
       onGrantPermission={onGrantPermission}
       onCancelSource={onCancelSource}
       tweaks={{
@@ -521,6 +527,8 @@ export const LvAppContainer = () => {
         showDate: tweaks.showDate,
         accent: tweaks.accent,
         timelineOn: tweaks.timelineOn,
+        sidebarWidth: tweaks.sidebarWidth,
+        sidebarCollapsed: tweaks.sidebarCollapsed,
       }}
       setTweak={setTweak}
       bookmarks={bookmarksHook.ids as ReadonlySet<string>}

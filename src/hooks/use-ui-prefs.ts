@@ -11,6 +11,10 @@ export interface LvTweaks {
   showDate: boolean;
   accent: string;
   timelineOn: boolean;
+  /** Width of the middle column (sidebar / search / bookmarks / AI panel) in px. */
+  sidebarWidth: number;
+  /** When true, the middle column is hidden (VSCode-style collapse). Toggle via Cmd/Ctrl+B or by clicking the active rail icon. */
+  sidebarCollapsed: boolean;
 }
 
 const DEFAULTS: LvTweaks = {
@@ -20,6 +24,8 @@ const DEFAULTS: LvTweaks = {
   showDate: false,
   accent: '#7aa2f7',
   timelineOn: true,
+  sidebarWidth: 260,
+  sidebarCollapsed: false,
 };
 
 interface UiPrefsState extends LvTweaks {
@@ -47,6 +53,8 @@ export const useUiPrefs = create<UiPrefsState>()(
         showDate: s.showDate,
         accent: s.accent,
         timelineOn: s.timelineOn,
+        sidebarWidth: s.sidebarWidth,
+        sidebarCollapsed: s.sidebarCollapsed,
       }),
     },
   ),

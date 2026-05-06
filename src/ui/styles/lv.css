@@ -354,6 +354,12 @@ button{font-family:inherit}
 .lv-form-error{
   margin-left:90px; margin-top:4px; font-size:11px; color:var(--lv-error);
 }
+.lv-form-input-error,
+.lv-form-input-error:focus{border-color:var(--lv-error)}
+/* Wrapper that lets an input share a row with its label while keeping any
+   inline error/help text on its own line directly under the input. */
+.lv-form-field{flex:1; min-width:0; display:flex; flex-direction:column; gap:4px}
+.lv-form-field .lv-form-error{margin-left:0; margin-top:0}
 .lv-btn-secondary{background:transparent; border:1px solid var(--lv-border-strong); color:var(--lv-fg-2)}
 .lv-btn-secondary:hover{background:var(--lv-bg-2); color:var(--lv-fg)}
 .lv-btn:disabled{opacity:.4; cursor:not-allowed}
@@ -379,7 +385,27 @@ button{font-family:inherit}
   letter-spacing:0;
 }
 
-.lv-main{display:grid; grid-template-columns: 44px 260px 1fr; min-height:0; overflow:hidden}
+.lv-main{
+  display:grid;
+  grid-template-columns: 44px var(--lv-sidebar-width, 260px) 4px 1fr;
+  min-height:0; overflow:hidden;
+}
+.lv-main.is-sidebar-collapsed{
+  grid-template-columns: 44px 1fr;
+}
+
+.lv-sidebar-resizer{
+  cursor:col-resize;
+  background:transparent;
+  border-right:1px solid transparent;
+  transition:border-right-color 120ms ease, background 120ms ease;
+}
+.lv-sidebar-resizer:hover,
+.lv-sidebar-resizer:active{
+  background:var(--lv-accent);
+  border-right-color:var(--lv-accent);
+  opacity:0.6;
+}
 
 /* ──────────────────────── Icon rail ──────────────────────── */
 .lv-rail{
@@ -1467,6 +1493,7 @@ button{font-family:inherit}
 
 /* ──────────────────────── Responsive safety ──────────────────────── */
 @media (max-width: 980px){
-  .lv-main{grid-template-columns: 44px 220px 1fr}
+  .lv-main{grid-template-columns: 44px var(--lv-sidebar-width, 220px) 4px 1fr}
+  .lv-main.is-sidebar-collapsed{grid-template-columns: 44px 1fr}
   .lv-stream-hd, .lv-row{grid-template-columns: 44px 16px 92px 54px 90px 110px 1fr 44px}
 }

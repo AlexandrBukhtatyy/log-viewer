@@ -83,7 +83,8 @@ export const LvSidebar = ({
     };
     return catalog
       .map((r) => walk(r))
-      .filter((x): x is LvCatalogRoot => x !== null && x.type === 'folder' && !!(x as LvCatalogRoot).root)
+      .filter((x): x is LvNode => x !== null && (x.type === 'folder' || x.type === 'file'))
+      .filter((x): x is LvCatalogRoot => !!(x as LvCatalogRoot).root)
       .map((x) => x as LvCatalogRoot);
   }, [filter, filterCase, filterWord, filterRegex, catalog]);
 

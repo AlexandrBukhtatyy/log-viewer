@@ -14,9 +14,26 @@ export interface LvAddSourceModalProps {
    * modal via the "Watch folder…" entry rather than "Local folder…".
    */
   readonly initialWatch?: boolean;
+  /**
+   * Names of sources already in the workspace. Used to surface an inline
+   * "name already in use" error and to suggest a free default
+   * (`folder`, `folder (2)`, `folder (3)`, …) when the picked folder
+   * collides with an existing source.
+   */
+  readonly existingNames?: ReadonlySet<string>;
   onClose: () => void;
   onSubmit: (data: LvAddSourceFormData) => void;
 }
+
+/** First free `name`, `name (2)`, `name (3)`… not in `taken`. */
+const suggestFreeName = (base: string, taken: ReadonlySet<string>): string => {
+  if (!taken.has(base)) return base;
+  for (let i = 2; i < 1000; i++) {
+    const candidate = `${base} (${i})`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${base} (${Date.now()})`;
+};
 
 /**
  * Single-step "Add log source" form. Currently supports the local-folder
@@ -28,9 +45,11 @@ export interface LvAddSourceModalProps {
 export const LvAddSourceModal = ({
   open,
   initialWatch = false,
+  existingNames,
   onClose,
   onSubmit,
 }: LvAddSourceModalProps) => {
+  const taken = existingNames ?? new Set<string>();
   const [handle, setHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
@@ -56,6 +75,10 @@ export const LvAddSourceModal = ({
     }
   }
 
+  const trimmedName = name.trim();
+  const effectiveName = trimmedName.length > 0 ? trimmedName : (handle?.name ?? '');
+  const nameTaken = effectiveName.length > 0 && taken.has(effectiveName);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -74,8 +97,10 @@ export const LvAddSourceModal = ({
     try {
       const picked = await window.showDirectoryPicker({ mode: 'read' });
       setHandle(picked);
-      // Auto-fill name once; preserve user edits afterwards.
-      if (!nameTouched) setName(picked.name);
+      // Auto-fill name once; preserve user edits afterwards. If the picked
+      // folder name collides with an existing source, suggest the next free
+      // `name (2)`/`(3)` so the user starts from a valid default.
+      if (!nameTouched) setName(suggestFreeName(picked.name, taken));
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       setPickerError(err instanceof Error ? err.message : String(err));
@@ -84,7 +109,8 @@ export const LvAddSourceModal = ({
 
   const submit = () => {
     if (handle === null) return;
-    const finalName = name.trim() || handle.name;
+    if (nameTaken) return;
+    const finalName = effectiveName;
     const finalGlob = glob.trim();
     onSubmit({
       handle,
@@ -112,6 +138,31 @@ export const LvAddSourceModal = ({
           </button>
         </div>
         <div className="lv-modal-body">
+          <div className="lv-form-row">
+            <label className="lv-form-label" htmlFor="lv-add-src-name">
+              Source name
+            </label>
+            <div className="lv-form-field">
+              <input
+                id="lv-add-src-name"
+                type="text"
+                className={`lv-form-input${nameTaken ? ' lv-form-input-error' : ''}`}
+                placeholder={handle?.name ?? 'Folder display name'}
+                value={name}
+                aria-invalid={nameTaken}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setNameTouched(true);
+                }}
+              />
+              {nameTaken && (
+                <span className="lv-form-error">
+                  A source named “{effectiveName}” already exists.
+                </span>
+              )}
+            </div>
+          </div>
+
           <div className="lv-form-row">
             <label className="lv-form-label">Type</label>
             <select className="lv-form-input" value="local-folder" disabled>
@@ -158,23 +209,6 @@ export const LvAddSourceModal = ({
           </div>
 
           <div className="lv-form-row">
-            <label className="lv-form-label" htmlFor="lv-add-src-name">
-              Name
-            </label>
-            <input
-              id="lv-add-src-name"
-              type="text"
-              className="lv-form-input"
-              placeholder={handle?.name ?? 'Folder display name'}
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setNameTouched(true);
-              }}
-            />
-          </div>
-
-          <div className="lv-form-row">
             <label className="lv-form-label" htmlFor="lv-add-src-glob">
               Glob
             </label>
@@ -196,7 +230,7 @@ export const LvAddSourceModal = ({
             type="button"
             className="lv-btn lv-btn-primary"
             onClick={submit}
-            disabled={handle === null}
+            disabled={handle === null || nameTaken}
           >
             Add
           </button>
