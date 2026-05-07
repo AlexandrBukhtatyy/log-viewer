@@ -5,6 +5,7 @@ import type {
   LvNode,
   LvSourceKind,
 } from '../../contracts/lv-types.ts';
+import { LvSearchInput } from '../common/LvSearchInput.tsx';
 import { LvTreeNode } from './LvTreeNode.tsx';
 
 export interface LvSidebarProps {
@@ -105,67 +106,18 @@ export const LvSidebar = ({
           <span>Add source</span>
         </button>
       </div>
-      <div className="lv-sb-search">
-        <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
-          <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M9 9 L12 12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-        <input
-          type="text"
-          value={filter}
-          placeholder="Filter files…"
-          onChange={(e) => setFilter(e.target.value)}
-        />
-        <div className="lv-search-toggles">
-          <button
-            type="button"
-            className={`lv-search-tog${filterCase ? ' is-on' : ''}`}
-            onClick={() => setFilterCase((v) => !v)}
-            title="Match Case"
-            aria-label="Match Case"
-          >
-            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-              <text x="1" y="12" fontSize="9" fontFamily="sans-serif" fontWeight="700" fill="currentColor">A</text>
-              <text x="7" y="12" fontSize="7" fontFamily="sans-serif" fontWeight="700" fill="currentColor">a</text>
-            </svg>
-          </button>
-          <button
-            type="button"
-            className={`lv-search-tog${filterWord ? ' is-on' : ''}`}
-            onClick={() => setFilterWord((v) => !v)}
-            title="Match Whole Word"
-            aria-label="Match Whole Word"
-          >
-            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-              <text x="1" y="11" fontSize="8" fontFamily="sans-serif" fontWeight="700" fill="currentColor">ab</text>
-              <path d="M1 13 H15" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className={`lv-search-tog${filterRegex ? ' is-on' : ''}`}
-            onClick={() => setFilterRegex((v) => !v)}
-            title="Use Regular Expression"
-            aria-label="Regex"
-          >
-            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-              <path
-                d="M9 2 V8 M6.4 3.4 L11.6 6.6 M6.4 6.6 L11.6 3.4"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <rect x="2" y="11" width="3" height="3" rx="0.5" fill="currentColor" />
-            </svg>
-          </button>
-        </div>
-        {filter && (
-          <button type="button" className="lv-clear" onClick={() => setFilter('')} aria-label="Clear">
-            ✕
-          </button>
-        )}
-      </div>
+      <LvSearchInput
+        className="lv-search--block"
+        value={filter}
+        onChange={setFilter}
+        placeholder="Filter files…"
+        caseSensitive={filterCase}
+        onCaseSensitiveChange={setFilterCase}
+        wholeWord={filterWord}
+        onWholeWordChange={setFilterWord}
+        regex={filterRegex}
+        onRegexChange={setFilterRegex}
+      />
 
       <div className="lv-sb-toolbar">
         <button type="button" className="lv-tlink" onClick={selectAll}>

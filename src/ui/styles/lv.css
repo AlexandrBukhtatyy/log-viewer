@@ -887,6 +887,14 @@ button{font-family:inherit}
 .lv-search-clear{border:0; background:transparent; color:var(--lv-fg-3); cursor:pointer; padding:0 2px}
 .lv-search-clear:hover{color:var(--lv-fg)}
 
+/* Sidebar/panel variant of .lv-search — same chrome as the filter-bar
+   one but with outer margins so it sits inside a panel column. */
+.lv-search--block{
+  margin:10px 12px 6px;
+  height:26px;
+}
+.lv-search--block .lv-search-input{font-size:12px; font-family:var(--lv-font-ui)}
+
 .lv-btn{
   display:inline-flex; align-items:center; gap:6px;
   height:28px; padding:0 10px;

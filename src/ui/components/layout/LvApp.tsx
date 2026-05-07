@@ -419,8 +419,14 @@ export const LvApp = ({
       />
     ) : rail === 'search' ? (
       <LvSearchPanel
-        onRun={(q) => {
-          setFilter((f) => ({ ...f, query: q }));
+        onRun={(q, opts) => {
+          setFilter((f) => ({
+            ...f,
+            query: q,
+            caseSensitive: opts.caseSensitive,
+            wholeWord: opts.wholeWord,
+            queryMode: opts.regex ? 'regex' : 'substring',
+          }));
           setRail('files');
         }}
         savedSearches={savedSearches}

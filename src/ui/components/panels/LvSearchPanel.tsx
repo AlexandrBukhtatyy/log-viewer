@@ -1,14 +1,27 @@
 import { useState } from 'react';
 import type { LvSavedSearch } from '../../contracts/lv-types.ts';
+import { LvSearchInput } from '../common/LvSearchInput.tsx';
 
 export interface LvSearchPanelProps {
-  onRun: (query: string) => void;
+  /**
+   * Run the search across all files. Receives the typed query plus the
+   * three toggle states so the caller can map them onto `LogFilter`
+   * (caseSensitive / wholeWord / queryMode='regex').
+   */
+  onRun: (
+    query: string,
+    opts: { caseSensitive: boolean; wholeWord: boolean; regex: boolean },
+  ) => void;
   readonly savedSearches: ReadonlyArray<LvSavedSearch>;
   onApplyPreset: (preset: LvSavedSearch) => void;
 }
 
 export const LvSearchPanel = ({ onRun, savedSearches, onApplyPreset }: LvSearchPanelProps) => {
   const [q, setQ] = useState('');
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
+  const [regex, setRegex] = useState(false);
+
   return (
     <aside className="lv-sidebar">
       <div className="lv-sb-hd">
@@ -16,18 +29,20 @@ export const LvSearchPanel = ({ onRun, savedSearches, onApplyPreset }: LvSearchP
           <span className="lv-sb-title-text">Search</span>
         </div>
       </div>
-      <div className="lv-sb-search">
-        <svg viewBox="0 0 14 14" width="12" height="12">
-          <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M9 9 L12 12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && onRun(q)}
-          placeholder="Search across all files…"
-        />
-      </div>
+      <LvSearchInput
+        className="lv-search--block"
+        value={q}
+        onChange={setQ}
+        placeholder="Search across all files…"
+        caseSensitive={caseSensitive}
+        onCaseSensitiveChange={setCaseSensitive}
+        wholeWord={wholeWord}
+        onWholeWordChange={setWholeWord}
+        regex={regex}
+        onRegexChange={setRegex}
+        onSubmit={() => onRun(q, { caseSensitive, wholeWord, regex })}
+        autoFocus
+      />
       <div className="lv-search-section">
         <div className="lv-search-section-hd">Saved</div>
         {savedSearches.map((s) => (
