@@ -1341,41 +1341,9 @@ button{font-family:inherit}
 .lv-grp-actions{display:flex; gap:2px; justify-self:end; opacity:.55}
 .lv-grp:hover .lv-grp-actions{opacity:1}
 
-/* Group-by popover: header (Group by + Clear + Add) + Order/Fields
-   tabs + per-tab content. */
+/* Group-by popover: autocomplete dropdown (input + filtered list)
+   + ordered chips below. */
 .lv-group-pop{ }
-.lv-pop-hd-actions{display:flex; gap:6px; align-items:center}
-.lv-pop-tabs{
-  display:flex; gap:0;
-  padding:0 4px;
-  border-bottom:1px solid var(--lv-border);
-}
-.lv-pop-tab{
-  position:relative;
-  display:inline-flex; align-items:center; gap:6px;
-  padding:6px 10px;
-  background:transparent; border:0;
-  color:var(--lv-fg-3);
-  font:inherit; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
-  cursor:pointer;
-  border-bottom:2px solid transparent;
-  margin-bottom:-1px;
-}
-.lv-pop-tab:hover{color:var(--lv-fg-1)}
-.lv-pop-tab.is-active{
-  color:var(--lv-fg);
-  border-bottom-color:var(--lv-accent);
-}
-.lv-pop-tab-badge{
-  display:inline-flex; align-items:center; justify-content:center;
-  min-width:16px; height:16px; padding:0 4px;
-  border-radius:8px; background:var(--lv-bg-2);
-  color:var(--lv-fg-2); font-size:10px; letter-spacing:0;
-  text-transform:none;
-}
-.lv-pop-tab.is-active .lv-pop-tab-badge{
-  background:var(--lv-accent); color:#fff;
-}
 .lv-group-search-dropdown{
   display:flex; flex-direction:column;
   margin:6px 4px 4px;
