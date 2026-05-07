@@ -9,10 +9,11 @@ import type { ParserPool } from '../pool/parser-pool.ts';
 import {
   FileSourceReader,
   FsHandleReader,
+  OpfsArchiveSpoolReader,
   OpfsChunkedSpoolReader,
   OpfsSingleSpoolReader,
   type SourceBlobReader,
-} from '../storage/source-blob-reader.ts';
+} from '../../../core/storage/source-blob-reader.ts';
 
 /**
  * Lazy-resolver layer (ADR-0016): the indexer hands out `LogEntry` shells
@@ -38,7 +39,9 @@ const readerForSource = (source: LogSource): SourceBlobReader | null => {
     case 'file':
       return new FileSourceReader(source.file);
     case 'snapshot':
-      return new FileSourceReader(source.archive);
+      // Each archive member was spooled to its own OPFS file by
+      // snapshot-adapter; the reader un-flattens member names.
+      return new OpfsArchiveSpoolReader(source.id);
     case 'text':
     case 'url':
       return new OpfsSingleSpoolReader(source.id);

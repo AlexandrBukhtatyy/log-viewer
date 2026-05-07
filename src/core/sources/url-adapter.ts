@@ -1,13 +1,20 @@
 import type { LogSource, UrlLogSource } from '../types/log-source.ts';
-import { createLineSplitter } from './line-splitter.ts';
-import {
-  tagLineStream,
-  type LogSourceAdapter,
-  type LogSourceAdapterFactory,
+import { OpfsSingleSpoolWriter } from '../storage/opfs-spool.ts';
+import { createByteLineSplitter } from './byte-line-splitter.ts';
+import type {
+  LogSourceAdapter,
+  LogSourceAdapterFactory,
 } from './source-adapter.ts';
 
 const isUrlSource = (s: LogSource): s is UrlLogSource => s.kind === 'url';
 
+/**
+ * URL fetch → tee → (a) OPFS spool writer for later lazy resolve, (b)
+ * byte-line-splitter for live ingest. Both branches see the same byte
+ * sequence, so the offsets emitted by the splitter match what the writer
+ * persisted. Spool-write errors are logged and skipped; ingest still runs
+ * (you just lose body-resolution after reload).
+ */
 export const createUrlAdapter: LogSourceAdapterFactory = (source) => {
   if (!isUrlSource(source)) {
     throw new Error(`createUrlAdapter: expected source.kind='url', got '${source.kind}'`);
@@ -33,10 +40,38 @@ export const createUrlAdapter: LogSourceAdapterFactory = (source) => {
       if (response.body === null) {
         throw new Error(`url-adapter: response body is null for ${source.url}`);
       }
-      const lines = response.body
-        .pipeThrough(new TextDecoderStream())
-        .pipeThrough(createLineSplitter());
-      return tagLineStream(lines, '');
+
+      const [forSpool, forIngest] = response.body.tee();
+
+      // Fire-and-forget spool persistence. We don't await it from `open` —
+      // ingest must start streaming immediately. If the spool write fails,
+      // body resolution becomes blank but the source is still ingested.
+      void (async () => {
+        try {
+          const writer = await OpfsSingleSpoolWriter.open(source.id);
+          const reader = forSpool.getReader();
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (value && value.byteLength > 0) {
+              await writer.write(value);
+            }
+          }
+          await writer.close();
+        } catch (err) {
+          console.warn(
+            `[url-adapter] OPFS spool write failed for ${source.id}:`,
+            err instanceof Error ? err.message : err,
+          );
+          try {
+            await forSpool.cancel();
+          } catch {
+            /* drained already */
+          }
+        }
+      })();
+
+      return forIngest.pipeThrough(createByteLineSplitter(''));
     },
     close: async () => {
       aborter?.abort();

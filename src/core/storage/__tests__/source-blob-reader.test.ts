@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SourceId } from '../../../../core/types/index.ts';
+import type { SourceId } from '../../types/index.ts';
 import {
   OpfsChunkedSpoolWriter,
   OpfsSingleSpoolWriter,

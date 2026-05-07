@@ -1,4 +1,4 @@
-import type { SourceId } from '../../../core/types/index.ts';
+import type { SourceId } from '../types/index.ts';
 
 /**
  * OPFS spool — temporary byte storage for sources whose data does not live in
@@ -156,6 +156,39 @@ export class OpfsChunkedSpoolWriter {
     // for symmetry with `OpfsSingleSpoolWriter` and future buffered variants.
   }
 }
+
+/**
+ * Sanitize an archive member path so it becomes a single flat file name
+ * inside `lv-spool/<sourceId>/`. Slashes/backslashes are replaced with
+ * `__` because OPFS doesn't natively let us nest directories from a
+ * single getFileHandle call. Collisions between e.g. `a/b` and `a__b`
+ * are theoretically possible — accepted trade-off; a pathological
+ * archive can use `--name-mangling` later.
+ */
+export const flattenArchiveMemberName = (memberPath: string): string =>
+  memberPath.replace(/[/\\]/g, '__') + '.bin';
+
+/**
+ * Write `bytes` into `lv-spool/<sourceId>/<fileName>` as a single file,
+ * truncating any existing content. Used by the snapshot adapter to spool
+ * each archive member separately so the lazy resolver can slice it back.
+ */
+export const writeSpoolFile = async (
+  sourceId: SourceId,
+  fileName: string,
+  bytes: Uint8Array,
+  rootProvider: OpfsRootProvider = defaultOpfsRoot,
+): Promise<void> => {
+  const root = await rootProvider.getRoot();
+  const spoolDir = await root.getDirectoryHandle(SPOOL_ROOT, { create: true });
+  const sourceDir = await spoolDir.getDirectoryHandle(sourceId, { create: true });
+  const fh = await sourceDir.getFileHandle(fileName, { create: true });
+  const writable = await fh.createWritable({ keepExistingData: false });
+  if (bytes.byteLength > 0) {
+    await writable.write(bytes as Uint8Array<ArrayBuffer>);
+  }
+  await writable.close();
+};
 
 /**
  * Best-effort cleanup. Used by `removeSource` in the coordinator. Silent on

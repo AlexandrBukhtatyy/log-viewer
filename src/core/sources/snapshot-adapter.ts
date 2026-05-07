@@ -1,5 +1,9 @@
 import { gunzipSync, unzipSync } from 'fflate';
 import type { LogSource, SnapshotLogSource } from '../types/log-source.ts';
+import {
+  flattenArchiveMemberName,
+  writeSpoolFile,
+} from '../storage/opfs-spool.ts';
 import type {
   LogLineFrame,
   LogSourceAdapter,
@@ -139,48 +143,63 @@ export const createSnapshotAdapter: LogSourceAdapterFactory = (source) => {
       }
 
       const decoder = new TextDecoder('utf-8', { fatal: false });
-      // Each archive member is its own byte-stream; offsets are relative
-      // to the member, not to the whole archive — that way the read-path
-      // can later resolve any line by (file_path, byte_start, byte_end)
-      // against an OPFS spool of the same member, if the lazy-resolver
-      // ever needs it. For now offsets are computed in-memory; the
-      // ingest path doesn't yet materialize the bytes anywhere.
+      // Each archive member is spooled as its own file under
+      // `lv-spool/<sourceId>/<flat-name>.bin` so the lazy-resolver can
+      // slice it back at read time. Frames carry the original member
+      // name (with `/`) — `OpfsArchiveSpoolReader` un-flattens it
+      // transparently. Offsets are relative to the member, not the
+      // archive.
       return new ReadableStream<LogLineFrame>({
-        start(controller) {
-          for (const f of textFiles) {
-            if (signal.aborted) {
-              controller.error(new DOMException('aborted', 'AbortError'));
-              return;
-            }
-            const bytes = f.bytes;
-            let lineStart = 0;
-            for (let i = 0; i < bytes.byteLength; i++) {
-              if (bytes[i] !== 0x0a) continue;
-              let lineEnd = i;
-              if (lineEnd > lineStart && bytes[lineEnd - 1] === 0x0d) lineEnd -= 1;
-              controller.enqueue({
-                path: f.name,
-                line: decoder.decode(bytes.subarray(lineStart, lineEnd)),
-                byteStart: lineStart,
-                byteEnd: lineEnd,
-              });
-              lineStart = i + 1;
-            }
-            // Trailing line without a final \n.
-            if (lineStart < bytes.byteLength) {
-              let lineEnd = bytes.byteLength;
-              if (bytes[lineEnd - 1] === 0x0d) lineEnd -= 1;
-              if (lineEnd > lineStart) {
+        async start(controller) {
+          try {
+            for (const f of textFiles) {
+              if (signal.aborted) {
+                controller.error(new DOMException('aborted', 'AbortError'));
+                return;
+              }
+              try {
+                await writeSpoolFile(
+                  source.id,
+                  flattenArchiveMemberName(f.name),
+                  f.bytes,
+                );
+              } catch (err) {
+                console.warn(
+                  `[snapshot-adapter] OPFS spool write failed for '${f.name}':`,
+                  err instanceof Error ? err.message : err,
+                );
+              }
+              const bytes = f.bytes;
+              let lineStart = 0;
+              for (let i = 0; i < bytes.byteLength; i++) {
+                if (bytes[i] !== 0x0a) continue;
+                let lineEnd = i;
+                if (lineEnd > lineStart && bytes[lineEnd - 1] === 0x0d) lineEnd -= 1;
                 controller.enqueue({
                   path: f.name,
                   line: decoder.decode(bytes.subarray(lineStart, lineEnd)),
                   byteStart: lineStart,
                   byteEnd: lineEnd,
                 });
+                lineStart = i + 1;
+              }
+              if (lineStart < bytes.byteLength) {
+                let lineEnd = bytes.byteLength;
+                if (bytes[lineEnd - 1] === 0x0d) lineEnd -= 1;
+                if (lineEnd > lineStart) {
+                  controller.enqueue({
+                    path: f.name,
+                    line: decoder.decode(bytes.subarray(lineStart, lineEnd)),
+                    byteStart: lineStart,
+                    byteEnd: lineEnd,
+                  });
+                }
               }
             }
+            controller.close();
+          } catch (err) {
+            controller.error(err);
           }
-          controller.close();
         },
       });
     },

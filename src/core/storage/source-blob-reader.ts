@@ -1,6 +1,7 @@
-import type { SourceId } from '../../../core/types/index.ts';
+import type { SourceId } from '../types/index.ts';
 import {
   defaultOpfsRoot,
+  flattenArchiveMemberName,
   type OpfsRootProvider,
   SINGLE_SPOOL_FILE,
   SPOOL_ROOT,
@@ -116,6 +117,44 @@ export class OpfsSingleSpoolReader implements SourceBlobReader {
     const spool = await root.getDirectoryHandle(SPOOL_ROOT);
     const sourceDir = await spool.getDirectoryHandle(this.sourceId);
     const fh = await sourceDir.getFileHandle(SINGLE_SPOOL_FILE);
+    const file = await fh.getFile();
+    return file.slice(byteStart, byteEnd).text();
+  }
+}
+
+/**
+ * Reader for snapshot-archive members. The adapter wrote each archive
+ * member as its own file under `lv-spool/<sourceId>/`, with `/` collapsed
+ * into `__` (see `flattenArchiveMemberName`). Frames carry the original
+ * member name so the sidebar / `entry.fields.file_path` stay readable; the
+ * reader does the un-flatten transparently.
+ */
+export class OpfsArchiveSpoolReader implements SourceBlobReader {
+  private readonly sourceId: SourceId;
+  private readonly rootProvider: OpfsRootProvider;
+  constructor(
+    sourceId: SourceId,
+    rootProvider: OpfsRootProvider = defaultOpfsRoot,
+  ) {
+    this.sourceId = sourceId;
+    this.rootProvider = rootProvider;
+  }
+
+  async read(
+    memberPath: string,
+    byteStart: number,
+    byteEnd: number,
+  ): Promise<string> {
+    if (memberPath === '') {
+      throw new Error(
+        "OpfsArchiveSpoolReader: empty memberPath — snapshot frames always carry a name.",
+      );
+    }
+    const fileName = flattenArchiveMemberName(memberPath);
+    const root = await this.rootProvider.getRoot();
+    const spool = await root.getDirectoryHandle(SPOOL_ROOT);
+    const sourceDir = await spool.getDirectoryHandle(this.sourceId);
+    const fh = await sourceDir.getFileHandle(fileName);
     const file = await fh.getFile();
     return file.slice(byteStart, byteEnd).text();
   }
