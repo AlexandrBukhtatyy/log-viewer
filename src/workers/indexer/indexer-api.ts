@@ -504,7 +504,13 @@ export const indexerApi: IndexerApi = {
       `GROUP BY ${expr} ` +
       `ORDER BY cnt DESC, gv ASC ` +
       `LIMIT ?`;
-    const rows = runRows(db, sql, [...params, ...lvl.binds, cap]);
+    // `?` placeholders in SQL appear in this order:
+    //   1. lvl.columns (7 ?'s in the SELECT)
+    //   2. whereSql params
+    //   3. LIMIT ?
+    // Bind in the same order — getting it wrong is silent (lvl.binds
+    // bleeding into WHERE and vice versa makes every match look false).
+    const rows = runRows(db, sql, [...lvl.binds, ...params, cap]);
     return rows.map((r): GroupBucket => {
       const v = r.gv;
       return {
@@ -553,14 +559,23 @@ export const indexerApi: IndexerApi = {
       `${lvl.columns} ` +
       `FROM entry ${joinSql} ${tsWhere} AND entry.ts >= ? AND entry.ts <= ? ` +
       `GROUP BY bidx ORDER BY bidx ASC`;
+    // `?` placeholders in SQL appear in this order:
+    //   1. MIN(?, ...) — `buckets - 1`
+    //   2. `(entry.ts - ?)` — `from`
+    //   3. `/ ?` — bucketSize
+    //   4. lvl.columns (7 ?'s)
+    //   5. whereSql params
+    //   6. `entry.ts >= ?` — from
+    //   7. `entry.ts <= ?` — to
+    // Bind in the same order.
     const bind: SqlValue[] = [
       buckets - 1,
       from,
       bucketSize === 0 ? 1 : bucketSize,
+      ...lvl.binds,
       ...params,
       from,
       to,
-      ...lvl.binds,
     ];
     const rows = runRows(db, sql, bind);
     const byIdx = new Map<number, Record<string, SqlValue>>();
