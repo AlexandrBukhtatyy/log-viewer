@@ -131,13 +131,27 @@ const buildLogSource = (input: LogSourceInput, id: SourceId): LogSource => {
  * Restore a placeholder LogSource from indexed metadata after reload, for source
  * kinds that don't depend on a persisted handle.
  *
- * `file` is intentionally not restored — single-file picks don't go to the
- * handle store; the entries persist in OPFS but the source chip won't reappear.
+ * `file` is rebuilt as a stub `LogSource` (empty `File`) — the source chip
+ * shows up in the sidebar so the user can still browse the previously
+ * indexed entries via the OPFS spool. The stub is never re-ingested; if
+ * the user wants fresh data they re-pick the file.
  * `directory` is restored from handle store separately (see listSources).
  */
 const placeholderFromIndexed = (rec: IndexedSourceRecord): LogSource | null => {
   switch (rec.kind) {
-    case 'file':
+    case 'file': {
+      const meta = rec.metaJson ? (JSON.parse(rec.metaJson) as { size?: number }) : {};
+      return {
+        kind: 'file',
+        id: rec.id,
+        name: rec.name,
+        size: typeof meta.size === 'number' ? meta.size : 0,
+        // Stub File — only used when the resolver looks up the source
+        // for byte-range reads, which actually goes through the OPFS
+        // spool, not this object.
+        file: new File([], rec.name),
+      };
+    }
     case 'directory':
       return null;
     case 'text':
@@ -203,40 +217,50 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   const hydratePersisted = async (): Promise<void> => {
     if (persistedHydrationPromise !== null) return persistedHydrationPromise;
     persistedHydrationPromise = (async () => {
-      await deps.getIndexer().opening;
-      const handleStore = await deps.handleStoreOpening;
-      const [indexed, handles] = await Promise.all([
-        deps.getIndexer().proxy.listSources(),
-        handleStore.list(),
-      ]);
-      const handleByIdx = new Map(handles.map((h) => [h.sourceId, h]));
-      for (const rec of indexed) {
-        if (sources.has(rec.id)) continue; // already live
-        let logSource: LogSource | null = null;
-        if (rec.kind === 'directory') {
-          const persisted = handleByIdx.get(rec.id);
-          if (persisted && persisted.kind === 'directory') {
-            const meta = rec.metaJson
-              ? (JSON.parse(rec.metaJson) as { glob?: string; watch?: boolean })
-              : {};
-            logSource = {
-              kind: 'directory',
-              id: rec.id,
-              name: rec.name,
-              handle: persisted.handle as FileSystemDirectoryHandle,
-              glob: meta.glob,
-              watch: meta.watch,
-            };
+      try {
+        await deps.getIndexer().opening;
+        const handleStore = await deps.handleStoreOpening;
+        const [indexed, handles] = await Promise.all([
+          deps.getIndexer().proxy.listSources(),
+          handleStore.list(),
+        ]);
+        const handleByIdx = new Map(handles.map((h) => [h.sourceId, h]));
+        for (const rec of indexed) {
+          if (sources.has(rec.id)) continue; // already live
+          let logSource: LogSource | null = null;
+          if (rec.kind === 'directory') {
+            const persisted = handleByIdx.get(rec.id);
+            if (persisted && persisted.kind === 'directory') {
+              const meta = rec.metaJson
+                ? (JSON.parse(rec.metaJson) as { glob?: string; watch?: boolean })
+                : {};
+              logSource = {
+                kind: 'directory',
+                id: rec.id,
+                name: rec.name,
+                handle: persisted.handle as FileSystemDirectoryHandle,
+                glob: meta.glob,
+                watch: meta.watch,
+              };
+            }
+          } else {
+            logSource = placeholderFromIndexed(rec);
           }
-        } else {
-          logSource = placeholderFromIndexed(rec);
+          if (logSource === null) continue;
+          persistedRecords.set(rec.id, {
+            source: logSource,
+            status: { kind: 'done', entryCount: rec.entryCount },
+          });
         }
-        if (logSource === null) continue;
-        persistedRecords.set(rec.id, {
-          source: logSource,
-          status: { kind: 'done', entryCount: rec.entryCount },
-        });
+      } catch (err) {
+        console.warn(
+          '[coordinator] hydratePersisted failed; sidebar starts empty',
+          err,
+        );
       }
+      // Re-emit so any subscriber that already received an empty
+      // snapshot now sees the persisted chips appear.
+      emitStatus();
     })();
     return persistedHydrationPromise;
   };
@@ -506,9 +530,13 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     subscribeStatus: async (cb) => {
       statusListeners.add(cb);
-      // Wait for hydration so the initial snapshot includes persisted directory chips.
-      await hydratePersisted();
+      // Send the current snapshot immediately so the sidebar gets
+      // its first render even if hydration is still running (or has
+      // failed). Hydration kicks off `emitStatus()` once it lands, so
+      // persisted directory chips appear automatically without
+      // blocking this initial paint.
       void cb(snapshotSources());
+      void hydratePersisted();
       return Comlink.proxy(() => {
         statusListeners.delete(cb);
       });
