@@ -1,5 +1,6 @@
 import type { Database, PreparedStatement, SqlValue } from '@sqlite.org/sqlite-wasm';
 import { buildClause, ORDER_BY_DEFAULT } from '../../core/filter/query.ts';
+import { SOURCE_JOIN_SQL } from '../../core/filter/field-key.ts';
 import { buildCsv, buildJsonl } from '../../core/util/export.ts';
 import type {
   GroupBucket,
@@ -482,8 +483,12 @@ export const indexerApi: IndexerApi = {
 
   groupCounts: async (filter, field, limit): Promise<ReadonlyArray<GroupBucket>> => {
     const { db } = requireState();
-    const { joinSql, whereSql, params } = buildClause(filter);
-    const expr = groupFieldExpr(field);
+    const { joinSql: filterJoin, whereSql, params } = buildClause(filter);
+    const { sql: expr, needsSourceJoin: groupNeedsJoin } = groupFieldExpr(field);
+    // SOURCE_JOIN_SQL is the only JOIN today; merge to avoid duplicating it.
+    const joinSql = (filterJoin === SOURCE_JOIN_SQL || groupNeedsJoin)
+      ? SOURCE_JOIN_SQL
+      : '';
     const cap = Math.max(1, Math.min(10000, limit ?? 1000));
     const lvl = levelBreakdownSql();
     const sql =

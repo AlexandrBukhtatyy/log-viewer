@@ -1,5 +1,19 @@
 import type { LogEntry, LogLevel, SourceId } from './log-entry.ts';
 
+/**
+ * A field reference in the unified `@`-namespace (ADR-0017).
+ *
+ * - Built-in attributes use `@`-prefix: `@ts`, `@level`, `@seq`, `@file`,
+ *   `@byte_start`, `@byte_end`, `@source.id`, `@source.name`, `@source.kind`.
+ * - Anything else is treated as a key inside `entry.fields_json` (e.g.
+ *   `trace_id`, `service`, `status`).
+ *
+ * The actual SQL translation lives in `core/filter/field-key.ts`. Plain
+ * `string` keeps the type ergonomic at API boundaries (RPC payloads,
+ * UI prefs) — the validator/translator rejects malformed values.
+ */
+export type FieldKey = string;
+
 export type QueryMode = 'substring' | 'fts' | 'regex';
 
 /**

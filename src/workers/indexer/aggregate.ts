@@ -1,5 +1,6 @@
 import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import type { LogLevel } from '../../core/types/index.ts';
+import type { FieldKey, LogLevel } from '../../core/types/index.ts';
+import { fieldKeyToSql, type FieldKeySql } from '../../core/filter/field-key.ts';
 
 export const ALL_LEVELS: ReadonlyArray<LogLevel> = [
   'trace',
@@ -11,25 +12,34 @@ export const ALL_LEVELS: ReadonlyArray<LogLevel> = [
   'unknown',
 ];
 
-const FIELD_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/**
+ * Map legacy bare names that pre-date ADR-0017 onto the unified
+ * `@`-namespace, so that callers passing `'level'`/`'source_id'`/
+ * `'service'` continue to work while the picker UIs migrate to
+ * emitting `FieldKey` directly.
+ */
+const LEGACY_BARE_KEY: Readonly<Record<string, FieldKey>> = {
+  level: '@level',
+  source_id: '@source.id',
+};
 
 /**
- * Resolve the user-provided group field to a SQL expression.
+ * Resolve the user-provided group field to a SQL expression and a
+ * `needsSourceJoin` flag (the caller adds `JOIN source ...` to the
+ * FROM clause when the flag is set).
  *
- * - `level` / `source_id` → entry.<col> (no JSON parse, indexed).
- * - any other identifier → `JSON_EXTRACT(entry.fields_json, '$.<key>')`.
+ * Accepts:
+ *  - `@`-prefixed built-ins (`@ts`, `@level`, `@source.name`, …)
+ *  - dynamic JSON keys (`trace_id`, `service`)
+ *  - legacy bare names (`level`, `source_id`) for backward compat
  *
- * `field` must match `^[A-Za-z_][A-Za-z0-9_]*$` — string interpolation is
- * safe only inside that whitelist; anything else throws to abort the query.
+ * Throws on anything else (including unknown `@`-keys), so a
+ * mistyped key fails loud at query time instead of silently
+ * matching nothing.
  */
-export const groupFieldExpr = (field: string): string => {
-  if (!FIELD_NAME_RE.test(field)) {
-    throw new Error(`invalid group field: ${field}`);
-  }
-  if (field === 'level' || field === 'source_id') {
-    return `entry.${field}`;
-  }
-  return `JSON_EXTRACT(entry.fields_json, '$.${field}')`;
+export const groupFieldExpr = (field: string): FieldKeySql => {
+  const key = LEGACY_BARE_KEY[field] ?? field;
+  return fieldKeyToSql(key);
 };
 
 /**

@@ -7,28 +7,51 @@ import {
 } from './aggregate.ts';
 
 describe('groupFieldExpr', () => {
-  it('maps `level` to the entry column directly (no JSON parse)', () => {
-    expect(groupFieldExpr('level')).toBe('entry.level');
+  it('legacy `level` maps onto @level translator (entry column)', () => {
+    expect(groupFieldExpr('level')).toEqual({
+      sql: 'entry.level',
+      needsSourceJoin: false,
+    });
   });
 
-  it('maps `source_id` to the entry column', () => {
-    expect(groupFieldExpr('source_id')).toBe('entry.source_id');
+  it('legacy `source_id` maps onto @source.id translator', () => {
+    expect(groupFieldExpr('source_id')).toEqual({
+      sql: 'entry.source_id',
+      needsSourceJoin: false,
+    });
   });
 
-  it('maps other identifiers to JSON_EXTRACT on fields_json', () => {
-    expect(groupFieldExpr('service')).toBe(
-      "JSON_EXTRACT(entry.fields_json, '$.service')",
-    );
-    expect(groupFieldExpr('trace_id')).toBe(
-      "JSON_EXTRACT(entry.fields_json, '$.trace_id')",
-    );
+  it('@-prefixed built-in goes straight to translator', () => {
+    expect(groupFieldExpr('@ts')).toEqual({
+      sql: 'entry.ts',
+      needsSourceJoin: false,
+    });
+    expect(groupFieldExpr('@source.kind')).toEqual({
+      sql: 'source.kind',
+      needsSourceJoin: true,
+    });
+  });
+
+  it('dynamic identifiers fall through to JSON_EXTRACT', () => {
+    expect(groupFieldExpr('service')).toEqual({
+      sql: "JSON_EXTRACT(entry.fields_json, '$.service')",
+      needsSourceJoin: false,
+    });
+    expect(groupFieldExpr('trace_id')).toEqual({
+      sql: "JSON_EXTRACT(entry.fields_json, '$.trace_id')",
+      needsSourceJoin: false,
+    });
   });
 
   it('rejects identifiers with metacharacters to prevent SQL injection', () => {
-    expect(() => groupFieldExpr("foo'); DROP TABLE entry;--")).toThrow(/invalid group field/);
+    expect(() => groupFieldExpr("foo'); DROP TABLE entry;--")).toThrow();
     expect(() => groupFieldExpr('foo bar')).toThrow();
     expect(() => groupFieldExpr('123_starts_digit')).toThrow();
     expect(() => groupFieldExpr('')).toThrow();
+  });
+
+  it('rejects unknown @-prefix to surface UI typos early', () => {
+    expect(() => groupFieldExpr('@nope')).toThrow(/unknown built-in/i);
   });
 });
 

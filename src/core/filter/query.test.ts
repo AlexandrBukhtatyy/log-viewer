@@ -17,30 +17,31 @@ describe('buildClause', () => {
     expect(built.params).toEqual([]);
   });
 
-  it('levels filter generates IN clause', () => {
+  it('levels filter routes through @level translator', () => {
     const built = buildClause(f({ levels: ['error', 'fatal'] }));
-    expect(built.whereSql).toBe('WHERE level IN (?, ?)');
+    expect(built.whereSql).toBe('WHERE entry.level IN (?, ?)');
     expect(built.params).toEqual(['error', 'fatal']);
     expect(built.joinSql).toBe('');
   });
 
-  it('sources filter generates IN clause', () => {
+  it('sources filter routes through @source.id translator', () => {
     const built = buildClause(
       f({ sources: ['s-1' as SourceId, 's-2' as SourceId] }),
     );
-    expect(built.whereSql).toBe('WHERE source_id IN (?, ?)');
+    expect(built.whereSql).toBe('WHERE entry.source_id IN (?, ?)');
     expect(built.params).toEqual(['s-1', 's-2']);
+    expect(built.joinSql).toBe('');
   });
 
-  it('time range with both bounds', () => {
+  it('time range with both bounds uses entry.ts', () => {
     const built = buildClause(f({ timeRange: { from: 1000, to: 2000 } }));
-    expect(built.whereSql).toBe('WHERE ts >= ? AND ts <= ?');
+    expect(built.whereSql).toBe('WHERE entry.ts >= ? AND entry.ts <= ?');
     expect(built.params).toEqual([1000, 2000]);
   });
 
   it('time range with only "from" bound', () => {
     const built = buildClause(f({ timeRange: { from: 1000, to: null } }));
-    expect(built.whereSql).toBe('WHERE ts >= ?');
+    expect(built.whereSql).toBe('WHERE entry.ts >= ?');
     expect(built.params).toEqual([1000]);
   });
 
@@ -63,50 +64,82 @@ describe('buildClause', () => {
     });
   });
 
-  it('filePaths filter generates JSON_EXTRACT IN clause', () => {
+  it('filePaths filter routes through @file (entry.file_path column)', () => {
     const built = buildClause(f({ filePaths: ['app.log', 'sub/b.log'] }));
-    expect(built.whereSql).toBe(
-      "WHERE JSON_EXTRACT(fields_json, '$.file_path') IN (?, ?)",
-    );
+    expect(built.whereSql).toBe('WHERE entry.file_path IN (?, ?)');
     expect(built.params).toEqual(['app.log', 'sub/b.log']);
   });
 
-  it('services filter generates JSON_EXTRACT IN clause', () => {
+  it('services filter still uses JSON_EXTRACT (dynamic key)', () => {
     const built = buildClause(f({ services: ['api-gateway', 'billing'] }));
     expect(built.whereSql).toBe(
-      "WHERE JSON_EXTRACT(fields_json, '$.service') IN (?, ?)",
+      "WHERE JSON_EXTRACT(entry.fields_json, '$.service') IN (?, ?)",
     );
     expect(built.params).toEqual(['api-gateway', 'billing']);
   });
 
-  it('fieldFilter `=` produces CAST AS TEXT equality', () => {
+  describe('fieldFilters via @-namespace', () => {
+    it('@-built-in key resolves to entry column with no JSON_EXTRACT', () => {
+      const built = buildClause(
+        f({ fieldFilters: [{ key: '@level', op: '=', value: 'error' }] }),
+      );
+      expect(built.whereSql).toBe(
+        'WHERE CAST(entry.level AS TEXT) = ?',
+      );
+      expect(built.params).toEqual(['error']);
+      expect(built.joinSql).toBe('');
+    });
+
+    it('@source.name triggers JOIN source', () => {
+      const built = buildClause(
+        f({ fieldFilters: [{ key: '@source.name', op: '~', value: 'api' }] }),
+      );
+      expect(built.joinSql).toBe('JOIN source ON source.id = entry.source_id');
+      expect(built.whereSql).toBe(
+        "WHERE LOWER(CAST(source.name AS TEXT)) LIKE LOWER(?) ESCAPE '\\'",
+      );
+      expect(built.params).toEqual(['%api%']);
+    });
+
+    it('dynamic key still produces JSON_EXTRACT', () => {
+      const built = buildClause(
+        f({ fieldFilters: [{ key: 'status', op: '=', value: '500' }] }),
+      );
+      expect(built.whereSql).toBe(
+        "WHERE CAST(JSON_EXTRACT(entry.fields_json, '$.status') AS TEXT) = ?",
+      );
+      expect(built.params).toEqual(['500']);
+    });
+  });
+
+  it('fieldFilter `=` with dynamic key (status)', () => {
     const built = buildClause(
       f({ fieldFilters: [{ key: 'status', op: '=', value: '500' }] }),
     );
     expect(built.whereSql).toBe(
-      'WHERE CAST(JSON_EXTRACT(fields_json, ?) AS TEXT) = ?',
+      "WHERE CAST(JSON_EXTRACT(entry.fields_json, '$.status') AS TEXT) = ?",
     );
-    expect(built.params).toEqual(['$.status', '500']);
+    expect(built.params).toEqual(['500']);
   });
 
-  it('fieldFilter `!=` produces CAST AS TEXT inequality', () => {
+  it('fieldFilter `!=` with dynamic key', () => {
     const built = buildClause(
       f({ fieldFilters: [{ key: 'env', op: '!=', value: 'prod' }] }),
     );
     expect(built.whereSql).toBe(
-      'WHERE CAST(JSON_EXTRACT(fields_json, ?) AS TEXT) != ?',
+      "WHERE CAST(JSON_EXTRACT(entry.fields_json, '$.env') AS TEXT) != ?",
     );
-    expect(built.params).toEqual(['$.env', 'prod']);
+    expect(built.params).toEqual(['prod']);
   });
 
-  it('fieldFilter `~` produces case-insensitive LIKE on extracted value', () => {
+  it('fieldFilter `~` is case-insensitive LIKE on the resolved expression', () => {
     const built = buildClause(
       f({ fieldFilters: [{ key: 'path', op: '~', value: '/v1/orders' }] }),
     );
     expect(built.whereSql).toBe(
-      "WHERE LOWER(CAST(JSON_EXTRACT(fields_json, ?) AS TEXT)) LIKE LOWER(?) ESCAPE '\\'",
+      "WHERE LOWER(CAST(JSON_EXTRACT(entry.fields_json, '$.path') AS TEXT)) LIKE LOWER(?) ESCAPE '\\'",
     );
-    expect(built.params).toEqual(['$.path', '%/v1/orders%']);
+    expect(built.params).toEqual(['%/v1/orders%']);
   });
 
   it('fieldFilter `>` produces numeric CAST AS REAL', () => {
@@ -114,9 +147,9 @@ describe('buildClause', () => {
       f({ fieldFilters: [{ key: 'duration_ms', op: '>', value: '1000' }] }),
     );
     expect(built.whereSql).toBe(
-      'WHERE CAST(JSON_EXTRACT(fields_json, ?) AS REAL) > CAST(? AS REAL)',
+      "WHERE CAST(JSON_EXTRACT(entry.fields_json, '$.duration_ms') AS REAL) > CAST(? AS REAL)",
     );
-    expect(built.params).toEqual(['$.duration_ms', '1000']);
+    expect(built.params).toEqual(['1000']);
   });
 
   it('fieldFilter `<` produces numeric CAST AS REAL', () => {
@@ -124,9 +157,9 @@ describe('buildClause', () => {
       f({ fieldFilters: [{ key: 'status', op: '<', value: '500' }] }),
     );
     expect(built.whereSql).toBe(
-      'WHERE CAST(JSON_EXTRACT(fields_json, ?) AS REAL) < CAST(? AS REAL)',
+      "WHERE CAST(JSON_EXTRACT(entry.fields_json, '$.status') AS REAL) < CAST(? AS REAL)",
     );
-    expect(built.params).toEqual(['$.status', '500']);
+    expect(built.params).toEqual(['500']);
   });
 
   it('combines structural clauses with AND (free-text still excluded)', () => {
@@ -143,18 +176,17 @@ describe('buildClause', () => {
     );
     expect(built.joinSql).toBe('');
     expect(built.whereSql).toBe(
-      'WHERE level IN (?)' +
-        ' AND source_id IN (?)' +
-        " AND JSON_EXTRACT(fields_json, '$.service') IN (?)" +
-        ' AND ts >= ?' +
-        ' AND CAST(JSON_EXTRACT(fields_json, ?) AS REAL) > CAST(? AS REAL)',
+      'WHERE entry.level IN (?)' +
+        ' AND entry.source_id IN (?)' +
+        " AND JSON_EXTRACT(entry.fields_json, '$.service') IN (?)" +
+        ' AND entry.ts >= ?' +
+        " AND CAST(JSON_EXTRACT(entry.fields_json, '$.status') AS REAL) > CAST(? AS REAL)",
     );
     expect(built.params).toEqual([
       'error',
       's-1',
       'billing',
       1000,
-      '$.status',
       '499',
     ]);
   });

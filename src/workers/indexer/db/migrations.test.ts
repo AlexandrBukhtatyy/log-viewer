@@ -194,7 +194,7 @@ describe('indexer/db', () => {
       expect(built.params).toEqual([]);
     });
 
-    it('filePaths filter narrows by JSON_EXTRACT(file_path)', async () => {
+    it('filePaths filter narrows by entry.file_path column', async () => {
       const db = await openMemoryDb();
       insertSource(db, 's1', 'directory', 'logs');
       insertEntry(

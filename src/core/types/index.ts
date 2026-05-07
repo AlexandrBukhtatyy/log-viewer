@@ -25,6 +25,7 @@ export {
 export type {
   FieldFilter,
   FieldFilterOp,
+  FieldKey,
   FilterPredicate,
   LogFilter,
   QueryMode,
