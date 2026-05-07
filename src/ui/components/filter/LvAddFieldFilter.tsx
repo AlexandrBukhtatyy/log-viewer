@@ -1,20 +1,42 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { FieldFilter, FieldFilterOp } from '../../../core/types/index.ts';
 
-const SUGGESTED = ['status', 'user_id', 'service', 'trace_id', 'duration_ms', 'method', 'path', 'req_id', 'pod'];
-const SYSTEM = ['$file', '$path', '$source', '$host', '$line', '$root', '$kind', '$ingested_at'];
-
-const isSystem = (k: string): boolean => k.startsWith('$');
-
 export interface LvAddFieldFilterProps {
+  readonly descriptors: ReadonlyArray<FieldDescriptor>;
   onAdd: (filter: FieldFilter) => void;
 }
 
-export const LvAddFieldFilter = ({ onAdd }: LvAddFieldFilterProps) => {
+const isBuiltIn = (key: string): boolean => key.startsWith('@');
+
+/**
+ * "+ field" filter builder (ADR-0017 Phase 7). The key combobox is
+ * fed by `coordinator.getFieldSchema` — built-ins (`@ts`, `@level`,
+ * `@source.kind`, …) and dynamic JSON keys mix in one autocomplete
+ * datalist. The value input pulls suggestions from `topValues` of
+ * the currently selected descriptor.
+ */
+export const LvAddFieldFilter = ({ descriptors, onAdd }: LvAddFieldFilterProps) => {
   const [open, setOpen] = useState(false);
-  const [key, setKey] = useState('status');
+  const [key, setKey] = useState<string>('');
   const [op, setOp] = useState<FieldFilterOp>('=');
-  const [value, setValue] = useState('500');
+  const [value, setValue] = useState('');
+
+  const sortedDescriptors = useMemo(() => {
+    const dyn = descriptors.filter((d) => d.origin === 'dynamic').slice();
+    dyn.sort((a, b) => {
+      const aRate = a.presenceRate ?? 0;
+      const bRate = b.presenceRate ?? 0;
+      if (aRate !== bRate) return bRate - aRate;
+      return a.key.localeCompare(b.key);
+    });
+    return { dynamic: dyn, builtin: descriptors.filter((d) => d.origin === 'builtin') };
+  }, [descriptors]);
+
+  const selected = useMemo(
+    () => descriptors.find((d) => d.key === key) ?? null,
+    [descriptors, key],
+  );
 
   const commit = () => {
     if (!key || !value) return;
@@ -37,18 +59,20 @@ export const LvAddFieldFilter = ({ onAdd }: LvAddFieldFilterProps) => {
           <div className="lv-field-pop-row">
             <input
               list="lv-field-keys"
-              className={`lv-field-input${isSystem(key) ? ' is-sys' : ''}`}
-              placeholder="key"
+              className={`lv-field-input${isBuiltIn(key) ? ' is-sys' : ''}`}
+              placeholder="field key (@ts, trace_id, …)"
               value={key}
               onChange={(e) => setKey(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && commit()}
             />
             <datalist id="lv-field-keys">
-              {SYSTEM.map((k) => (
-                <option key={k} value={k} />
+              {sortedDescriptors.builtin.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
               ))}
-              {SUGGESTED.map((k) => (
-                <option key={k} value={k} />
+              {sortedDescriptors.dynamic.map((d) => (
+                <option key={d.key} value={d.key} />
               ))}
             </datalist>
             <select
@@ -63,6 +87,7 @@ export const LvAddFieldFilter = ({ onAdd }: LvAddFieldFilterProps) => {
               <option value="~">contains</option>
             </select>
             <input
+              list={selected?.topValues && selected.topValues.length > 0 ? 'lv-field-vals' : undefined}
               className="lv-field-input lv-field-val"
               placeholder="value"
               value={value}
@@ -70,6 +95,15 @@ export const LvAddFieldFilter = ({ onAdd }: LvAddFieldFilterProps) => {
               onKeyDown={(e) => e.key === 'Enter' && commit()}
               autoFocus
             />
+            {selected?.topValues && selected.topValues.length > 0 && (
+              <datalist id="lv-field-vals">
+                {selected.topValues.map((tv) => (
+                  <option key={tv.value} value={tv.value}>
+                    {tv.count}
+                  </option>
+                ))}
+              </datalist>
+            )}
             <button type="button" className="lv-btn lv-btn-primary" onClick={commit}>
               Add
             </button>
@@ -78,24 +112,40 @@ export const LvAddFieldFilter = ({ onAdd }: LvAddFieldFilterProps) => {
             </button>
           </div>
           <div className="lv-field-hints">
-            <span className="lv-field-hints-lbl">System</span>
-            {SYSTEM.slice(0, 6).map((k) => (
-              <button
-                type="button"
-                key={k}
-                className="lv-field-hint is-sys"
-                onClick={() => setKey(k)}
-              >
-                {k}
-              </button>
-            ))}
-            <span className="lv-field-hints-br" />
-            <span className="lv-field-hints-lbl">Log</span>
-            {SUGGESTED.slice(0, 6).map((k) => (
-              <button type="button" key={k} className="lv-field-hint" onClick={() => setKey(k)}>
-                {k}
-              </button>
-            ))}
+            {sortedDescriptors.builtin.length > 0 && (
+              <>
+                <span className="lv-field-hints-lbl">Built-in</span>
+                {sortedDescriptors.builtin.slice(0, 6).map((d) => (
+                  <button
+                    type="button"
+                    key={d.key}
+                    className="lv-field-hint is-sys"
+                    onClick={() => setKey(d.key)}
+                  >
+                    {d.key}
+                  </button>
+                ))}
+                <span className="lv-field-hints-br" />
+              </>
+            )}
+            {sortedDescriptors.dynamic.length > 0 && (
+              <>
+                <span className="lv-field-hints-lbl">Fields</span>
+                {sortedDescriptors.dynamic.slice(0, 6).map((d) => (
+                  <button
+                    type="button"
+                    key={d.key}
+                    className="lv-field-hint"
+                    onClick={() => setKey(d.key)}
+                  >
+                    {d.key}
+                  </button>
+                ))}
+              </>
+            )}
+            {sortedDescriptors.dynamic.length === 0 && sortedDescriptors.builtin.length === 0 && (
+              <span className="lv-field-hints-lbl">No fields yet — pick a source.</span>
+            )}
           </div>
         </div>
       )}

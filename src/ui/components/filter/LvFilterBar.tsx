@@ -332,6 +332,7 @@ export const LvFilterBar = ({
             </span>
           ))}
           <LvAddFieldFilter
+            descriptors={fieldDescriptors}
             onAdd={(ff) =>
               setFilters((f) => ({
                 ...f,
