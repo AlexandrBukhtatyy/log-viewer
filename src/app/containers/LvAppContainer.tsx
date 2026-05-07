@@ -8,7 +8,9 @@ import {
   type SourceId,
 } from '../../core/types/index.ts';
 import { entryFingerprint } from '../../core/util/fingerprint.ts';
+import { getEntryFieldValue } from '../../core/filter/field-key.ts';
 import { useExport } from '../../hooks/use-export.ts';
+import { useFieldSchema } from '../../hooks/use-field-schema.ts';
 import { useGroupCounts } from '../../hooks/use-group-counts.ts';
 import { useHistogram } from '../../hooks/use-histogram.ts';
 import { useLogFilter } from '../../hooks/use-log-filter.ts';
@@ -196,6 +198,26 @@ export const LvAppContainer = () => {
       tweaks.setTweak(key, value);
     },
     [tweaks],
+  );
+
+  // Field schema discovery (ADR-0017) — drives the column picker /
+  // group-by picker / filter-on-field popovers.
+  const { descriptors: fieldDescriptors } = useFieldSchema();
+  const onColumnsChange = useCallback(
+    (next: ReadonlyArray<{ key: string; label?: string; widthPx: number }>) => {
+      tweaks.setTweak('columns', next);
+    },
+    [tweaks],
+  );
+  const sourceRecordsById = useMemo(() => {
+    const m = new Map<SourceId, (typeof sources)[number]>();
+    for (const r of sources) m.set(r.source.id, r);
+    return m;
+  }, [sources]);
+  const cellValueOf = useCallback(
+    (entry: LogEntry, key: string) =>
+      getEntryFieldValue(entry, key, sourceRecordsById.get(entry.sourceId) ?? null),
+    [sourceRecordsById],
   );
 
   const bookmarksHook = useBookmarks();
@@ -529,6 +551,7 @@ export const LvAppContainer = () => {
         timelineOn: tweaks.timelineOn,
         sidebarWidth: tweaks.sidebarWidth,
         sidebarCollapsed: tweaks.sidebarCollapsed,
+        columns: tweaks.columns,
       }}
       setTweak={setTweak}
       bookmarks={bookmarksHook.ids as ReadonlySet<string>}
@@ -545,6 +568,10 @@ export const LvAppContainer = () => {
       groupBuckets={groupField !== null ? groupBuckets : null}
       groupField={groupField}
       onGroupDrillDown={onGroupDrillDown}
+      fieldDescriptors={fieldDescriptors}
+      columns={tweaks.columns}
+      onColumnsChange={onColumnsChange}
+      cellValueOf={cellValueOf}
       onExport={onExport}
       histogramData={histogramData}
       stats={stats}

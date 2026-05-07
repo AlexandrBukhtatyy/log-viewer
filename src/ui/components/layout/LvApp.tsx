@@ -9,8 +9,10 @@ import type {
   LogFilter,
   LogLevel,
 } from '../../../core/types/index.ts';
+import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type {
   LvCatalogRoot,
+  LvColumnPref,
   LvFileNode,
   LvGroupBy,
   LvRail,
@@ -131,6 +133,12 @@ export interface LvAppProps {
   readonly groupField: string | null;
   onGroupDrillDown: (bucket: GroupBucket, field: string) => void;
 
+  // Column picker (ADR-0017 Phase 5).
+  readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
+  readonly columns: ReadonlyArray<LvColumnPref>;
+  onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
+  cellValueOf?: (entry: LogEntry, key: string) => unknown;
+
   /** File menu → Export → JSONL/CSV; container wires `useExport`. */
   onExport?: (format: 'jsonl' | 'csv') => void;
 
@@ -186,6 +194,10 @@ export const LvApp = ({
   groupBuckets,
   groupField,
   onGroupDrillDown,
+  fieldDescriptors,
+  columns,
+  onColumnsChange,
+  cellValueOf,
   onExport,
   histogramData,
   stats,
@@ -539,6 +551,10 @@ export const LvApp = ({
           groupBuckets={groupBuckets}
           groupField={groupField}
           onGroupDrillDown={onGroupDrillDown}
+          fieldDescriptors={fieldDescriptors}
+          columns={columns}
+          onColumnsChange={onColumnsChange}
+          cellValueOf={cellValueOf}
           renderDetailEditor={renderDetailEditor}
         />
       </div>

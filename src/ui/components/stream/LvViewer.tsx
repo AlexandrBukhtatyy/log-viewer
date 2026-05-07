@@ -10,12 +10,15 @@ import type {
   FieldFilter,
 } from '../../../core/types/index.ts';
 import type {
+  LvColumnPref,
   LvFileNode,
   LvGroupBy,
   LvSavedSearch,
   LvTab,
   LvTweaks,
 } from '../../contracts/lv-types.ts';
+import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
+import { LvColumnPicker } from '../filter/LvColumnPicker.tsx';
 import { LvFilterBar } from '../filter/LvFilterBar.tsx';
 import { LvTimeline } from '../timeline/LvTimeline.tsx';
 import { LvEmpty } from './LvEmpty.tsx';
@@ -25,6 +28,20 @@ import { LvRow } from './LvRow.tsx';
 import { LvTabs } from './LvTabs.tsx';
 
 const ROW_HEIGHT = 28;
+
+/**
+ * Build the inline `grid-template-columns` for table header and rows.
+ * Fixed columns (LN/CARET/TS/LEVEL/SERVICE/FILE on the left, MESSAGE/
+ * ACTIONS on the right) frame an arbitrary number of user-added
+ * columns in the middle.
+ */
+const gridTemplateForColumns = (columns: ReadonlyArray<LvColumnPref>): string => {
+  const left = '52px 16px 120px 58px 120px 150px';
+  const right = '1fr 52px';
+  if (columns.length === 0) return `${left} ${right}`;
+  const userCols = columns.map((c) => `${c.widthPx}px`).join(' ');
+  return `${left} ${userCols} ${right}`;
+};
 
 type RenderDetailEditor = (props: {
   readonly value: string;
@@ -86,6 +103,14 @@ export interface LvViewerProps {
   /** Drill into a group: container appends a `fieldFilter` and clears group-by. */
   onGroupDrillDown: (bucket: GroupBucket, field: string) => void;
 
+  /** Available fields from coordinator.getFieldSchema (built-in + dynamic). */
+  readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
+  /** User-picked extra columns; the picker mutates this list. */
+  readonly columns: ReadonlyArray<LvColumnPref>;
+  onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
+  /** Extracts the cell value for a `(entry, columnKey)` pair. */
+  cellValueOf?: (entry: LogEntry, key: string) => unknown;
+
   renderDetailEditor?: RenderDetailEditor;
 }
 
@@ -119,8 +144,13 @@ export const LvViewer = ({
   groupBuckets,
   groupField,
   onGroupDrillDown,
+  fieldDescriptors,
+  columns,
+  onColumnsChange,
+  cellValueOf,
   renderDetailEditor,
 }: LvViewerProps) => {
+  const gridTemplate = useMemo(() => gridTemplateForColumns(columns), [columns]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [menu, setMenu] = useState<
     { path: string; line: number; sourceId: string; x: number; y: number } | null
@@ -405,15 +435,26 @@ export const LvViewer = ({
               </div>
             )}
 
-            <div className="lv-stream-hd">
+            <div className="lv-stream-hd" style={{ gridTemplateColumns: gridTemplate }}>
               <span className="lv-sh lv-sh-ln">ln</span>
               <span className="lv-sh lv-sh-caret"></span>
               <span className="lv-sh lv-sh-ts">timestamp</span>
               <span className="lv-sh lv-sh-lvl">level</span>
               <span className="lv-sh lv-sh-svc">service</span>
               <span className="lv-sh lv-sh-file">file</span>
+              {columns.map((c) => (
+                <span key={c.key} className="lv-sh" title={c.key}>
+                  {c.label || c.key}
+                </span>
+              ))}
               <span className="lv-sh lv-sh-msg">message</span>
-              <span className="lv-sh lv-sh-act"></span>
+              <span className="lv-sh lv-sh-act">
+                <LvColumnPicker
+                  columns={columns}
+                  descriptors={fieldDescriptors}
+                  onChange={onColumnsChange}
+                />
+              </span>
             </div>
 
             <div
@@ -477,7 +518,11 @@ export const LvViewer = ({
                         }}
                       >
                         {entry === undefined ? (
-                          <div className="lv-row lv-row-loading" data-row-idx={vi.index}>
+                          <div
+                            className="lv-row lv-row-loading"
+                            data-row-idx={vi.index}
+                            style={{ gridTemplateColumns: gridTemplate }}
+                          >
                             <span className="lv-row-gutter">
                               <span className="lv-ln">…</span>
                             </span>
@@ -509,6 +554,9 @@ export const LvViewer = ({
                             onContextMenu={openAtLine}
                             onAddFieldFilter={addFieldFilter}
                             theme={tweaks.theme}
+                            columns={columns}
+                            gridTemplate={gridTemplate}
+                            cellValueOf={cellValueOf}
                             renderDetailEditor={renderDetailEditor}
                           />
                         )}

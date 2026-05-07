@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { FieldFilter, LogEntry } from '../../../core/types/index.ts';
 import type {
+  LvColumnPref,
   LvFileNode,
   LvLogKind,
   LvTweakDensity,
@@ -35,6 +36,15 @@ export interface LvRowProps {
   onAddFieldFilter: (ff: FieldFilter) => void;
   readonly theme?: LvTweakTheme;
   readonly indentPx?: number;
+  /** User-added columns rendered between FILE and MESSAGE (ADR-0017). */
+  readonly columns?: ReadonlyArray<LvColumnPref>;
+  /** Inline grid-template-columns matching the LvViewer header. */
+  readonly gridTemplate?: string;
+  /**
+   * Resolves the cell value for a given column key. Container injects
+   * this so LvRow stays free of core/ runtime imports (ADR-0002).
+   */
+  cellValueOf?: (entry: LogEntry, key: string) => unknown;
   renderDetailEditor?: (props: {
     readonly value: string;
     readonly language: string;
@@ -48,6 +58,17 @@ const serviceFromEntry = (entry: LogEntry, fileMeta: LvFileNode | null): string 
   const fromFields = (entry.fields as Record<string, unknown>).service;
   if (typeof fromFields === 'string' && fromFields.length > 0) return fromFields;
   return fileMeta?.service ?? '—';
+};
+
+const formatCellValue = (v: unknown): string => {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return '';
+  }
 };
 
 export const LvRow = ({
@@ -73,6 +94,9 @@ export const LvRow = ({
   onAddFieldFilter,
   theme,
   indentPx = 0,
+  columns,
+  gridTemplate,
+  cellValueOf,
   renderDetailEditor,
 }: LvRowProps) => {
   const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -103,7 +127,10 @@ export const LvRow = ({
         className={className}
         data-density={density}
         data-row-idx={index}
-        style={indentPx ? { paddingLeft: indentPx } : undefined}
+        style={{
+          ...(gridTemplate ? { gridTemplateColumns: gridTemplate } : {}),
+          ...(indentPx ? { paddingLeft: indentPx } : {}),
+        }}
         onClick={handleRowClick}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -140,6 +167,20 @@ export const LvRow = ({
         <span className="lv-row-file" title={filePath}>
           {fileName}
         </span>
+        {columns?.map((c) => {
+          const v = cellValueOf ? cellValueOf(entry, c.key) : undefined;
+          const text = formatCellValue(v);
+          return (
+            <span
+              key={c.key}
+              className="lv-row-cell"
+              data-empty={text === '' ? '1' : undefined}
+              title={text}
+            >
+              {text || '—'}
+            </span>
+          );
+        })}
         <span className={`lv-row-msg${wrap ? ' wrap' : ''}`}>
           {lvHighlight(entry.message, query, useRegex, caseSensitive, wholeWord)}
         </span>

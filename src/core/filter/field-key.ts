@@ -1,3 +1,4 @@
+import type { LogEntry, SourceRecord } from '../types/index.ts';
 import type { FieldKey } from '../types/log-filter.ts';
 
 /**
@@ -52,3 +53,35 @@ export const fieldKeyToSql = (key: FieldKey): FieldKeySql => {
 };
 
 export const SOURCE_JOIN_SQL = 'JOIN source ON source.id = entry.source_id';
+
+/**
+ * In-memory mirror of `fieldKeyToSql` — returns the value a SQL query
+ * for the same key would produce, but reading off an already-resolved
+ * `LogEntry` (and its source). Used by the column picker to render
+ * dynamic cells without an extra round-trip.
+ *
+ * `@source.name` / `@source.kind` need a `SourceRecord` lookup; pass
+ * `undefined` when the caller does not have it (the cell renders as
+ * `null` in that case).
+ */
+export const getEntryFieldValue = (
+  entry: LogEntry,
+  key: FieldKey,
+  sourceRecord?: SourceRecord | null,
+): unknown => {
+  switch (key) {
+    case '@ts':         return entry.timestamp;
+    case '@level':      return entry.level;
+    case '@seq':        return entry.seq;
+    case '@file':       return entry.filePath;
+    case '@byte_start': return entry.byteStart;
+    case '@byte_end':   return entry.byteEnd;
+    case '@source.id':  return entry.sourceId;
+    case '@source.name': return sourceRecord?.source.name ?? null;
+    case '@source.kind': return sourceRecord?.source.kind ?? null;
+    default:
+      if (key.startsWith('@')) return null;
+      return (entry.fields as Record<string, unknown>)[key];
+  }
+};
+

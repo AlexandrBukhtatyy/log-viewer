@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import type {
+  EntryId,
+  LogEntry,
+  SourceId,
+  SourceRecord,
+} from '../types/index.ts';
 import {
   BUILT_IN_FIELD_KEYS,
   fieldKeyToSql,
+  getEntryFieldValue,
   isBuiltInFieldKey,
 } from './field-key.ts';
 
@@ -62,5 +69,57 @@ describe('fieldKeyToSql', () => {
       '@source.name',
       '@source.kind',
     ]);
+  });
+});
+
+describe('getEntryFieldValue', () => {
+  const entry: LogEntry = {
+    id: 'e1' as EntryId,
+    sourceId: 's1' as SourceId,
+    seq: 7,
+    timestamp: 1234,
+    level: 'warn',
+    message: 'hi',
+    raw: 'raw',
+    fields: { trace_id: 't', status: 500 },
+    filePath: 'a.log',
+    byteStart: 100,
+    byteEnd: 150,
+  };
+  const sourceRecord: SourceRecord = {
+    source: { id: 's1' as SourceId, kind: 'text', name: 'a.log', text: '' },
+    status: { kind: 'idle' },
+  };
+
+  it.each([
+    ['@ts',         1234],
+    ['@level',      'warn'],
+    ['@seq',        7],
+    ['@file',       'a.log'],
+    ['@byte_start', 100],
+    ['@byte_end',   150],
+    ['@source.id',  's1'],
+  ] as const)('built-in %s pulls from entry', (key, expected) => {
+    expect(getEntryFieldValue(entry, key)).toBe(expected);
+  });
+
+  it('@source.name / @source.kind use the SourceRecord lookup', () => {
+    expect(getEntryFieldValue(entry, '@source.name', sourceRecord)).toBe('a.log');
+    expect(getEntryFieldValue(entry, '@source.kind', sourceRecord)).toBe('text');
+  });
+
+  it('@source.* return null when no record is supplied', () => {
+    expect(getEntryFieldValue(entry, '@source.name')).toBeNull();
+    expect(getEntryFieldValue(entry, '@source.kind', null)).toBeNull();
+  });
+
+  it('dynamic key reads entry.fields', () => {
+    expect(getEntryFieldValue(entry, 'trace_id')).toBe('t');
+    expect(getEntryFieldValue(entry, 'status')).toBe(500);
+    expect(getEntryFieldValue(entry, 'missing')).toBeUndefined();
+  });
+
+  it('unknown @-key returns null (mirrors fieldKeyToSql throwing)', () => {
+    expect(getEntryFieldValue(entry, '@nope')).toBeNull();
   });
 });

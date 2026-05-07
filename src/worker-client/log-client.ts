@@ -17,6 +17,7 @@ import type {
   SourceRecord,
 } from '../core/types/index.ts';
 import { EMPTY_FILTER } from '../core/types/index.ts';
+import type { FieldDescriptor } from '../core/filter/field-descriptor.ts';
 
 const OVERSCAN = 200;
 
@@ -104,6 +105,7 @@ export interface ViewActions {
     filter: LogFilter,
     bucketCount: number,
   ) => Promise<HistogramResponse>;
+  getFieldSchema: (filter: LogFilter) => Promise<ReadonlyArray<FieldDescriptor>>;
   refresh: () => Promise<void>;
   destroy: () => void;
 }
@@ -351,6 +353,7 @@ export const createLogClient = (): ViewStore => {
         api().getGroupCounts(filter, field, limit),
       getHistogram: async (filter, bucketCount) =>
         api().getHistogram(filter, bucketCount),
+      getFieldSchema: async (filter) => api().getFieldSchema(filter),
       refresh,
       destroy: () => {
         statusUnsubPromise

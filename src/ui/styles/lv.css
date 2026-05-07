@@ -1104,6 +1104,8 @@ button{font-family:inherit}
 
 .lv-stream-hd{
   display:grid;
+  /* grid-template-columns is set inline by LvViewer (see gridTemplateForColumns).
+     The shape is: LN  CARET  TS  LEVEL  SERVICE  FILE  [user-cols]  MESSAGE  ACTIONS */
   grid-template-columns: 52px 16px 120px 58px 120px 150px 1fr 52px;
   align-items:center;
   padding:0 8px;
@@ -1113,7 +1115,9 @@ button{font-family:inherit}
   font-family:var(--lv-font-mono); font-size:10px; letter-spacing:.06em;
   text-transform:uppercase; color:var(--lv-fg-3);
   flex-shrink:0;
+  position:relative;
 }
+.lv-sh-add{position:absolute; right:60px; top:50%; transform:translateY(-50%)}
 .lv-sh{padding:0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .lv-sh-ln{text-align:right; padding-right:8px}
 
@@ -1127,6 +1131,8 @@ button{font-family:inherit}
 
 .lv-row{
   display:grid;
+  /* grid-template-columns is set inline by LvViewer (see gridTemplateForColumns).
+     Shape: LN  CARET  TS  LEVEL  SERVICE  FILE  [user-cols]  MESSAGE  ACTIONS */
   grid-template-columns: 52px 16px 120px 58px 120px 150px 1fr 52px;
   align-items:center; gap:0;
   padding:0 8px;
@@ -1136,6 +1142,12 @@ button{font-family:inherit}
   position:relative;
   min-height:24px;
 }
+.lv-row-cell{
+  padding:0 6px; min-width:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  color:var(--lv-fg-2); font-variant-numeric:tabular-nums;
+}
+.lv-row-cell[data-empty="1"]{color:var(--lv-fg-3)}
 .lv-row[data-density="comfortable"]{min-height:30px}
 .lv-row:nth-child(odd){background:var(--lv-row-alt)}
 .lv-row:hover{background:var(--lv-bg-hover)}
@@ -1490,6 +1502,47 @@ button{font-family:inherit}
 }
 .lv-cmd-item:hover{background:var(--lv-bg-hover)}
 .lv-cmd-empty{padding:16px; color:var(--lv-fg-3); font-size:12.5px; text-align:center}
+
+/* ──────────────────────── Column picker (ADR-0017) ──────────────────────── */
+.lv-colpick-wrap{position:relative; display:inline-flex; align-items:center}
+.lv-colpick-btn{
+  border:1px solid var(--lv-border); background:var(--lv-bg-2);
+  color:var(--lv-fg-2); font:inherit; font-size:10px;
+  padding:1px 6px; border-radius:4px; cursor:pointer;
+  text-transform:uppercase; letter-spacing:.04em;
+}
+.lv-colpick-btn:hover{background:var(--lv-bg-hover)}
+.lv-colpick-btn.is-open{background:var(--lv-bg-3); border-color:var(--lv-accent)}
+.lv-colpick-pop{
+  position:absolute; top:24px; right:0; z-index:10;
+  min-width:240px; max-width:320px; max-height:380px; overflow:auto;
+  background:var(--lv-bg-1); border:1px solid var(--lv-border);
+  border-radius:6px; padding:6px;
+  box-shadow:var(--lv-shadow-pop);
+  font:inherit; font-size:12px;
+}
+.lv-colpick-sec{padding:4px 0; border-bottom:1px solid var(--lv-border)}
+.lv-colpick-sec:last-child{border-bottom:0}
+.lv-colpick-sec-title{
+  padding:2px 6px; color:var(--lv-fg-3);
+  font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+}
+.lv-colpick-row{
+  display:flex; align-items:center; gap:6px;
+  padding:3px 6px; border-radius:4px;
+}
+.lv-colpick-row:hover{background:var(--lv-bg-hover)}
+.lv-colpick-row.is-on{background:color-mix(in srgb, var(--lv-accent) 12%, transparent)}
+.lv-colpick-label{display:flex; align-items:center; gap:6px; flex:1; min-width:0; cursor:pointer}
+.lv-colpick-key{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.lv-colpick-meta{color:var(--lv-fg-3); font-size:10px; flex-shrink:0}
+.lv-colpick-move{display:flex; gap:2px}
+.lv-colpick-move button{
+  width:18px; height:18px; padding:0;
+  background:var(--lv-bg-2); border:1px solid var(--lv-border);
+  color:var(--lv-fg-2); border-radius:3px; cursor:pointer; font-size:10px;
+}
+.lv-colpick-move button:disabled{opacity:.4; cursor:not-allowed}
 
 /* ──────────────────────── Responsive safety ──────────────────────── */
 @media (max-width: 980px){

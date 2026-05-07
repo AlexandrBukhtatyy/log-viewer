@@ -12,6 +12,7 @@ export type {
   LvTweaks,
   LvTweakTheme,
   LvTweakDensity,
+  LvColumnPref,
 } from '../../hooks/use-ui-prefs.ts';
 export type { LvSavedSearch } from '../../hooks/use-saved-searches.ts';
 
@@ -113,6 +114,22 @@ export type LvGroupBy =
   | 'level'
   | 'kind'
   | 'file';
+
+/**
+ * One user-added column in the table (ADR-0017). The fixed
+ * LN/TIMESTAMP/LEVEL/MESSAGE columns are always present and never
+ * appear here; this list is what the column-picker controls.
+ *
+ * `key` is a `FieldKey` (built-in `@`-attribute or dynamic JSON key).
+ * `label` overrides the default header text — defaults to `key`.
+ * `widthPx` is the rendered width; `null` means "auto-size" (used
+ * for trailing 1fr columns).
+ */
+export interface LvColumn {
+  readonly key: string;
+  readonly label?: string;
+  readonly widthPx: number;
+}
 
 export interface LvTab {
   id: string;
