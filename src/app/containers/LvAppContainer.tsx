@@ -78,7 +78,7 @@ export const LvAppContainer = () => {
   const sourceCtrl = useSourceController();
 
   // Windowed entry stream.
-  const { totalCount, filteredCount, getRow, setVisibleRange } = useLogWindow();
+  const { totalCount, filteredCount, getRow, setVisibleRange, isLoading, hasLoadedEntries } = useLogWindow();
 
   // UI state — selection, tabs, group-by, live tail.
   // `selectedIds` may contain plain `SourceId` strings *and* compound ids
@@ -519,6 +519,8 @@ export const LvAppContainer = () => {
       totalCount={totalCount}
       getRow={getRow}
       onVisibleRangeChange={setVisibleRange}
+      isLoading={isLoading}
+      hasLoadedEntries={hasLoadedEntries}
       levelCounts={levelCounts}
       filter={filter}
       setFilter={setFilter}

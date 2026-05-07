@@ -76,6 +76,10 @@ export interface LvAppProps {
   readonly totalCount: number;
   getRow: (i: number) => LogEntry | undefined;
   onVisibleRangeChange: (from: number, to: number) => void;
+  /** True while the worker is mid-refresh; UI shows the initial-load overlay. */
+  readonly isLoading: boolean;
+  /** False until the first resolved entry lands, used to gate the overlay. */
+  readonly hasLoadedEntries: boolean;
   readonly levelCounts: Partial<Record<LogLevel, number>>;
 
   // Filter — single source of truth lives in the container (or its hook).
@@ -162,6 +166,8 @@ export const LvApp = ({
   totalCount,
   getRow,
   onVisibleRangeChange,
+  isLoading,
+  hasLoadedEntries,
   levelCounts,
   filter,
   setFilter,
@@ -520,6 +526,8 @@ export const LvApp = ({
           totalCount={totalCount}
           getRow={getRow}
           onVisibleRangeChange={onVisibleRangeChange}
+          isLoading={isLoading}
+          hasLoadedEntries={hasLoadedEntries}
           hasSources={selectedIds.size > 0}
           filesById={filesById}
           filter={filter}

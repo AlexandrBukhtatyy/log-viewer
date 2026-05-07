@@ -1426,6 +1426,53 @@ button{font-family:inherit}
 .lv-stream-empty-title{color:var(--lv-fg-1); font-size:14px; font-family:var(--lv-font-ui); margin-bottom:4px}
 .lv-stream-empty-sub{font-family:var(--lv-font-ui); font-size:12px}
 
+/* Skeleton row — drawn while a virtual slot is awaiting its entry. */
+.lv-row-skeleton{
+  cursor:default;
+  pointer-events:none;
+}
+.lv-row-skeleton:hover{background:transparent}
+.lv-skel{
+  display:inline-block;
+  margin:0 6px;
+  height:10px;
+  border-radius:3px;
+  background:linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--lv-fg-3) 15%, transparent) 0%,
+    color-mix(in srgb, var(--lv-fg-3) 28%, transparent) 50%,
+    color-mix(in srgb, var(--lv-fg-3) 15%, transparent) 100%
+  );
+  background-size:200% 100%;
+  animation:lv-skel-shimmer 1.2s linear infinite;
+}
+.lv-skel-num{width:18px; height:8px; margin:0 8px 0 4px}
+.lv-skel-cell{height:10px}
+.lv-skel-msg{width:65%; max-width:520px}
+@keyframes lv-skel-shimmer{
+  0%   { background-position:  100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Initial-load overlay — only shown until the first entry resolves. */
+.lv-stream-loading-overlay{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  background:color-mix(in srgb, var(--lv-bg) 70%, transparent);
+  color:var(--lv-fg-2);
+  font-family:var(--lv-font-ui); font-size:12.5px;
+  pointer-events:none;
+  z-index:5;
+}
+.lv-spinner{
+  width:14px; height:14px;
+  border:2px solid color-mix(in srgb, var(--lv-fg-3) 50%, transparent);
+  border-top-color:var(--lv-accent);
+  border-radius:50%;
+  animation:lv-spin 0.9s linear infinite;
+}
+@keyframes lv-spin{ to { transform:rotate(360deg); } }
+
 .lv-live-pulse{
   display:flex; align-items:center; gap:8px; padding:8px 14px;
   border-top:1px dashed var(--lv-border);

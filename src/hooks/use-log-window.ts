@@ -7,6 +7,12 @@ export interface UseLogWindow {
   readonly totalCount: number;
   readonly filteredCount: number;
   readonly isLoading: boolean;
+  /**
+   * `true` once the first resolved entry has landed in the window cache.
+   * Differentiates "initial load" (overlay) from "fetching more rows
+   * during scroll" (skeleton-only) in the UI.
+   */
+  readonly hasLoadedEntries: boolean;
   readonly version: number;
   /** Returns entry at absolute (post-filter) index, or undefined if not yet loaded. */
   getRow: (index: number) => LogEntry | undefined;
@@ -22,6 +28,7 @@ export const useLogWindow = (): UseLogWindow => {
   const version = useStore(store, (s) => s.version);
   // Subscribe to entries map so virtualizer re-renders when window updates.
   const entries = useStore(store, (s) => s.entries);
+  const hasLoadedEntries = entries.size > 0;
 
   const getRow = useCallback(
     (index: number) => entries.get(index),
@@ -37,6 +44,7 @@ export const useLogWindow = (): UseLogWindow => {
     totalCount,
     filteredCount,
     isLoading,
+    hasLoadedEntries,
     version,
     getRow,
     setVisibleRange,

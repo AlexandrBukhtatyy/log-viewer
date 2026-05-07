@@ -58,6 +58,10 @@ export interface LvViewerProps {
   readonly totalCount: number;
   getRow: (index: number) => LogEntry | undefined;
   onVisibleRangeChange: (from: number, to: number) => void;
+  /** Mirrors `useLogWindow.isLoading` — drives the initial-load overlay. */
+  readonly isLoading: boolean;
+  /** Mirrors `useLogWindow.hasLoadedEntries` — gates the overlay against incremental scroll loads. */
+  readonly hasLoadedEntries: boolean;
   /** Whether at least one source is selected; if not, render the empty state. */
   readonly hasSources: boolean;
 
@@ -119,6 +123,8 @@ export const LvViewer = ({
   totalCount,
   getRow,
   onVisibleRangeChange,
+  isLoading,
+  hasLoadedEntries,
   hasSources,
   filesById,
   filter,
@@ -536,16 +542,24 @@ export const LvViewer = ({
                       >
                         {entry === undefined ? (
                           <div
-                            className="lv-row lv-row-loading"
+                            className="lv-row lv-row-skeleton"
                             data-row-idx={vi.index}
                             style={{ gridTemplateColumns: gridTemplate }}
+                            aria-busy="true"
                           >
                             <span className="lv-row-gutter">
-                              <span className="lv-ln">…</span>
+                              <span className="lv-skel lv-skel-num" />
                             </span>
-                            <span className="lv-row-msg" style={{ color: 'var(--lv-muted)' }}>
-                              loading row {vi.index}
-                            </span>
+                            <span className="lv-row-caret" />
+                            <span className="lv-skel lv-skel-cell" />
+                            <span className="lv-skel lv-skel-cell" />
+                            <span className="lv-skel lv-skel-cell" />
+                            <span className="lv-skel lv-skel-cell" />
+                            {columns.map((c) => (
+                              <span key={c.key} className="lv-skel lv-skel-cell" />
+                            ))}
+                            <span className="lv-skel lv-skel-cell lv-skel-msg" />
+                            <span />
                           </div>
                         ) : (
                           <LvRow
@@ -592,6 +606,12 @@ export const LvViewer = ({
                 <div className="lv-live-pulse">
                   <span className="lv-live-dot is-on" />
                   <span>Tailing — new lines appear below</span>
+                </div>
+              )}
+              {isLoading && !hasLoadedEntries && rowCount > 0 && (
+                <div className="lv-stream-loading-overlay" role="status" aria-live="polite">
+                  <span className="lv-spinner" aria-hidden="true" />
+                  <span>Loading entries…</span>
                 </div>
               )}
             </div>
