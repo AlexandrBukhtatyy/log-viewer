@@ -243,12 +243,28 @@ export const LvViewer = ({
       if (!entry) continue;
       const tsTxt = entry.timestamp === null ? '' : new Date(entry.timestamp).toISOString();
       const file = filesById[entry.sourceId]?.name ?? '';
-      const hay = [tsTxt, entry.level, file, entry.message, entry.raw].join(' ');
+      // Search every cell shown in the table — fixed columns plus
+      // any user-added ones — so the find-bar matches anything the
+      // user can actually see.
+      const customCells = cellValueOf
+        ? columns.map((c) => {
+            const v = cellValueOf(entry, c.key);
+            if (v === null || v === undefined) return '';
+            if (typeof v === 'string') return v;
+            if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+            try {
+              return JSON.stringify(v);
+            } catch {
+              return '';
+            }
+          })
+        : [];
+      const hay = [tsTxt, entry.level, file, ...customCells, entry.message, entry.raw].join(' ');
       if (findRe.test(hay)) out.push(i);
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally bound to virtualizer items so window updates re-run
-  }, [findRe, rowCount, items.length]);
+  }, [findRe, rowCount, items.length, columns, cellValueOf, filesById]);
 
   const findSig = `${findQ}|${findCase ? '1' : '0'}|${findWord ? '1' : '0'}|${findRegex ? '1' : '0'}|${rowCount}`;
   if (prevFindSig !== findSig) {

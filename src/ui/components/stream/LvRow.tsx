@@ -126,6 +126,16 @@ export const LvRow = ({
   const filePath = fileMeta?.path ?? '';
   const fileKind: LvLogKind | undefined = fileMeta?.kind;
   const service = serviceFromEntry(entry, fileMeta);
+  const renderCell = (text: string) =>
+    highlight
+      ? lvHighlight(
+          text,
+          highlight.query,
+          highlight.useRegex,
+          highlight.caseSensitive,
+          highlight.wholeWord,
+        )
+      : text;
   return (
     <>
       <div
@@ -163,14 +173,16 @@ export const LvRow = ({
           </svg>
         </span>
         <span className="lv-row-ts" title={tsTitle}>
-          {lvFmtTime(entry.timestamp, showDate)}
+          {renderCell(lvFmtTime(entry.timestamp, showDate))}
         </span>
-        <span className={`lv-row-lvl lv-level-tag-${entry.level}`}>{entry.level}</span>
+        <span className={`lv-row-lvl lv-level-tag-${entry.level}`}>
+          {renderCell(entry.level)}
+        </span>
         <span className="lv-row-svc" title={service}>
-          {service}
+          {renderCell(service)}
         </span>
         <span className="lv-row-file" title={filePath}>
-          {fileName}
+          {renderCell(fileName)}
         </span>
         {columns?.map((c) => {
           const v = cellValueOf ? cellValueOf(entry, c.key) : undefined;
@@ -182,20 +194,12 @@ export const LvRow = ({
               data-empty={text === '' ? '1' : undefined}
               title={text}
             >
-              {text || '—'}
+              {text === '' ? '—' : renderCell(text)}
             </span>
           );
         })}
         <span className={`lv-row-msg${wrap ? ' wrap' : ''}`}>
-          {highlight
-            ? lvHighlight(
-                entry.message,
-                highlight.query,
-                highlight.useRegex,
-                highlight.caseSensitive,
-                highlight.wholeWord,
-              )
-            : entry.message}
+          {renderCell(entry.message)}
         </span>
         <span className="lv-row-actions" onClick={(e) => e.stopPropagation()}>
           <button
