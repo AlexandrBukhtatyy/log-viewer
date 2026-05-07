@@ -2,6 +2,7 @@ import type { Database } from '@sqlite.org/sqlite-wasm';
 import schemaV1Sql from './schema.sql?raw';
 import schemaV2Sql from './schema-v2-fts.sql?raw';
 import schemaV3Sql from './schema-v3-offsets.sql?raw';
+import schemaV4Sql from './schema-v4-field-meta.sql?raw';
 
 interface Migration {
   readonly version: number;
@@ -30,6 +31,15 @@ const MIGRATIONS: ReadonlyArray<Migration> = [
     version: 3,
     up: (db) => {
       db.exec(schemaV3Sql);
+    },
+  },
+  {
+    // v4 (ADR-0017): per-source field-schema cache. Populated by
+    // `insertBatch` from Phase 2 onwards; until then the table exists but
+    // stays empty, and `getFieldSchema` returns built-in attributes only.
+    version: 4,
+    up: (db) => {
+      db.exec(schemaV4Sql);
     },
   },
 ];

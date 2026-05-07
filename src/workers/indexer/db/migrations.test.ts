@@ -79,7 +79,7 @@ describe('indexer/db', () => {
       expect(readUserVersion(db)).toBe(before);
     });
 
-    it('creates entry, source and entry_minute tables', async () => {
+    it('creates entry, source, entry_minute, and field_meta tables', async () => {
       const db = await openMemoryDb();
       const tables = db.exec({
         sql: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
@@ -90,6 +90,37 @@ describe('indexer/db', () => {
       expect(names).toContain('entry');
       expect(names).toContain('source');
       expect(names).toContain('entry_minute');
+      expect(names).toContain('field_meta');
+    });
+
+    it('field_meta has the v4 columns and FK on source', async () => {
+      const db = await openMemoryDb();
+      const cols = db.exec({
+        sql: 'PRAGMA table_info(field_meta)',
+        rowMode: 'object',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<Record<string, unknown>>;
+      const names = cols.map((c) => c.name as string);
+      expect(names).toEqual(
+        expect.arrayContaining([
+          'source_id',
+          'key',
+          'type',
+          'occurrences',
+          'total_seen',
+          'last_seen_at',
+          'top_values_json',
+        ]),
+      );
+
+      const fks = db.exec({
+        sql: 'PRAGMA foreign_key_list(field_meta)',
+        rowMode: 'object',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<Record<string, unknown>>;
+      expect(fks).toHaveLength(1);
+      expect(fks[0]?.table).toBe('source');
+      expect(fks[0]?.from).toBe('source_id');
     });
 
     it('drops entry_fts after v3 (FTS5 is retired by ADR-0016)', async () => {
