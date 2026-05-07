@@ -22,6 +22,12 @@ import type {
 } from '../../core/types/index.ts';
 import { collectLevelCounts, groupFieldExpr, levelBreakdownSql } from './aggregate.ts';
 import { openDb } from './db/open-db.ts';
+import {
+  aggregateFieldMeta,
+  type FieldType,
+  mergeFieldType,
+  mergeTopValues,
+} from './field-meta.ts';
 
 const WORKER_ID = crypto.randomUUID();
 
@@ -30,7 +36,9 @@ interface State {
   insertEntryStmt: PreparedStatement;
   bumpSourceCountStmt: PreparedStatement;
   upsertMinuteStmt: PreparedStatement;
+  upsertFieldMetaStmt: PreparedStatement;
 }
+
 
 interface MinuteBucket {
   readonly sourceId: SourceId;
@@ -232,6 +240,24 @@ const UPSERT_MINUTE_SQL = `
     level_dist_json = excluded.level_dist_json
 `;
 
+/**
+ * UPSERT into `field_meta` — one row per (source, key). Type and top-values
+ * merging is done in JS (loaded from existing row before bind) since SQLite
+ * UPSERT can't easily do a JSON-array merge with cap-K. The bind already
+ * carries the merged values.
+ */
+const UPSERT_FIELD_META_SQL = `
+  INSERT INTO field_meta (source_id, key, type, occurrences, total_seen,
+                          last_seen_at, top_values_json)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(source_id, key) DO UPDATE SET
+    type            = excluded.type,
+    occurrences     = excluded.occurrences,
+    total_seen      = excluded.total_seen,
+    last_seen_at    = excluded.last_seen_at,
+    top_values_json = excluded.top_values_json
+`;
+
 const BUMP_SOURCE_COUNT_SQL = `
   UPDATE source SET entry_count = entry_count + ?, indexed_at = ? WHERE id = ?
 `;
@@ -253,6 +279,7 @@ export const indexerApi: IndexerApi = {
       insertEntryStmt: opened.db.prepare(INSERT_ENTRY_SQL),
       bumpSourceCountStmt: opened.db.prepare(BUMP_SOURCE_COUNT_SQL),
       upsertMinuteStmt: opened.db.prepare(UPSERT_MINUTE_SQL),
+      upsertFieldMetaStmt: opened.db.prepare(UPSERT_FIELD_META_SQL),
     };
     return {
       migrationFrom: opened.migration.from,
@@ -266,6 +293,7 @@ export const indexerApi: IndexerApi = {
     state.insertEntryStmt.finalize();
     state.bumpSourceCountStmt.finalize();
     state.upsertMinuteStmt.finalize();
+    state.upsertFieldMetaStmt.finalize();
     state.db.close();
     state = null;
   },
@@ -304,8 +332,13 @@ export const indexerApi: IndexerApi = {
 
   insertBatch: async (entries) => {
     if (entries.length === 0) return;
-    const { db, insertEntryStmt, bumpSourceCountStmt, upsertMinuteStmt } =
-      requireState();
+    const {
+      db,
+      insertEntryStmt,
+      bumpSourceCountStmt,
+      upsertMinuteStmt,
+      upsertFieldMetaStmt,
+    } = requireState();
 
     db.exec('BEGIN');
     try {
@@ -354,6 +387,58 @@ export const indexerApi: IndexerApi = {
           ])
           .step();
         upsertMinuteStmt.reset();
+      }
+
+      // Update per-(source, key) field schema cache so the column /
+      // group-by / filter pickers can serve their lists without scanning
+      // `entry.fields_json`. Existing rows are read first, then merged
+      // (type, top values) in JS; UPSERT below carries the merged result.
+      const fieldsBySource = aggregateFieldMeta(entries);
+      for (const [sid, perKey] of fieldsBySource) {
+        if (perKey.size === 0) continue;
+        const totalSeenIncr = counts.get(sid) ?? 0;
+        // Bulk-load existing rows for the keys we're about to touch.
+        const keys = [...perKey.keys()];
+        const placeholders = keys.map(() => '?').join(', ');
+        const existingRows = runRows(
+          db,
+          `SELECT key, type, occurrences, total_seen, top_values_json
+             FROM field_meta
+            WHERE source_id = ? AND key IN (${placeholders})`,
+          [sid, ...keys],
+        );
+        const existing = new Map<
+          string,
+          { type: FieldType; occurrences: number; totalSeen: number; topValuesJson: string | null }
+        >();
+        for (const r of existingRows) {
+          existing.set(r.key as string, {
+            type: r.type as FieldType,
+            occurrences: Number(r.occurrences ?? 0),
+            totalSeen: Number(r.total_seen ?? 0),
+            topValuesJson: (r.top_values_json as string | null) ?? null,
+          });
+        }
+        for (const [key, accum] of perKey) {
+          const prev = existing.get(key);
+          const mergedType = mergeFieldType(prev?.type ?? null, accum.types);
+          const mergedTopVals = mergeTopValues(
+            prev?.topValuesJson ?? null,
+            accum.topVals,
+          );
+          upsertFieldMetaStmt
+            .bind([
+              sid,
+              key,
+              mergedType,
+              accum.occurrences + (prev?.occurrences ?? 0),
+              totalSeenIncr + (prev?.totalSeen ?? 0),
+              now,
+              JSON.stringify(mergedTopVals),
+            ])
+            .step();
+          upsertFieldMetaStmt.reset();
+        }
       }
 
       db.exec('COMMIT');
@@ -535,5 +620,6 @@ export const indexerApi: IndexerApi = {
     db.exec('DELETE FROM source');
     db.exec('DELETE FROM entry');
     db.exec('DELETE FROM entry_minute');
+    db.exec('DELETE FROM field_meta');
   },
 };
