@@ -184,70 +184,73 @@ export const LvGroupBySelect = ({
         <div className="lv-pop lv-group-pop" style={{ minWidth: 280 }}>
           <div className="lv-pop-hd">
             <span>Group by</span>
-            {active.length > 0 && (
-              <button type="button" className="lv-pop-clear" onClick={() => onChange([])}>
-                Clear
+            <div className="lv-pop-hd-actions">
+              {active.length > 0 && (
+                <button type="button" className="lv-pop-clear" onClick={() => onChange([])}>
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                className="lv-btn lv-btn-primary"
+                onClick={() => {
+                  const target = filtered[effectiveIdx];
+                  if (target) toggle(target.key);
+                }}
+                disabled={addDisabled}
+                title="Add highlighted field"
+              >
+                + Add
               </button>
-            )}
-          </div>
-
-          <div className="lv-group-search-row">
-            <input
-              ref={inputRef}
-              type="text"
-              className="lv-field-input"
-              placeholder="Search field…"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setHighlightedIdx(0);
-              }}
-              onKeyDown={onSearchKeyDown}
-              spellCheck={false}
-            />
-            <button
-              type="button"
-              className="lv-btn lv-btn-primary"
-              onClick={() => {
-                const target = filtered[effectiveIdx];
-                if (target) toggle(target.key);
-              }}
-              disabled={addDisabled}
-              title="Add highlighted field"
-            >
-              + Add
-            </button>
+            </div>
           </div>
 
           {sorted.length === 0 ? (
             <div className="lv-pop-empty">No fields yet — pick a source.</div>
-          ) : filtered.length === 0 ? (
-            <div className="lv-pop-empty">No fields match “{query}”.</div>
           ) : (
-            <div className="lv-group-search-list" ref={listRef}>
-              {filtered.map((d, idx) => {
-                const on = active.includes(d.key);
-                const isHi = idx === effectiveIdx;
-                return (
-                  <div
-                    key={d.key}
-                    className={
-                      'lv-group-search-item' +
-                      (isHi ? ' is-active' : '') +
-                      (on ? ' is-on' : '')
-                    }
-                    onMouseEnter={() => setHighlightedIdx(idx)}
-                    onClick={() => toggle(d.key)}
-                  >
-                    <span className="lv-group-search-key">{d.label || d.key}</span>
-                    <span className="lv-group-search-meta">
-                      {d.origin === 'dynamic' && d.presenceRate !== undefined
-                        ? `${Math.round(d.presenceRate * 100)}%`
-                        : d.type}
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="lv-group-search-dropdown">
+              <input
+                ref={inputRef}
+                type="text"
+                className="lv-field-input lv-group-search-input"
+                placeholder="Search field…"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setHighlightedIdx(0);
+                }}
+                onKeyDown={onSearchKeyDown}
+                spellCheck={false}
+              />
+              {filtered.length === 0 ? (
+                <div className="lv-pop-empty">No fields match “{query}”.</div>
+              ) : (
+                <div className="lv-group-search-list" ref={listRef}>
+                  {filtered.map((d, idx) => {
+                    const on = active.includes(d.key);
+                    const isHi = idx === effectiveIdx;
+                    return (
+                      <div
+                        key={d.key}
+                        className={
+                          'lv-group-search-item' +
+                          (isHi ? ' is-active' : '') +
+                          (on ? ' is-on' : '')
+                        }
+                        onMouseEnter={() => setHighlightedIdx(idx)}
+                        onClick={() => toggle(d.key)}
+                      >
+                        <span className="lv-group-search-key">{d.label || d.key}</span>
+                        <span className="lv-group-search-meta">
+                          {d.origin === 'dynamic' && d.presenceRate !== undefined
+                            ? `${Math.round(d.presenceRate * 100)}%`
+                            : d.type}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

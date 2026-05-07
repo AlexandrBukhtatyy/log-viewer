@@ -1341,19 +1341,27 @@ button{font-family:inherit}
 .lv-grp-actions{display:flex; gap:2px; justify-self:end; opacity:.55}
 .lv-grp:hover .lv-grp-actions{opacity:1}
 
-/* Group-by popover: search row + filtered list + ordered chips */
+/* Group-by popover: header (Group by + Clear + Add) + search-dropdown
+   (input on top, filtered list below, both inside one bordered block) +
+   ordered chips at the bottom. */
 .lv-group-pop{ }
-.lv-group-search-row{
-  display:flex; gap:6px; align-items:center;
-  padding:6px 6px 4px;
+.lv-pop-hd-actions{display:flex; gap:6px; align-items:center}
+.lv-group-search-dropdown{
+  display:flex; flex-direction:column;
+  margin:6px 4px 4px;
+  border:1px solid var(--lv-border); border-radius:5px;
+  background:var(--lv-bg-1);
+  overflow:hidden;
 }
-.lv-group-search-row .lv-field-input{flex:1; min-width:0}
+.lv-group-search-input{
+  border:0 !important;
+  border-bottom:1px solid var(--lv-border) !important;
+  border-radius:0 !important;
+  background:transparent !important;
+}
 .lv-group-search-list{
   display:flex; flex-direction:column;
   max-height:220px; overflow-y:auto;
-  margin:0 4px;
-  border:1px solid var(--lv-border); border-radius:5px;
-  background:var(--lv-bg-1);
 }
 .lv-group-search-item{
   display:flex; align-items:center; gap:6px;
