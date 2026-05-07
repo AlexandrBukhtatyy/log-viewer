@@ -45,6 +45,7 @@ export const LvGroupBySelect = ({
   onChange,
 }: LvGroupBySelectProps) => {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'order' | 'fields'>('order');
   const [query, setQuery] = useState('');
   const [highlightedIdx, setHighlightedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -67,17 +68,33 @@ export const LvGroupBySelect = ({
     };
   }, [open]);
 
-  // Auto-focus the search input when popover opens.
+  // Auto-focus the search input whenever the Fields tab becomes
+  // active (incl. on first open with default tab=fields).
   useEffect(() => {
-    if (!open) return;
+    if (!open || tab !== 'fields') return;
     const t = setTimeout(() => inputRef.current?.focus(), 0);
     return () => clearTimeout(t);
-  }, [open]);
+  }, [open, tab]);
 
   const closePopover = () => {
     setOpen(false);
     setQuery('');
     setHighlightedIdx(0);
+  };
+
+  const onOpenToggle = () => {
+    setOpen((wasOpen) => {
+      if (wasOpen) {
+        setQuery('');
+        setHighlightedIdx(0);
+        return false;
+      }
+      // Smart default: jump straight to Fields when nothing is
+      // grouped yet (first action is "add"); otherwise show Order
+      // so the user sees what's already configured.
+      setTab(active.length === 0 ? 'fields' : 'order');
+      return true;
+    });
   };
 
   const sorted = useMemo(() => sortDescriptors(descriptors), [descriptors]);
@@ -157,7 +174,7 @@ export const LvGroupBySelect = ({
       <button
         type="button"
         className={`lv-btn${active.length > 0 ? ' is-on' : ''}`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={onOpenToggle}
         title="Group logs by fields (stack multiple for nested groups)"
       >
         <svg viewBox="0 0 14 14" width="13" height="13">
@@ -190,115 +207,147 @@ export const LvGroupBySelect = ({
                   Clear
                 </button>
               )}
-              <button
-                type="button"
-                className="lv-btn lv-btn-primary"
-                onClick={() => {
-                  const target = filtered[effectiveIdx];
-                  if (target) toggle(target.key);
-                }}
-                disabled={addDisabled}
-                title="Add highlighted field"
-              >
-                + Add
-              </button>
+              {tab === 'fields' && (
+                <button
+                  type="button"
+                  className="lv-btn lv-btn-primary"
+                  onClick={() => {
+                    const target = filtered[effectiveIdx];
+                    if (target) toggle(target.key);
+                  }}
+                  disabled={addDisabled}
+                  title="Add highlighted field"
+                >
+                  + Add
+                </button>
+              )}
             </div>
           </div>
 
-          {sorted.length === 0 ? (
-            <div className="lv-pop-empty">No fields yet — pick a source.</div>
-          ) : (
-            <div className="lv-group-search-dropdown">
-              <input
-                ref={inputRef}
-                type="text"
-                className="lv-field-input lv-group-search-input"
-                placeholder="Search field…"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setHighlightedIdx(0);
-                }}
-                onKeyDown={onSearchKeyDown}
-                spellCheck={false}
-              />
-              {filtered.length === 0 ? (
-                <div className="lv-pop-empty">No fields match “{query}”.</div>
-              ) : (
-                <div className="lv-group-search-list" ref={listRef}>
-                  {filtered.map((d, idx) => {
-                    const on = active.includes(d.key);
-                    const isHi = idx === effectiveIdx;
-                    return (
-                      <div
-                        key={d.key}
-                        className={
-                          'lv-group-search-item' +
-                          (isHi ? ' is-active' : '') +
-                          (on ? ' is-on' : '')
-                        }
-                        onMouseEnter={() => setHighlightedIdx(idx)}
-                        onClick={() => toggle(d.key)}
-                      >
-                        <span className="lv-group-search-key">{d.label || d.key}</span>
-                        <span className="lv-group-search-meta">
-                          {d.origin === 'dynamic' && d.presenceRate !== undefined
-                            ? `${Math.round(d.presenceRate * 100)}%`
-                            : d.type}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+          <div className="lv-pop-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'order'}
+              className={`lv-pop-tab${tab === 'order' ? ' is-active' : ''}`}
+              onClick={() => setTab('order')}
+            >
+              Order
+              {active.length > 0 && (
+                <span className="lv-pop-tab-badge">{active.length}</span>
               )}
-            </div>
-          )}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'fields'}
+              className={`lv-pop-tab${tab === 'fields' ? ' is-active' : ''}`}
+              onClick={() => setTab('fields')}
+            >
+              Fields
+            </button>
+          </div>
 
-          {active.length > 0 && (
-            <div className="lv-group-order">
-              {active.map((k, i) => (
-                <div key={k} className="lv-group-chip">
-                  <span className="lv-group-chip-num">{i + 1}</span>
-                  <span className="lv-group-chip-label">{labelFor(k, descriptors)}</span>
-                  <button
-                    type="button"
-                    className="lv-group-chip-btn"
-                    disabled={i === 0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      move(k, -1);
-                    }}
-                    title="Move up"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="lv-group-chip-btn"
-                    disabled={i === active.length - 1}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      move(k, 1);
-                    }}
-                    title="Move down"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    className="lv-group-chip-btn lv-group-chip-x"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggle(k);
-                    }}
-                    title="Remove"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          {tab === 'order' &&
+            (active.length === 0 ? (
+              <div className="lv-pop-empty">
+                No groupings yet — pick fields in the <b>Fields</b> tab.
+              </div>
+            ) : (
+              <div className="lv-group-order">
+                {active.map((k, i) => (
+                  <div key={k} className="lv-group-chip">
+                    <span className="lv-group-chip-num">{i + 1}</span>
+                    <span className="lv-group-chip-label">{labelFor(k, descriptors)}</span>
+                    <button
+                      type="button"
+                      className="lv-group-chip-btn"
+                      disabled={i === 0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        move(k, -1);
+                      }}
+                      title="Move up"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="lv-group-chip-btn"
+                      disabled={i === active.length - 1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        move(k, 1);
+                      }}
+                      title="Move down"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="lv-group-chip-btn lv-group-chip-x"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggle(k);
+                      }}
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ))}
+
+          {tab === 'fields' &&
+            (sorted.length === 0 ? (
+              <div className="lv-pop-empty">No fields yet — pick a source.</div>
+            ) : (
+              <div className="lv-group-search-dropdown">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="lv-field-input lv-group-search-input"
+                  placeholder="Search field…"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setHighlightedIdx(0);
+                  }}
+                  onKeyDown={onSearchKeyDown}
+                  spellCheck={false}
+                />
+                {filtered.length === 0 ? (
+                  <div className="lv-pop-empty">No fields match “{query}”.</div>
+                ) : (
+                  <div className="lv-group-search-list" ref={listRef}>
+                    {filtered.map((d, idx) => {
+                      const on = active.includes(d.key);
+                      const isHi = idx === effectiveIdx;
+                      return (
+                        <div
+                          key={d.key}
+                          className={
+                            'lv-group-search-item' +
+                            (isHi ? ' is-active' : '') +
+                            (on ? ' is-on' : '')
+                          }
+                          onMouseEnter={() => setHighlightedIdx(idx)}
+                          onClick={() => toggle(d.key)}
+                        >
+                          <span className="lv-group-search-key">{d.label || d.key}</span>
+                          <span className="lv-group-search-meta">
+                            {d.origin === 'dynamic' && d.presenceRate !== undefined
+                              ? `${Math.round(d.presenceRate * 100)}%`
+                              : d.type}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
         </div>
       )}
     </div>
