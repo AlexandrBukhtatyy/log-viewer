@@ -6,6 +6,7 @@ import type {
   LogSourceKind,
   SourceId,
 } from '../types/index.ts';
+import type { FieldDescriptor } from '../filter/field-descriptor.ts';
 import type { GroupBucket, HistogramResponse } from './coordinator.contract.ts';
 
 /**
@@ -56,6 +57,18 @@ export interface IndexerApi {
     field: string,
     limit?: number,
   ) => Promise<ReadonlyArray<GroupBucket>>;
+
+  /**
+   * Per-source field schema cache (ADR-0017). Returns one descriptor per
+   * dynamic key seen across `sourceIds`, with occurrences/total_seen
+   * summed and top-K values merged. Built-in `@`-attributes are NOT
+   * included — the coordinator appends them from `BUILT_IN_FIELD_DESCRIPTORS`.
+   *
+   * Empty `sourceIds` → empty array (caller still sees built-ins).
+   */
+  fieldMeta: (
+    sourceIds: ReadonlyArray<SourceId>,
+  ) => Promise<ReadonlyArray<FieldDescriptor>>;
   histogram: (
     filter: LogFilter,
     bucketCount: number,

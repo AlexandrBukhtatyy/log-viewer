@@ -7,6 +7,7 @@ import type {
   SourceRecord,
   SourceStatus,
 } from '../types/index.ts';
+import type { FieldDescriptor } from '../filter/field-descriptor.ts';
 
 export interface RangeCounts {
   readonly total: number;
@@ -94,6 +95,17 @@ export interface CoordinatorApi {
     filter: LogFilter,
     bucketCount: number,
   ) => Promise<HistogramResponse>;
+
+  /**
+   * Discover which fields are available for the given filter (ADR-0017).
+   * Returns built-in `@`-attributes (constant) + dynamic JSON keys
+   * aggregated from `field_meta` for the source set named in
+   * `filter.sources` (or all known sources when that is null).
+   *
+   * Used by the column / group-by / filter pickers to enumerate keys
+   * and surface usage stats (occurrences, presenceRate, top values).
+   */
+  getFieldSchema: (filter: LogFilter) => Promise<ReadonlyArray<FieldDescriptor>>;
 
   listSources: () => Promise<ReadonlyArray<SourceRecord>>;
   subscribeStatus: (

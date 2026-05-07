@@ -20,6 +20,7 @@ import type {
   SourceStatus,
 } from '../../core/types/index.ts';
 import { EMPTY_FILTER } from '../../core/types/index.ts';
+import { BUILT_IN_FIELD_DESCRIPTORS } from '../../core/filter/field-descriptor.ts';
 import { newSourceId } from '../../core/util/ids.ts';
 import type { HandleStore } from './handles/handle-store.ts';
 import { ingestSource } from './ingest/ingest-orchestrator.ts';
@@ -484,6 +485,18 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     getHistogram: async (filter, bucketCount) => {
       await deps.getIndexer().opening;
       return deps.getIndexer().proxy.histogram(filter, bucketCount);
+    },
+
+    getFieldSchema: async (filter) => {
+      await deps.getIndexer().opening;
+      // `filter.sources === null` → caller wants every known source.
+      const sourceIds = filter.sources && filter.sources.length > 0
+        ? filter.sources
+        : [...sources.keys()];
+      const dynamic = await deps.getIndexer().proxy.fieldMeta(sourceIds);
+      // Built-ins are appended last — UI can re-sort by occurrences,
+      // presenceRate, label, etc. without losing the @-set.
+      return [...dynamic, ...BUILT_IN_FIELD_DESCRIPTORS];
     },
 
     listSources: async () => {

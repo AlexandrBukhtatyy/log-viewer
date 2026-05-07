@@ -6,9 +6,11 @@ import type {
   SourceId,
 } from '../../core/types/index.ts';
 import {
+  aggregateFieldDescriptors,
   aggregateFieldMeta,
   FIELD_META_TOP_K,
   FIELD_META_VALUE_MAX_CHARS,
+  type FieldMetaRow,
   inferFieldType,
   mergeFieldType,
   mergeTopValues,
@@ -177,5 +179,133 @@ describe('aggregateFieldMeta', () => {
     expect(tv?.size).toBe(0);
     // occurrences still counted — only top-list excludes the long value.
     expect(out.get('s1' as SourceId)?.get('trace_id')?.occurrences).toBe(1);
+  });
+});
+
+describe('aggregateFieldDescriptors', () => {
+  const row = (overrides: Partial<FieldMetaRow>): FieldMetaRow => ({
+    key: 'k',
+    type: 'string',
+    occurrences: 0,
+    total_seen: 0,
+    top_values_json: null,
+    ...overrides,
+  });
+
+  it('empty input → empty output', () => {
+    expect(aggregateFieldDescriptors([])).toEqual([]);
+  });
+
+  it('single row → one descriptor with presenceRate and topValues', () => {
+    const out = aggregateFieldDescriptors([
+      row({
+        key: 'service',
+        type: 'string',
+        occurrences: 4,
+        total_seen: 10,
+        top_values_json: JSON.stringify([
+          { value: 'api', count: 3 },
+          { value: 'billing', count: 1 },
+        ]),
+      }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toEqual({
+      key: 'service',
+      label: 'service',
+      type: 'string',
+      origin: 'dynamic',
+      occurrences: 4,
+      presenceRate: 0.4,
+      topValues: [
+        { value: 'api', count: 3 },
+        { value: 'billing', count: 1 },
+      ],
+    });
+  });
+
+  it('sums occurrences and merges top values across sources for the same key', () => {
+    const out = aggregateFieldDescriptors([
+      row({
+        key: 'service',
+        type: 'string',
+        occurrences: 3,
+        total_seen: 10,
+        top_values_json: JSON.stringify([{ value: 'api', count: 3 }]),
+      }),
+      row({
+        key: 'service',
+        type: 'string',
+        occurrences: 2,
+        total_seen: 5,
+        top_values_json: JSON.stringify([
+          { value: 'api', count: 1 },
+          { value: 'billing', count: 1 },
+        ]),
+      }),
+    ]);
+    expect(out[0]?.occurrences).toBe(5);
+    expect(out[0]?.presenceRate).toBe(5 / 15);
+    expect(out[0]?.topValues).toEqual([
+      { value: 'api', count: 4 },
+      { value: 'billing', count: 1 },
+    ]);
+  });
+
+  it('collapses to mixed when multiple concrete types appear', () => {
+    const out = aggregateFieldDescriptors([
+      row({ key: 'status', type: 'string', occurrences: 1, total_seen: 1 }),
+      row({ key: 'status', type: 'number', occurrences: 1, total_seen: 1 }),
+    ]);
+    expect(out[0]?.type).toBe('mixed');
+  });
+
+  it('preserves mixed once seen, regardless of later concrete types', () => {
+    const out = aggregateFieldDescriptors([
+      row({ key: 'x', type: 'mixed', occurrences: 1, total_seen: 1 }),
+      row({ key: 'x', type: 'string', occurrences: 1, total_seen: 1 }),
+    ]);
+    expect(out[0]?.type).toBe('mixed');
+  });
+
+  it('sorts descriptors by occurrences DESC then key A→Z', () => {
+    const out = aggregateFieldDescriptors([
+      row({ key: 'b', occurrences: 5, total_seen: 5 }),
+      row({ key: 'a', occurrences: 5, total_seen: 5 }),
+      row({ key: 'c', occurrences: 9, total_seen: 9 }),
+    ]);
+    expect(out.map((d) => d.key)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('skips empty key and tolerates corrupt top_values_json', () => {
+    const out = aggregateFieldDescriptors([
+      row({ key: '', occurrences: 1, total_seen: 1 }),
+      row({ key: 'k', occurrences: 1, total_seen: 1, top_values_json: 'not json' }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.topValues).toBeUndefined();
+  });
+
+  it('omits presenceRate when total_seen is zero', () => {
+    const out = aggregateFieldDescriptors([
+      row({ key: 'k', occurrences: 0, total_seen: 0 }),
+    ]);
+    expect(out[0]?.presenceRate).toBeUndefined();
+  });
+
+  it('caps merged topValues at FIELD_META_TOP_K', () => {
+    const items = Array.from({ length: FIELD_META_TOP_K + 5 }, (_, i) => ({
+      value: `v${i}`,
+      count: FIELD_META_TOP_K + 5 - i,
+    }));
+    const out = aggregateFieldDescriptors([
+      row({
+        key: 'k',
+        occurrences: 1,
+        total_seen: 1,
+        top_values_json: JSON.stringify(items),
+      }),
+    ]);
+    expect(out[0]?.topValues).toHaveLength(FIELD_META_TOP_K);
   });
 });

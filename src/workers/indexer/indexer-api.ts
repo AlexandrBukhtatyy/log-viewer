@@ -13,6 +13,7 @@ import type {
   OpenReport,
   SizeReport,
 } from '../../core/rpc/indexer.contract.ts';
+import type { FieldDescriptor } from '../../core/filter/field-descriptor.ts';
 import type {
   EntryId,
   LogEntry,
@@ -24,7 +25,9 @@ import type {
 import { collectLevelCounts, groupFieldExpr, levelBreakdownSql } from './aggregate.ts';
 import { openDb } from './db/open-db.ts';
 import {
+  aggregateFieldDescriptors,
   aggregateFieldMeta,
+  type FieldMetaRow,
   type FieldType,
   mergeFieldType,
   mergeTopValues,
@@ -576,6 +579,28 @@ export const indexerApi: IndexerApi = {
       });
     }
     return { buckets: out, range: { from, to } };
+  },
+
+  fieldMeta: async (sourceIds): Promise<ReadonlyArray<FieldDescriptor>> => {
+    if (sourceIds.length === 0) return [];
+    const { db } = requireState();
+    const placeholders = sourceIds.map(() => '?').join(', ');
+    const rows = runRows(
+      db,
+      `SELECT key, type, occurrences, total_seen, top_values_json
+         FROM field_meta
+        WHERE source_id IN (${placeholders})`,
+      sourceIds as ReadonlyArray<SqlValue>,
+    );
+    return aggregateFieldDescriptors(
+      rows.map((r): FieldMetaRow => ({
+        key: String(r.key ?? ''),
+        type: String(r.type ?? ''),
+        occurrences: r.occurrences as number | null,
+        total_seen: r.total_seen as number | null,
+        top_values_json: r.top_values_json as string | null,
+      })),
+    );
   },
 
   exportFiltered: async (filter, format) => {
