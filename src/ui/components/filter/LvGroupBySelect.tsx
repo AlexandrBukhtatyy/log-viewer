@@ -1,29 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { LvGroupBy } from '../../contracts/lv-types.ts';
-
-interface OptionDef {
-  v: LvGroupBy;
-  label: string;
-  hint: string;
-}
-
-const OPTS: OptionDef[] = [
-  { v: 'trace_id', label: 'Trace', hint: 'by trace_id' },
-  { v: 'req_id', label: 'Request', hint: 'by req_id' },
-  { v: 'user_id', label: 'User', hint: 'by user_id' },
-  { v: 'service', label: 'Service', hint: 'by service' },
-  { v: 'file', label: 'File', hint: 'by source file' },
-];
-
-const labelFor = (v: LvGroupBy | string): string =>
-  OPTS.find((o) => o.v === v)?.label ?? v;
 
 export interface LvGroupBySelectProps {
   readonly value: ReadonlyArray<LvGroupBy>;
+  readonly descriptors: ReadonlyArray<FieldDescriptor>;
   onChange: (value: LvGroupBy[]) => void;
 }
 
-export const LvGroupBySelect = ({ value, onChange }: LvGroupBySelectProps) => {
+const labelFor = (
+  key: LvGroupBy,
+  descriptors: ReadonlyArray<FieldDescriptor>,
+): string => {
+  const d = descriptors.find((x) => x.key === key);
+  return d?.label || key;
+};
+
+/**
+ * Group-by picker (ADR-0017 Phase 6) — same shape as before, but
+ * options now come from `coordinator.getFieldSchema` instead of a
+ * hard-coded list. Order: dynamic descriptors by `presenceRate` DESC,
+ * then `occurrences` DESC; built-ins follow in catalog order.
+ */
+export const LvGroupBySelect = ({
+  value,
+  descriptors,
+  onChange,
+}: LvGroupBySelectProps) => {
   const [open, setOpen] = useState(false);
   const active = Array.isArray(value) ? value : [];
 
@@ -39,14 +42,29 @@ export const LvGroupBySelect = ({ value, onChange }: LvGroupBySelectProps) => {
     };
   }, [open]);
 
-  const toggle = (v: LvGroupBy) => {
-    const idx = active.indexOf(v);
-    if (idx >= 0) onChange(active.filter((x) => x !== v));
-    else onChange([...active, v]);
+  const options = useMemo(() => {
+    const dyn = descriptors.filter((d) => d.origin === 'dynamic').slice();
+    dyn.sort((a, b) => {
+      const aRate = a.presenceRate ?? 0;
+      const bRate = b.presenceRate ?? 0;
+      if (aRate !== bRate) return bRate - aRate;
+      const aOcc = a.occurrences ?? 0;
+      const bOcc = b.occurrences ?? 0;
+      if (aOcc !== bOcc) return bOcc - aOcc;
+      return a.key.localeCompare(b.key);
+    });
+    const builtin = descriptors.filter((d) => d.origin === 'builtin');
+    return [...dyn, ...builtin];
+  }, [descriptors]);
+
+  const toggle = (k: LvGroupBy) => {
+    const idx = active.indexOf(k);
+    if (idx >= 0) onChange(active.filter((x) => x !== k));
+    else onChange([...active, k]);
   };
 
-  const move = (v: LvGroupBy, dir: -1 | 1) => {
-    const idx = active.indexOf(v);
+  const move = (k: LvGroupBy, dir: -1 | 1) => {
+    const idx = active.indexOf(k);
     if (idx < 0) return;
     const target = idx + dir;
     if (target < 0 || target >= active.length) return;
@@ -59,8 +77,8 @@ export const LvGroupBySelect = ({ value, onChange }: LvGroupBySelectProps) => {
     active.length === 0
       ? 'No grouping'
       : active.length === 1
-        ? labelFor(active[0]!)
-        : `${labelFor(active[0]!)} › +${active.length - 1}`;
+        ? labelFor(active[0]!, descriptors)
+        : `${labelFor(active[0]!, descriptors)} › +${active.length - 1}`;
 
   return (
     <div className="lv-group-sel">
@@ -102,17 +120,17 @@ export const LvGroupBySelect = ({ value, onChange }: LvGroupBySelectProps) => {
           </div>
           {active.length > 0 && (
             <div className="lv-group-order">
-              {active.map((v, i) => (
-                <div key={v} className="lv-group-chip">
+              {active.map((k, i) => (
+                <div key={k} className="lv-group-chip">
                   <span className="lv-group-chip-num">{i + 1}</span>
-                  <span className="lv-group-chip-label">{labelFor(v)}</span>
+                  <span className="lv-group-chip-label">{labelFor(k, descriptors)}</span>
                   <button
                     type="button"
                     className="lv-group-chip-btn"
                     disabled={i === 0}
                     onClick={(e) => {
                       e.stopPropagation();
-                      move(v, -1);
+                      move(k, -1);
                     }}
                     title="Move up"
                   >
@@ -124,7 +142,7 @@ export const LvGroupBySelect = ({ value, onChange }: LvGroupBySelectProps) => {
                     disabled={i === active.length - 1}
                     onClick={(e) => {
                       e.stopPropagation();
-                      move(v, 1);
+                      move(k, 1);
                     }}
                     title="Move down"
                   >
@@ -135,7 +153,7 @@ export const LvGroupBySelect = ({ value, onChange }: LvGroupBySelectProps) => {
                     className="lv-group-chip-btn lv-group-chip-x"
                     onClick={(e) => {
                       e.stopPropagation();
-                      toggle(v);
+                      toggle(k);
                     }}
                     title="Remove"
                   >
@@ -146,36 +164,44 @@ export const LvGroupBySelect = ({ value, onChange }: LvGroupBySelectProps) => {
             </div>
           )}
           <div className="lv-pop-sub">Add level</div>
-          {OPTS.map((o) => {
-            const on = active.includes(o.v);
-            return (
-              <button
-                key={o.v}
-                type="button"
-                className={`lv-pop-item${on ? ' is-on' : ''}`}
-                onClick={() => toggle(o.v)}
-              >
-                <span className="lv-pop-name">
-                  <span className={`lv-chk${on ? ' is-on' : ''}`}>
-                    {on && (
-                      <svg viewBox="0 0 10 10" width="8" height="8">
-                        <path
-                          d="M1.5 5 L4 7.5 L8.5 2.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
+          {options.length === 0 ? (
+            <div className="lv-pop-empty">No fields yet — pick a source.</div>
+          ) : (
+            options.map((d) => {
+              const on = active.includes(d.key);
+              return (
+                <button
+                  key={d.key}
+                  type="button"
+                  className={`lv-pop-item${on ? ' is-on' : ''}`}
+                  onClick={() => toggle(d.key)}
+                >
+                  <span className="lv-pop-name">
+                    <span className={`lv-chk${on ? ' is-on' : ''}`}>
+                      {on && (
+                        <svg viewBox="0 0 10 10" width="8" height="8">
+                          <path
+                            d="M1.5 5 L4 7.5 L8.5 2.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </span>
+                    {d.label || d.key}
                   </span>
-                  {o.label}
-                </span>
-                <span className="lv-pop-q">{o.hint}</span>
-              </button>
-            );
-          })}
+                  <span className="lv-pop-q">
+                    {d.origin === 'dynamic' && d.presenceRate !== undefined
+                      ? `${Math.round(d.presenceRate * 100)}%`
+                      : d.type}
+                  </span>
+                </button>
+              );
+            })
+          )}
         </div>
       )}
     </div>

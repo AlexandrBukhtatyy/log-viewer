@@ -4,6 +4,7 @@ import type {
   LogLevel,
   QueryMode,
 } from '../../../core/types/index.ts';
+import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { LvGroupBy, LvSavedSearch } from '../../contracts/lv-types.ts';
 import { LvLevelPill } from './LvLevelPill.tsx';
 import { LvGroupBySelect } from './LvGroupBySelect.tsx';
@@ -38,6 +39,7 @@ export interface LvFilterBarProps {
   onToggleTimeline: () => void;
   readonly groupBy: ReadonlyArray<LvGroupBy>;
   onGroupByChange: (next: LvGroupBy[]) => void;
+  readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
 }
 
 export const LvFilterBar = ({
@@ -54,6 +56,7 @@ export const LvFilterBar = ({
   onToggleTimeline,
   groupBy,
   onGroupByChange,
+  fieldDescriptors,
 }: LvFilterBarProps) => {
   const [savedOpen, setSavedOpen] = useState(false);
 
@@ -221,7 +224,11 @@ export const LvFilterBar = ({
           <span>Timeline</span>
         </button>
 
-        <LvGroupBySelect value={groupBy} onChange={onGroupByChange} />
+        <LvGroupBySelect
+          value={groupBy}
+          descriptors={fieldDescriptors}
+          onChange={onGroupByChange}
+        />
 
         <div className="lv-split">
           <button

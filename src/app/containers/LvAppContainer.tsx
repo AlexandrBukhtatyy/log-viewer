@@ -35,25 +35,18 @@ const HISTOGRAM_BUCKETS = 80;
 const GROUP_LIMIT = 200;
 
 /**
- * Map UI group-by token to the SQL field name used by `coordinator.getGroupCounts`.
- * `kind` is UI-only (file-meta classification) — returns null so the hook
- * stays inactive and LvViewer falls back to the entry stream.
+ * Pick the active group field for `coordinator.getGroupCounts`.
+ *
+ * After ADR-0017 Phase 6, `LvGroupBy` is a free-form `FieldKey`,
+ * so the value flows straight through — `groupFieldExpr` decides
+ * whether `level` becomes `entry.level` or `JSON_EXTRACT(...)`.
+ * The legacy `'kind'` token (UI-only, never had a SQL mapping) is
+ * still recognised and disables the hook.
  */
 const lvGroupByToCoreField = (g: LvGroupBy | undefined): string | null => {
   if (!g) return null;
-  switch (g) {
-    case 'level':
-      return 'level';
-    case 'file':
-      return 'source_id';
-    case 'service':
-    case 'trace_id':
-    case 'req_id':
-    case 'user_id':
-      return g;
-    case 'kind':
-      return null;
-  }
+  if (g === 'kind') return null;
+  return g;
 };
 import {
   buildCatalogTree,

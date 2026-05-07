@@ -310,6 +310,7 @@ export const LvViewer = ({
             onToggleTimeline={onToggleTimeline}
             groupBy={groupBy}
             onGroupByChange={setGroupBy}
+            fieldDescriptors={fieldDescriptors}
           />
 
           {timelineOn && (

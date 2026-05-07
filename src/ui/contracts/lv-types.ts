@@ -106,14 +106,17 @@ export type LvCatalogRoot =
 
 export type LvRail = 'files' | 'search' | 'bookmarks' | 'alerts' | 'ai';
 
-export type LvGroupBy =
-  | 'trace_id'
-  | 'req_id'
-  | 'user_id'
-  | 'service'
-  | 'level'
-  | 'kind'
-  | 'file';
+/**
+ * Group-by key (ADR-0017). Free-form `FieldKey` — built-in `@`-attribute
+ * (`@level`, `@source.kind`, …) or a dynamic JSON key (`trace_id`,
+ * `service`). The picker enumerates available keys from
+ * `coordinator.getFieldSchema`; the SQL translator (`fieldKeyToSql`)
+ * decides what column or `JSON_EXTRACT` to emit.
+ *
+ * Pre-Phase-6 enum values (`'trace_id'`/`'service'`/…) keep working
+ * without translation — they're already valid `FieldKey`s.
+ */
+export type LvGroupBy = string;
 
 /**
  * One user-added column in the table (ADR-0017). The fixed
