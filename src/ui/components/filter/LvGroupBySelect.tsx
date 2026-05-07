@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { LvGroupBy } from '../../contracts/lv-types.ts';
 
@@ -16,11 +16,28 @@ const labelFor = (
   return d?.label || key;
 };
 
+const sortDescriptors = (
+  descriptors: ReadonlyArray<FieldDescriptor>,
+): ReadonlyArray<FieldDescriptor> => {
+  const dyn = descriptors.filter((d) => d.origin === 'dynamic').slice();
+  dyn.sort((a, b) => {
+    const aRate = a.presenceRate ?? 0;
+    const bRate = b.presenceRate ?? 0;
+    if (aRate !== bRate) return bRate - aRate;
+    const aOcc = a.occurrences ?? 0;
+    const bOcc = b.occurrences ?? 0;
+    if (aOcc !== bOcc) return bOcc - aOcc;
+    return a.key.localeCompare(b.key);
+  });
+  const builtin = descriptors.filter((d) => d.origin === 'builtin');
+  return [...dyn, ...builtin];
+};
+
 /**
- * Group-by picker (ADR-0017 Phase 6) — same shape as before, but
- * options now come from `coordinator.getFieldSchema` instead of a
- * hard-coded list. Order: dynamic descriptors by `presenceRate` DESC,
- * then `occurrences` DESC; built-ins follow in catalog order.
+ * Group-by picker — search-as-you-type combobox over the descriptors
+ * from `coordinator.getFieldSchema` (ADR-0017). One key at a time:
+ * type to filter, ↑/↓ to navigate, Enter or [+ Add] toggles. Active
+ * groupings live below the search row as ordered chips.
  */
 export const LvGroupBySelect = ({
   value,
@@ -28,12 +45,20 @@ export const LvGroupBySelect = ({
   onChange,
 }: LvGroupBySelectProps) => {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [highlightedIdx, setHighlightedIdx] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const active = Array.isArray(value) ? value : [];
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest?.('.lv-group-sel')) setOpen(false);
+      if (!(e.target as HTMLElement).closest?.('.lv-group-sel')) {
+        setOpen(false);
+        setQuery('');
+        setHighlightedIdx(0);
+      }
     };
     const t = setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
     return () => {
@@ -42,20 +67,38 @@ export const LvGroupBySelect = ({
     };
   }, [open]);
 
-  const options = useMemo(() => {
-    const dyn = descriptors.filter((d) => d.origin === 'dynamic').slice();
-    dyn.sort((a, b) => {
-      const aRate = a.presenceRate ?? 0;
-      const bRate = b.presenceRate ?? 0;
-      if (aRate !== bRate) return bRate - aRate;
-      const aOcc = a.occurrences ?? 0;
-      const bOcc = b.occurrences ?? 0;
-      if (aOcc !== bOcc) return bOcc - aOcc;
-      return a.key.localeCompare(b.key);
+  // Auto-focus the search input when popover opens.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  const closePopover = () => {
+    setOpen(false);
+    setQuery('');
+    setHighlightedIdx(0);
+  };
+
+  const sorted = useMemo(() => sortDescriptors(descriptors), [descriptors]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q === '') return sorted;
+    return sorted.filter((d) => {
+      return (
+        d.key.toLowerCase().includes(q) ||
+        (d.label ?? '').toLowerCase().includes(q)
+      );
     });
-    const builtin = descriptors.filter((d) => d.origin === 'builtin');
-    return [...dyn, ...builtin];
-  }, [descriptors]);
+  }, [sorted, query]);
+
+  // Derived clamp — never trust raw `highlightedIdx` against the
+  // currently filtered list (changes synchronously when query updates).
+  const effectiveIdx =
+    filtered.length === 0
+      ? 0
+      : Math.min(Math.max(0, highlightedIdx), filtered.length - 1);
 
   const toggle = (k: LvGroupBy) => {
     const idx = active.indexOf(k);
@@ -73,12 +116,41 @@ export const LvGroupBySelect = ({
     onChange(next);
   };
 
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIdx((i) => Math.min(filtered.length - 1, i + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIdx((i) => Math.max(0, i - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const target = filtered[effectiveIdx];
+      if (target) toggle(target.key);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      if (query !== '') setQuery('');
+      else closePopover();
+    }
+  };
+
+  // Keep highlighted item visible inside the scrollable list.
+  useEffect(() => {
+    if (!open) return;
+    const el = listRef.current?.querySelector<HTMLElement>(
+      '.lv-group-search-item.is-active',
+    );
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [effectiveIdx, open]);
+
   const label =
     active.length === 0
       ? 'No grouping'
       : active.length === 1
         ? labelFor(active[0]!, descriptors)
         : `${labelFor(active[0]!, descriptors)} › +${active.length - 1}`;
+
+  const addDisabled = filtered.length === 0;
 
   return (
     <div className="lv-group-sel">
@@ -109,7 +181,7 @@ export const LvGroupBySelect = ({
         </svg>
       </button>
       {open && (
-        <div className="lv-pop lv-group-pop" style={{ minWidth: 260 }}>
+        <div className="lv-pop lv-group-pop" style={{ minWidth: 280 }}>
           <div className="lv-pop-hd">
             <span>Group by</span>
             {active.length > 0 && (
@@ -118,6 +190,67 @@ export const LvGroupBySelect = ({
               </button>
             )}
           </div>
+
+          <div className="lv-group-search-row">
+            <input
+              ref={inputRef}
+              type="text"
+              className="lv-field-input"
+              placeholder="Search field…"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setHighlightedIdx(0);
+              }}
+              onKeyDown={onSearchKeyDown}
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              className="lv-btn lv-btn-primary"
+              onClick={() => {
+                const target = filtered[effectiveIdx];
+                if (target) toggle(target.key);
+              }}
+              disabled={addDisabled}
+              title="Add highlighted field"
+            >
+              + Add
+            </button>
+          </div>
+
+          {sorted.length === 0 ? (
+            <div className="lv-pop-empty">No fields yet — pick a source.</div>
+          ) : filtered.length === 0 ? (
+            <div className="lv-pop-empty">No fields match “{query}”.</div>
+          ) : (
+            <div className="lv-group-search-list" ref={listRef}>
+              {filtered.map((d, idx) => {
+                const on = active.includes(d.key);
+                const isHi = idx === effectiveIdx;
+                return (
+                  <div
+                    key={d.key}
+                    className={
+                      'lv-group-search-item' +
+                      (isHi ? ' is-active' : '') +
+                      (on ? ' is-on' : '')
+                    }
+                    onMouseEnter={() => setHighlightedIdx(idx)}
+                    onClick={() => toggle(d.key)}
+                  >
+                    <span className="lv-group-search-key">{d.label || d.key}</span>
+                    <span className="lv-group-search-meta">
+                      {d.origin === 'dynamic' && d.presenceRate !== undefined
+                        ? `${Math.round(d.presenceRate * 100)}%`
+                        : d.type}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {active.length > 0 && (
             <div className="lv-group-order">
               {active.map((k, i) => (
@@ -162,45 +295,6 @@ export const LvGroupBySelect = ({
                 </div>
               ))}
             </div>
-          )}
-          <div className="lv-pop-sub">Add level</div>
-          {options.length === 0 ? (
-            <div className="lv-pop-empty">No fields yet — pick a source.</div>
-          ) : (
-            options.map((d) => {
-              const on = active.includes(d.key);
-              return (
-                <button
-                  key={d.key}
-                  type="button"
-                  className={`lv-pop-item${on ? ' is-on' : ''}`}
-                  onClick={() => toggle(d.key)}
-                >
-                  <span className="lv-pop-name">
-                    <span className={`lv-chk${on ? ' is-on' : ''}`}>
-                      {on && (
-                        <svg viewBox="0 0 10 10" width="8" height="8">
-                          <path
-                            d="M1.5 5 L4 7.5 L8.5 2.5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      )}
-                    </span>
-                    {d.label || d.key}
-                  </span>
-                  <span className="lv-pop-q">
-                    {d.origin === 'dynamic' && d.presenceRate !== undefined
-                      ? `${Math.round(d.presenceRate * 100)}%`
-                      : d.type}
-                  </span>
-                </button>
-              );
-            })
           )}
         </div>
       )}
