@@ -1,134 +1,133 @@
-# Sequence diagrams: log pipeline (ingest + read)
+# Dynamic field schema + `@`-namespace — implementation plan
+
+Companion to [ADR-0017](../adr/0017-dynamic-field-schema.md). The ADR fixes the *what* and *why*; this document fixes the *order* and *touch points* so the work can be picked up phase-by-phase without re-deriving them.
 
 ## Context
 
-После миграции на offset-pointer индекс ([ADR-0016](../adr/0016-offset-pointer-index-lazy-body.md)) рантайм-пайплайн стал нелинейным: парсинг идёт в одном worker-pool'е, хранение pointer'ов — в indexer-worker'е, а тело строк подгружается **лениво** в coordinator-worker'е через blob-reader. ADR показывает компонентную картину (flowchart), но не показывает, **в каком порядке** что вызывается и какие сообщения летают через границы worker'ов.
+После [ADR-0016](../adr/0016-offset-pointer-index-lazy-body.md) `entry.fields_json` уже содержит парсенные ключи произвольной формы (pino: `traceId`/`reqId`/…; nginx: `remote_addr`/`status`/…; syslog: `host`/…). UI этим **не пользуется**: колонки таблицы зашиты в CSS-grid, group-by enum-string из 7 значений, filter-bar отдельные кнопки для `levels`/`services`/`filePaths`.
 
-Разработчику, читающему код впервые, сейчас приходится вручную трассировать flow через 8+ файлов. Цель этой работы — задокументировать два главных runtime-сценария sequence-диаграммами, чтобы можно было быстро ответить «что происходит когда…».
+Цель — сделать UI генерируемым из реальных данных:
+- какие поля встречаются в выбранных источниках → picker'ы (column / group-by / filter on field).
+- built-in атрибуты (timestamp/level/file/source) и dynamic-поля живут в одном namespace через `@`-prefix.
+- единый SQL-translator (`fieldKeyToSql`) — никаких разрозненных «одно поле — один shorthand».
 
-Целевые два сценария:
-1. **Ingest** — от клика «+ Add source» до записи pointer-row в SQLite и обновления `entry_count` в сайдбаре.
-2. **Read** — от scroll-события в virtual list до отображения строки `127.0.0.1 - GET / 200` после lazy-resolve.
+## Phases
 
-Дополнительно мини-диаграмма для **Filter change**, потому что она триггерит тот же read-pipeline и часто непонятно, почему UI re-fetch'ит данные «сам собой».
+### Phase 1 — Schema v4: `field_meta` table
 
-## Recommended approach
+**Modify:**
+- [src/workers/indexer/db/schema.sql](../../src/workers/indexer/db/schema.sql) или новый [schema-v4-field-meta.sql](../../src/workers/indexer/db/) — миграция.
+- [src/workers/indexer/db/migrations.ts](../../src/workers/indexer/db/migrations.ts) — register v4.
 
-Создаём один документ `docs/architecture/log-pipeline-sequence.md`. Не интегрируем в ADR-0016: ADR — про **решение**, sequence — про **исполнение**. Если поведение поменяется, ADR меняется редко, а sequence-диаграмма — синхронно с кодом.
-
-В файл идут три Mermaid `sequenceDiagram`-блока, каждый с короткой пояснительной запиской под ним. Записка ссылается на конкретные файлы и функции, чтобы можно было прыгнуть в код одним кликом.
-
-### Структура файла
-
-```
-# Log pipeline — sequence diagrams
-
-## 1. Ingest: from "Add source" click to indexed pointers
-   <Mermaid sequenceDiagram>
-   ### Step-by-step (with code links)
-
-## 2. Read: from scroll event to displayed lines
-   <Mermaid sequenceDiagram>
-   ### Step-by-step
-
-## 3. Filter change (mini)
-   <Mermaid sequenceDiagram>
-   ### Step-by-step
-
-## How this matches the code (verification)
-   - Bullet list mapping arrows → files:line
+```sql
+CREATE TABLE field_meta (
+  source_id    TEXT NOT NULL REFERENCES source(id) ON DELETE CASCADE,
+  key          TEXT NOT NULL,
+  type         TEXT NOT NULL,                    -- 'string'|'number'|'boolean'|'mixed'
+  occurrences  INTEGER NOT NULL DEFAULT 0,
+  total_seen   INTEGER NOT NULL DEFAULT 0,
+  last_seen_at INTEGER,
+  top_values_json TEXT,                          -- top-K {value, count}
+  PRIMARY KEY (source_id, key)
+);
+CREATE INDEX idx_field_meta_source ON field_meta(source_id);
 ```
 
-### Участники (lifelines), которые повторно используются между диаграммами
+Backfill стратегия — **none**. v4 миграция просто создаёт пустую таблицу. Существующие entries (от v3) не имеют counter'ов в meta — picker для них покажет «no fields yet», пока не пройдёт хотя бы один новый ingest. Re-ingest не форсируем; по практике пользователь либо добавит новый source, либо триггернёт ручной refresh когда захочет видеть поля.
 
-- **User** — кнопка/клавиатура.
-- **UI (React)** — `LvAppContainer`, `LvSidebar`, `LvViewer`, `useLogWindow`, hooks.
-- **store** — Zustand store в main thread (`createLogClient` в [log-client.ts](../../src/worker-client/log-client.ts)).
-- **Coord** — coordinator-worker ([coordinator.ts](../../src/workers/coordinator/coordinator.ts)).
-- **Parsers** — parser-worker pool через `ParserPool.withWorker` ([parser-api.ts](../../src/workers/parser/parser-api.ts)).
-- **Indexer** — indexer-worker ([indexer-api.ts](../../src/workers/indexer/indexer-api.ts)).
-- **Storage** — FS handle / OPFS spool, обёрнуты `SourceBlobReader` ([source-blob-reader.ts](../../src/workers/coordinator/storage/source-blob-reader.ts)).
+### Phase 2 — Indexer: UPSERT `field_meta` в `insertBatch`
 
-### Ground-truth flow для §1 «Ingest» (что должна показать диаграмма)
+**Modify:**
+- [src/workers/indexer/indexer-api.ts](../../src/workers/indexer/indexer-api.ts) — внутри transaction batch'а:
+  1. Проход по `entries` собирает `Map<sourceId, Map<key, KeyAccum>>`, где `KeyAccum = { occurrences, types: Set, topVals: Map<value, count> }`. `total_seen` равен `entries.length`-per-source.
+  2. UPSERT в `field_meta` per (source, key): `INSERT … ON CONFLICT DO UPDATE SET occurrences = occurrences + ?, total_seen = total_seen + ?, type = …merge…, top_values_json = …merge top-20…`.
+  3. `type` merge: если existing != new → `'mixed'`, иначе сохранить.
+  4. `top_values_json` merge: cap 20, увеличиваем counters существующих, новые добавляем по convergence.
 
-Прослежено по коду:
+Фактический UPSERT statement добавлять в `State.upsertFieldMetaStmt` (prepared) и вызывать в той же транзакции что и `INSERT_ENTRY_SQL` + `upsertMinuteStmt`.
 
-1. User → `LvAddSourceModal.submit()` → `onSubmit(data)`.
-2. `LvApp` закрывает модал; `LvAppContainer.onSubmitAddSource(data)` ([LvAppContainer.tsx:374-393](../../src/app/containers/LvAppContainer.tsx#L374-L393)) → `sourceCtrl.addDirectory(data)`.
-3. `useSourceController.addDirectory` → `store.getState().addDirectory(opts)` → `log-client.ts addDirectory` ([log-client.ts:241-267](../../src/worker-client/log-client.ts#L241-L267)). Если handle уже передан — пикер не открывается; иначе под user-gesture открывается `showDirectoryPicker`. Затем `api().addSource({kind:'directory',…})` через Comlink.
-4. `coordinator.addSource` ([coordinator.ts:372-399](../../src/workers/coordinator/coordinator.ts#L372-L399)):
-   - `await indexer.opening`.
-   - `newSourceId()`.
-   - `indexer.upsertSource(source)` — запись в `source` таблицу.
-   - Для directory — `handleStore.put({...})` в IDB.
-   - `startIngest(source)` — fire-and-forget.
-5. `coordinator.startIngest` ([coordinator.ts:272-308](../../src/workers/coordinator/coordinator.ts#L272-L308)):
-   - `factory(source)` создаёт adapter.
-   - `sources.set(id, {source, status:'idle', aborter})`.
-   - `emitStatus()` синхронно прогоняет `statusListeners` → callback в main thread → `store.setState({sources:records})` → Zustand notify → `useSourceStatus()` → ребиндит сайдбар. Source появляется как chip с status idle.
-   - `ingestSource({adapter, parserPool, indexer, signal, onStatus, onChange})`.
-6. `ingestSource` ([ingest-orchestrator.ts:35-120](../../src/workers/coordinator/ingest/ingest-orchestrator.ts)):
-   - `onStatus({kind:'loading'})` → emit → UI status «loading…».
-   - `adapter.open(signal)` → `ReadableStream<LogLineFrame>`.
-     - **directory-adapter** ([directory-adapter.ts](../../src/core/sources/directory-adapter.ts)): `walkDirectory(handle, glob, signal)` → для каждого `entry.file`: `file.stream().pipeThrough(createByteLineSplitter(path))` → каждый кадр `{path, line, byteStart, byteEnd}`.
-   - `lineStream.pipeThrough(createChunker({maxLines:1000, maxMs:100}))` → `LineBatch{path, lines: ParseLineFrame[]}`.
-   - Цикл: `reader.read()` → batch.
-     - На первом непустом — `parserPool.withWorker(p => p.detectParser(sample))`.
-     - `parserPool.withWorker(p => p.parse(lines, ctx))` где ctx = `{sourceId, startSeq, parserId, filePath}`.
-       - В parser-worker ([parser-api.ts:25-77](../../src/workers/parser/parser-api.ts)): `primary.parseLine(line)` → `ParsedRecord` без `filePath`/`byteStart`/`byteEnd`. `enrich(record, frame.byteStart, frame.byteEnd)` стампит pointer + `fields.file_path`.
-     - `indexer.insertBatch(entries)` ([indexer-api.ts insertBatch](../../src/workers/indexer/indexer-api.ts)):
-       - В транзакции: `INSERT_ENTRY_SQL` per entry → `entry(id, source_id, seq, ts, level, file_path, byte_start, byte_end, fields_json)`.
-       - `bumpSourceCountStmt(n, now, sid)` per source.
-       - `aggregateMinuteBuckets(entries)` группирует по `(source, file, floor(ts/60000))`, потом `upsertMinuteStmt` per bucket → `entry_minute`.
-     - `entriesIndexed += n`; `onStatus({kind:'indexing', entriesIndexed})` → emit.
-     - `onChange()` → `emitChange` ([coordinator.ts:323-343](../../src/workers/coordinator/coordinator.ts#L323-L343)): `version++`, `indexer.count(activeFilter)`, push `ChangesNotice{version, filteredCount}` подписчикам → main store `setState({version, filteredCount})` + `void store.getState().refresh()` ([log-client.ts:148-156](../../src/worker-client/log-client.ts#L148-L156)) → новый scroll fetch.
-   - Конец потока: `onStatus({kind:'done', entryCount: entriesIndexed})`.
+**Tests:**
+- Расширить `migrations.test.ts` (или новый) — `insertBatch` обновляет `field_meta`, `type='mixed'` при разных типах, top values с правильными counters.
 
-### Ground-truth flow для §2 «Read» (что должна показать диаграмма)
+### Phase 3 — SQL field-key translator
 
-1. User scroll → `LvViewer` virtual scroll вычисляет visible range → `useLogWindow.setVisibleRange(from, to)` ([use-log-window.ts:31-34](../../src/hooks/use-log-window.ts)).
-2. `setVisibleRange` ([log-client.ts:228-233](../../src/worker-client/log-client.ts)) → set `windowFrom/To` → `void refresh()`.
-3. `refresh` ([log-client.ts:176-203](../../src/worker-client/log-client.ts)):
-   - increments `refreshToken`, `set({isLoading:true})`.
-   - `await api().setFilter(filter)`.
-   - `Promise.all([api().getCount(), api().getRange(from-OVERSCAN, to+OVERSCAN)])`.
-   - Stale-token check, потом `set({totalCount, filteredCount, entries: new Map(from+i → entry), isLoading:false})`.
-4. `coordinator.getRange(from, to)` ([coordinator.ts:430-444](../../src/workers/coordinator/coordinator.ts#L430-L444)):
-   - `indexer.search(activeFilter, from, to)` → SQL через `buildClause` ([query.ts](../../src/core/filter/query.ts)) → `SELECT entry.id, source_id, seq, ts, level, file_path, byte_start, byte_end, fields_json FROM entry WHERE … LIMIT ? OFFSET ?`. `rowToEntry` маппит в `LogEntry` shell с `raw=''`, `message=''` и заполненными pointer-полями.
-   - `resolvePointersToEntries(pointers, lookupSource, parserPool)` ([lazy-resolver.ts](../../src/workers/coordinator/read/lazy-resolver.ts)):
-     - Группирует по `sourceId`.
-     - `lookupSource(sid)` → `LogSource` из in-memory `sources` Map. `readerForSource(source)` → `FsHandleReader`/`FileSourceReader`/`OpfsSingleSpoolReader`/`OpfsChunkedSpoolReader`.
-     - Для каждой row параллельно (`Promise.all(srows.map(...))`): `reader.read(filePath, byteStart, byteEnd)` → `Blob.slice(start, end).text()` → string.
-     - Все non-failed frames batch'ом → `parserPool.withWorker(p.parse(goodFrames, ctx))` чтобы реконструировать `message`.
-     - Map enriched LogEntry в исходный порядок rows.
-5. Возвращается `LogEntry[]` в main thread → store.setState → React rerender → `LvViewer` рисует строки.
+**Modify:**
+- [src/core/filter/query.ts](../../src/core/filter/query.ts) — новый `fieldKeyToSql(key: FieldKey): { sql: string; needsSourceJoin: boolean; bindParams?: SqlValue[] }`. Для key:
+  - `@ts` → `entry.ts`
+  - `@level` → `entry.level`
+  - `@seq` → `entry.seq`
+  - `@file` → `entry.file_path`
+  - `@byte_start` / `@byte_end` → `entry.byte_start` / `entry.byte_end`
+  - `@source.id` → `entry.source_id`
+  - `@source.name` → `source.name` (+ needsSourceJoin)
+  - `@source.kind` → `source.kind` (+ needsSourceJoin)
+  - всё остальное → `JSON_EXTRACT(entry.fields_json, '$.<key>')`
+- `buildClause` рефакторится: `levels[]` / `services[]` / `filePaths[]` сворачиваются в проходы через `fieldFilters`-like loop, но всё на уровне translator'а. Shorthand-поля **остаются** на API-поверхности `LogFilter` (backward compat) — сахар, не отдельный SQL-путь.
+- `joinSql` начинает использоваться: если в filter есть `@source.*`, добавляется `JOIN source ON source.id = entry.source_id`.
+- [src/workers/indexer/indexer-api.ts](../../src/workers/indexer/indexer-api.ts) — `groupCounts` / `histogram` принимают `FieldKey` вместо `string`, проходят через `fieldKeyToSql`.
 
-### Ground-truth flow для §3 «Filter change»
+**Tests:**
+- [src/core/filter/query.test.ts](../../src/core/filter/query.test.ts) — кейсы для каждого `@`-built-in (включая JOIN), для произвольного fields_json key, для `levels` shorthand.
 
-Простой:
-1. User меняет filter в UI (level/query/timeRange).
-2. `useLogFilter.setFilter(next)` → `store.getState().setFilter(next)`.
-3. `setFilter` ([log-client.ts:217-222](../../src/worker-client/log-client.ts)) → `set({filter, entries: new Map()})` (отбрасывает кэш) → `refresh()`.
-4. Дальше шаги 3+ как в §2 «Read» — поэтому диаграмма очень короткая, только хвост.
+### Phase 4 — RPC: `getFieldSchema`
 
-### Critical files
+**Modify:**
+- [src/core/rpc/indexer.contract.ts](../../src/core/rpc/indexer.contract.ts) — `fieldMeta(sourceIds: SourceId[]): FieldDescriptor[]`. `FieldDescriptor`:
+  ```ts
+  interface FieldDescriptor {
+    key: FieldKey;                         // '@ts', 'trace_id', …
+    label: string;                         // human label
+    type: 'string'|'number'|'boolean'|'enum'|'time'|'level'|'mixed';
+    origin: 'builtin' | 'dynamic';
+    occurrences?: number;                  // dynamic only
+    presenceRate?: number;                 // dynamic only
+    topValues?: ReadonlyArray<{ value: string; count: number }>;
+  }
+  ```
+- [src/workers/indexer/indexer-api.ts](../../src/workers/indexer/indexer-api.ts) — `fieldMeta` SQL: `SELECT key, type, occurrences, total_seen, top_values_json FROM field_meta WHERE source_id IN (…)`. Aggregates across the requested set (sums of occurrences / total_seen, types unioned). Built-in поля append'ятся в коде (они константны).
+- [src/core/rpc/coordinator.contract.ts](../../src/core/rpc/coordinator.contract.ts) + [src/workers/coordinator/coordinator.ts](../../src/workers/coordinator/coordinator.ts) — `getFieldSchema(filter)` proxy.
 
-**Create:**
-- `docs/architecture/log-pipeline-sequence.md` — три Mermaid sequence-диаграммы плюс текстовая запись пошагово с file:line ссылками. Файл self-contained, не дублирует ADR-0016 (там компонентный flowchart, тут — runtime-вызовы).
+### Phase 5 — UI: column picker + dynamic CSS-grid
 
-**Optional:**
-- Линк на новый файл в [docs/adr/0016-offset-pointer-index-lazy-body.md](../adr/0016-offset-pointer-index-lazy-body.md) под секцию `Links` (одна строка). Это связь «решение → как оно живёт в рантайме».
-- Не трогаю CLAUDE.md / README.md — диаграмма обнаружится через ADR-link.
+**Modify:**
+- [src/ui/contracts/lv-types.ts](../../src/ui/contracts/lv-types.ts):
+  - Add `LvColumn { key: FieldKey; label?: string; widthPx: number }`.
+  - `LvTweaks.columns: ReadonlyArray<LvColumn>` (default: `LN/TIMESTAMP/LEVEL/MESSAGE` fixed + nothing else).
+  - `LvGroupBy = string` (free-form), retire enum.
+- [src/hooks/use-ui-prefs.ts](../../src/hooks/use-ui-prefs.ts) — persist `columns` + `columnWidths`.
+- [src/ui/components/stream/LvViewer.tsx](../../src/ui/components/stream/LvViewer.tsx) + [lv.css:1107](../../src/ui/styles/lv.css#L1107) — header + row рисуются по `columns`. `grid-template-columns` строится inline-style:
+  `[fixed cols] [user cols join(' ')] [MESSAGE 1fr] [action]`.
+- New `LvColumnPicker.tsx` (popover): получает `getFieldSchema`, рисует две группы (`Source / Built-in` + `Fields`), checkboxes per field, drag-handle для переупорядочивания. Sort dynamic part by `presenceRate DESC`. Auto-suggest: показывать поля с `presenceRate ≥ 0.5` сверху списка.
 
-### Verification
+### Phase 6 — Group-by picker (replace enum)
 
-Перед коммитом:
-1. **Перечитать каждую стрелку диаграммы** против указанных в записке файлов:line — это и есть «соответствует ли реализации». Конкретно проверить:
-   - Имена методов в сообщениях (`api().addSource` vs `coordinator.addSource` vs `indexerApi.insertBatch` — последний идёт через Comlink-обёртку, в диаграмме надо отразить границу main↔worker).
-   - Порядок: `upsertSource` строго перед `startIngest`, `aggregateMinuteBuckets` строго после INSERT batch внутри той же транзакции.
-   - Что `onChange` → `subscribeChanges` callback → `refresh()` — это **обратная сторона** одной и той же RPC-связи (push, не call).
-2. **Mermaid render check**:
-   - Открыть файл в VSCode preview (или GitHub.dev) — диаграмма рендерится, нет syntax-ошибок.
-   - Запустить `pnpm dev` и пройти один полный сценарий из диаграммы (Add source → scroll), убедиться что нет шагов, которых в коде нет, и нет шагов в коде, которые не отражены.
-3. **Tests**: тестов на этот файл нет (это документ). `pnpm test --run`, `pnpm lint`, `npx tsc -b` всё равно гоняем — изменения не должны затронуть код.
-4. **Ревью самого Mermaid**: для каждой sequenceDiagram задействовать participants (alias'ы) консистентно между диаграммами — `User`, `UI`, `Store`, `Coord`, `Parsers`, `Indexer`, `Storage` — чтобы реdader мог переключаться между диаграммами без переустановки контекста.
+**Modify:**
+- [src/ui/components/filter/LvGroupBySelect.tsx](../../src/ui/components/filter/LvGroupBySelect.tsx) — переписан под `FieldKey` строки. UI идентичен column picker'у (тот же `LvFieldPicker.tsx` shared component).
+- [src/app/containers/LvAppContainer.tsx](../../src/app/containers/LvAppContainer.tsx) — `lvGroupByToCoreField` упрощается (теперь `FieldKey` идёт прямо в `coordinator.getGroupCounts`).
+
+### Phase 7 — Filter-on-any-field
+
+**Modify:**
+- [src/ui/components/filter/LvFilterBar.tsx](../../src/ui/components/filter/LvFilterBar.tsx) — кнопка `+ field filter` открывает `LvFieldPicker` → выбор field → `LvFieldFilterBuilder` (op: `=`/`!=`/`~`/`>`/`<`, value-input с автодополнением из `topValues`).
+- Existing chips (level/service/timeRange) остаются как было — sugar, не дублируются.
+
+### Phase 8 — Verification
+
+1. `npx tsc -b`, `pnpm lint`, `pnpm test --run` — все зелёные. Новые тесты: indexer field_meta UPSERT, fieldKeyToSql translator, query.test для @-prefix cases.
+2. `pnpm build` — bundle размер делta < +5 KiB gz (UI picker компоненты).
+3. **Browser smoke**:
+   - Открыть pino-source (`.tmp/demo_logs/pino.jsonl`) — `getFieldSchema` возвращает `traceId`, `reqId`, `level` (или нет — pino кладёт level в built-in `entry.level`). Auto-suggest вставляет topN в column picker.
+   - `+ Add column` → traceId → таблица показывает trace IDs.
+   - `Group by → @source.kind` → группы `directory`, `file`, etc.
+   - `Group by → traceId` → группы по trace.
+   - `+ field filter → status > 499` (на nginx) → фильтрует только error-rows.
+   - Reload → колонки/group-by/filter persist'ятся (через `useUiPrefs`).
+   - 0 console errors.
+
+## Out of scope (separate work)
+
+- **History fields**: показывать «исчезнувшие» поля (были в логах, но отсутствуют в недавних batch'ах). `field_meta` хранит cumulative; UI решит когда «забывать».
+- **Per-source column profiles**: разные column-наборы для разных источников. Сейчас persist глобальный — пользователь сам toggle'ит при смене source set.
+- **Schema export/import**: backup column/group/filter prefs между устройствами. Через [useUiPrefs](../../src/hooks/use-ui-prefs.ts) JSON-blob если понадобится.
+- **Type-aware operators**: `>`/`<` для string-полей сейчас silent-cast; UI должен дисабл'ить недопустимые операторы по `type`. Cosmetic, после Phase 7.
+- **`@message` в filter**: post-filter substring/regex остаётся как сейчас (lazy-resolver path), не трогаем.
