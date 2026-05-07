@@ -19,10 +19,18 @@ export interface LvRowProps {
   readonly density: LvTweakDensity;
   readonly showDate: boolean;
   readonly wrap: boolean;
-  readonly query: string;
-  readonly useRegex: boolean;
-  readonly caseSensitive: boolean;
-  readonly wholeWord: boolean;
+  /**
+   * Highlight settings for the message column. `null` disables
+   * highlighting. The filter-bar query is intentionally NOT plumbed
+   * here — it filters via the worker; this prop carries only the
+   * Cmd+F find-in-window state from `LvViewer`.
+   */
+  readonly highlight: {
+    readonly query: string;
+    readonly useRegex: boolean;
+    readonly caseSensitive: boolean;
+    readonly wholeWord: boolean;
+  } | null;
   readonly selected: boolean;
   readonly expanded: boolean;
   readonly bookmarked: boolean;
@@ -78,10 +86,7 @@ export const LvRow = ({
   density,
   showDate,
   wrap,
-  query,
-  useRegex,
-  caseSensitive,
-  wholeWord,
+  highlight,
   selected,
   expanded,
   bookmarked,
@@ -182,7 +187,15 @@ export const LvRow = ({
           );
         })}
         <span className={`lv-row-msg${wrap ? ' wrap' : ''}`}>
-          {lvHighlight(entry.message, query, useRegex, caseSensitive, wholeWord)}
+          {highlight
+            ? lvHighlight(
+                entry.message,
+                highlight.query,
+                highlight.useRegex,
+                highlight.caseSensitive,
+                highlight.wholeWord,
+              )
+            : entry.message}
         </span>
         <span className="lv-row-actions" onClick={(e) => e.stopPropagation()}>
           <button

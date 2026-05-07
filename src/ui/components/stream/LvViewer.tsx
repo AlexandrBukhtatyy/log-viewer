@@ -539,10 +539,16 @@ export const LvViewer = ({
                             density={tweaks.density}
                             showDate={tweaks.showDate}
                             wrap={tweaks.wrap}
-                            query={filter.query}
-                            useRegex={filter.queryMode === 'regex'}
-                            caseSensitive={filter.caseSensitive}
-                            wholeWord={filter.wholeWord}
+                            highlight={
+                              findOpen && findQ.length > 0
+                                ? {
+                                    query: findQ,
+                                    useRegex: findRegex,
+                                    caseSensitive: findCase,
+                                    wholeWord: findWord,
+                                  }
+                                : null
+                            }
                             isFindMatch={findOpen && findMatchSet.has(vi.index)}
                             isFindCurrent={findOpen && findMatches[findIdx] === vi.index}
                             selected={false}
