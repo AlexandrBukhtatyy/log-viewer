@@ -888,8 +888,12 @@ button{font-family:inherit}
 .lv-search-clear:hover{color:var(--lv-fg)}
 
 /* Sidebar/panel variant of .lv-search — same chrome as the filter-bar
-   one but with outer margins so it sits inside a panel column. */
+   one but with outer margins so it sits inside a panel column. The
+   `flex:1` from `.lv-search` is for *horizontal* growth in the
+   filter-bar; inside a `flex-direction:column` panel it would expand
+   vertically and balloon the field, hence the override here. */
 .lv-search--block{
+  flex:0 0 auto;
   margin:10px 12px 6px;
   height:26px;
 }
