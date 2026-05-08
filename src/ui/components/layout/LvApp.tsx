@@ -70,6 +70,8 @@ export interface LvAppProps {
   // Adapted UI data — built by the container from useSourceStatus / useLogWindow.
   readonly catalog: ReadonlyArray<LvCatalogRoot>;
   readonly filesById: Readonly<Record<string, LvFileNode>>;
+  /** False until the worker delivers the first sources snapshot. */
+  readonly sourcesHydrated: boolean;
 
   // Windowed entry stream (from useLogWindow).
   readonly rowCount: number;
@@ -135,7 +137,10 @@ export interface LvAppProps {
   setGroupBy: (next: LvGroupBy[]) => void;
   readonly groupBuckets: ReadonlyArray<GroupBucket> | null;
   readonly groupField: string | null;
+  readonly groupRootFilter: LogFilter;
   onGroupDrillDown: (bucket: GroupBucket, field: string) => void;
+  fetchGroupCounts: (filter: LogFilter, field: string, limit?: number) => Promise<ReadonlyArray<GroupBucket>>;
+  fetchEntries: (filter: LogFilter, from: number, to: number) => Promise<ReadonlyArray<LogEntry>>;
 
   // Column picker (ADR-0017 Phase 5).
   readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
@@ -162,6 +167,7 @@ export interface LvAppProps {
 export const LvApp = ({
   catalog,
   filesById,
+  sourcesHydrated,
   rowCount,
   totalCount,
   getRow,
@@ -199,7 +205,10 @@ export const LvApp = ({
   setGroupBy,
   groupBuckets,
   groupField,
+  groupRootFilter,
   onGroupDrillDown,
+  fetchGroupCounts,
+  fetchEntries,
   fieldDescriptors,
   columns,
   onColumnsChange,
@@ -410,6 +419,7 @@ export const LvApp = ({
       <LvSidebar
         catalog={catalog}
         filesById={filesById}
+        sourcesHydrated={sourcesHydrated}
         selectedIds={selectedIds}
         setSelectedIds={(updater) => setSelectedIds((prev) => updater(prev))}
         onAddRoot={handleAddRoot}
@@ -563,6 +573,9 @@ export const LvApp = ({
           setGroupBy={setGroupBy}
           histogramData={histogramData}
           groupBuckets={groupBuckets}
+          groupRootFilter={groupRootFilter}
+          fetchGroupCounts={fetchGroupCounts}
+          fetchEntries={fetchEntries}
           groupField={groupField}
           onGroupDrillDown={onGroupDrillDown}
           fieldDescriptors={fieldDescriptors}

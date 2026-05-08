@@ -15,6 +15,7 @@ import { useGroupCounts } from '../../hooks/use-group-counts.ts';
 import { useHistogram } from '../../hooks/use-histogram.ts';
 import { useLogFilter } from '../../hooks/use-log-filter.ts';
 import { useLogWindow } from '../../hooks/use-log-window.ts';
+import { useViewStore } from '../providers/view-store-context.ts';
 import { useSourceController } from '../../hooks/use-source-controller.ts';
 import { useSourceStatus } from '../../hooks/use-source-status.ts';
 import { useDirectoryTrees } from '../../hooks/use-directory-trees.ts';
@@ -74,7 +75,7 @@ export const LvAppContainer = () => {
   const { setFilter: pushFilter } = useLogFilter();
 
   // Source state.
-  const sources = useSourceStatus().sources;
+  const { sources, hydrated: sourcesHydrated } = useSourceStatus();
   const sourceCtrl = useSourceController();
 
   // Windowed entry stream.
@@ -211,6 +212,20 @@ export const LvAppContainer = () => {
     (entry: LogEntry, key: string) =>
       getEntryFieldValue(entry, key, sourceRecordsById.get(entry.sourceId) ?? null),
     [sourceRecordsById],
+  );
+
+  // Inline group-expand callbacks: bypass the active-filter/refresh
+  // pipeline by going straight to the worker with an explicit filter.
+  const viewStore = useViewStore();
+  const fetchGroupCounts = useCallback(
+    (f: LogFilter, field: string, limit?: number) =>
+      viewStore.getState().getGroupCounts(f, field, limit),
+    [viewStore],
+  );
+  const fetchEntries = useCallback(
+    (f: LogFilter, from: number, to: number) =>
+      viewStore.getState().getEntriesScoped(f, from, to),
+    [viewStore],
   );
 
   const bookmarksHook = useBookmarks();
@@ -515,6 +530,7 @@ export const LvAppContainer = () => {
     <LvApp
       catalog={catalog}
       filesById={filesById}
+      sourcesHydrated={sourcesHydrated}
       rowCount={filteredCount}
       totalCount={totalCount}
       getRow={getRow}
@@ -561,6 +577,9 @@ export const LvAppContainer = () => {
       groupBy={groupBy}
       setGroupBy={setGroupBy}
       groupBuckets={groupField !== null ? groupBuckets : null}
+      groupRootFilter={filter}
+      fetchGroupCounts={fetchGroupCounts}
+      fetchEntries={fetchEntries}
       groupField={groupField}
       onGroupDrillDown={onGroupDrillDown}
       fieldDescriptors={fieldDescriptors}

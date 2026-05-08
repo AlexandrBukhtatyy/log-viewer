@@ -11,6 +11,12 @@ import { LvTreeNode } from './LvTreeNode.tsx';
 export interface LvSidebarProps {
   readonly catalog: ReadonlyArray<LvCatalogRoot>;
   readonly filesById: Readonly<Record<string, LvFileNode>>;
+  /**
+   * False until the coordinator delivers its first sources snapshot.
+   * Drives the "Loading sources…" skeleton so the user doesn't think
+   * a freshly-reloaded page has lost their persisted sources.
+   */
+  readonly sourcesHydrated: boolean;
   readonly selectedIds: ReadonlySet<string>;
   setSelectedIds: (next: (prev: Set<string>) => Set<string>) => void;
   onAddRoot: (sourceType: LvSourceKind) => void;
@@ -23,6 +29,7 @@ export interface LvSidebarProps {
 export const LvSidebar = ({
   catalog,
   filesById,
+  sourcesHydrated,
   selectedIds,
   setSelectedIds,
   onAddRoot,
@@ -168,8 +175,16 @@ export const LvSidebar = ({
           onDropFolders?.(names);
         }}
       >
-        {filteredRoots.length === 0 ? (
-          <div className="lv-tree-empty">No files match “{filter}”.</div>
+        {!sourcesHydrated && filteredRoots.length === 0 ? (
+          <div className="lv-tree-loading" role="status" aria-busy="true">
+            <span className="lv-skel lv-skel-tree" />
+            <span className="lv-skel lv-skel-tree" />
+            <span className="lv-skel lv-skel-tree" />
+          </div>
+        ) : filteredRoots.length === 0 ? (
+          <div className="lv-tree-empty">
+            {filter ? `No files match “${filter}”.` : 'No sources yet.'}
+          </div>
         ) : (
           filteredRoots.map((root) => (
             <LvTreeNode

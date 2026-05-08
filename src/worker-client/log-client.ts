@@ -27,6 +27,12 @@ export interface ViewState {
   readonly totalCount: number;
   readonly filteredCount: number;
   readonly sources: ReadonlyArray<SourceRecord>;
+  /**
+   * `false` until the coordinator delivers its first sources snapshot
+   * (after `hydratePersisted`). Lets the sidebar show a loading skeleton
+   * instead of an empty list during the initial worker-open + IDB read.
+   */
+  readonly sourcesHydrated: boolean;
   /** sparse map: absolute index (after filter) → entry */
   readonly entries: ReadonlyMap<number, LogEntry>;
   readonly windowFrom: number;
@@ -105,6 +111,11 @@ export interface ViewActions {
     filter: LogFilter,
     bucketCount: number,
   ) => Promise<HistogramResponse>;
+  getEntriesScoped: (
+    filter: LogFilter,
+    from: number,
+    to: number,
+  ) => Promise<ReadonlyArray<LogEntry>>;
   getFieldSchema: (filter: LogFilter) => Promise<ReadonlyArray<FieldDescriptor>>;
   refresh: () => Promise<void>;
   destroy: () => void;
@@ -144,7 +155,7 @@ export const createLogClient = (): ViewStore => {
   const armSubscriptions = (a: Comlink.Remote<CoordinatorApi>): void => {
     statusUnsubPromise = a.subscribeStatus(
       Comlink.proxy((records) => {
-        store.setState({ sources: records });
+        store.setState({ sources: records, sourcesHydrated: true });
       }),
     );
     changeUnsubPromise = a.subscribeChanges(
@@ -210,6 +221,7 @@ export const createLogClient = (): ViewStore => {
       totalCount: 0,
       filteredCount: 0,
       sources: [],
+      sourcesHydrated: false,
       entries: new Map(),
       windowFrom: 0,
       windowTo: 0,
@@ -353,6 +365,8 @@ export const createLogClient = (): ViewStore => {
         api().getGroupCounts(filter, field, limit),
       getHistogram: async (filter, bucketCount) =>
         api().getHistogram(filter, bucketCount),
+      getEntriesScoped: async (filter, from, to) =>
+        api().getEntriesScoped(filter, from, to),
       getFieldSchema: async (filter) => api().getFieldSchema(filter),
       refresh,
       destroy: () => {

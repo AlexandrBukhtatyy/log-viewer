@@ -1353,21 +1353,43 @@ button{font-family:inherit}
 .lv-grp-actions{display:flex; gap:2px; justify-self:end; opacity:.55}
 .lv-grp:hover .lv-grp-actions{opacity:1}
 
-/* Group-by popover: autocomplete dropdown (input + filtered list)
-   + ordered chips below. */
+/* Group-by popover: combobox (closed field + chevron, dropdown
+   opens on focus/click) + ordered chips below. */
 .lv-group-pop{ }
-.lv-group-search-dropdown{
-  display:flex; flex-direction:column;
-  margin:6px 4px 4px;
-  border:1px solid var(--lv-border); border-radius:5px;
-  background:var(--lv-bg-1);
-  overflow:hidden;
+.lv-combo{
+  margin:6px 6px 4px;
 }
-.lv-group-search-input{
-  border:0 !important;
-  border-bottom:1px solid var(--lv-border) !important;
-  border-radius:0 !important;
-  background:transparent !important;
+.lv-combo-row{
+  display:flex; align-items:center;
+  height:26px;
+  background:var(--lv-bg-2); border:1px solid var(--lv-border);
+  border-radius:5px;
+}
+.lv-combo:focus-within .lv-combo-row,
+.lv-combo.is-open .lv-combo-row{
+  border-color:var(--lv-accent);
+  background:var(--lv-bg-3);
+}
+.lv-combo-input{
+  flex:1; min-width:0;
+  border:0; background:transparent;
+  font:inherit; font-size:12px; color:var(--lv-fg);
+  padding:0 8px;
+  outline:none;
+}
+.lv-combo-chevron{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:22px; height:22px; padding:0; margin-right:2px;
+  background:transparent; border:0; border-radius:3px;
+  color:var(--lv-fg-3); cursor:pointer;
+  transition:transform .15s ease;
+}
+.lv-combo-chevron:hover{color:var(--lv-fg-1)}
+.lv-combo.is-open .lv-combo-chevron{transform:rotate(180deg); color:var(--lv-accent)}
+.lv-combo-pop{
+  margin-top:4px;
+  background:var(--lv-bg-1); border:1px solid var(--lv-border);
+  border-radius:5px; overflow:hidden;
 }
 .lv-group-search-list{
   display:flex; flex-direction:column;
@@ -1461,6 +1483,8 @@ button{font-family:inherit}
 .lv-skel-num{width:18px; height:8px; margin:0 8px 0 4px}
 .lv-skel-cell{height:10px}
 .lv-skel-msg{width:65%; max-width:520px}
+.lv-skel-tree{display:block; height:14px; margin:6px 0; border-radius:4px}
+.lv-tree-loading{padding:10px 14px}
 @keyframes lv-skel-shimmer{
   0%   { background-position:  100% 0; }
   100% { background-position: -100% 0; }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type {
@@ -104,8 +104,15 @@ export interface LvViewerProps {
   readonly groupBuckets: ReadonlyArray<GroupBucket> | null;
   /** The active group field as it would appear in SQL (`level`, `service`, …). Pure label use. */
   readonly groupField: string | null;
+  /** The current root filter, copied so nested expansion can extend it
+   *  with extra `fieldFilters` without mutating activeFilter. */
+  readonly groupRootFilter: LogFilter;
   /** Drill into a group: container appends a `fieldFilter` and clears group-by. */
   onGroupDrillDown: (bucket: GroupBucket, field: string) => void;
+  /** Fetch group buckets for a scoped filter (used by inline expand). */
+  fetchGroupCounts: (filter: LogFilter, field: string, limit?: number) => Promise<ReadonlyArray<GroupBucket>>;
+  /** Fetch entries for a scoped filter (used by inline expand of the leaf). */
+  fetchEntries: (filter: LogFilter, from: number, to: number) => Promise<ReadonlyArray<LogEntry>>;
 
   /** Available fields from coordinator.getFieldSchema (built-in + dynamic). */
   readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
@@ -149,7 +156,10 @@ export const LvViewer = ({
   histogramData,
   groupBuckets,
   groupField,
+  groupRootFilter,
   onGroupDrillDown,
+  fetchGroupCounts,
+  fetchEntries,
   fieldDescriptors,
   columns,
   onColumnsChange,
@@ -158,6 +168,22 @@ export const LvViewer = ({
 }: LvViewerProps) => {
   const gridTemplate = useMemo(() => gridTemplateForColumns(columns), [columns]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  // Inline group expansion. Each entry maps a `<field>=<value>/...`
+  // path to either child buckets (next group level) or the resolved
+  // log entries (when the path reaches the bottom of `groupBy`).
+  type GroupNode =
+    | { readonly kind: 'loading' }
+    | { readonly kind: 'buckets'; readonly field: string; readonly buckets: ReadonlyArray<GroupBucket> }
+    | { readonly kind: 'entries'; readonly entries: ReadonlyArray<LogEntry> }
+    | { readonly kind: 'error'; readonly message: string };
+  const [groupExpanded, setGroupExpanded] = useState<Map<string, GroupNode>>(() => new Map());
+
+  // Reset expansion whenever the chain of group fields changes —
+  // an old path is meaningless under a different grouping.
+  useEffect(() => {
+    setGroupExpanded(new Map());
+  }, [groupBy]);
   const [menu, setMenu] = useState<
     { path: string; line: number; sourceId: string; x: number; y: number } | null
   >(null);
@@ -171,6 +197,58 @@ export const LvViewer = ({
   const [findIdx, setFindIdx] = useState(0);
   const [prevFindSig, setPrevFindSig] = useState<string>('');
   const findInputRef = useRef<HTMLInputElement>(null);
+
+  // Path = stack of field/value pairs that uniquely identify a node
+  // in the group tree. Root buckets have `path=[bucket]`.
+  type GroupPath = ReadonlyArray<{ readonly field: string; readonly value: string }>;
+  const pathKey = (p: GroupPath): string =>
+    p.map((x) => `${x.field}=${x.value}`).join('/');
+
+  const filterForPath = (path: GroupPath): LogFilter => {
+    const extra: FieldFilter[] = path.map((p) => ({
+      key: p.field,
+      op: '=',
+      value: p.value,
+    }));
+    return {
+      ...groupRootFilter,
+      fieldFilters: [...(groupRootFilter.fieldFilters ?? []), ...extra],
+    };
+  };
+
+  const toggleGroup = async (path: GroupPath): Promise<void> => {
+    const key = pathKey(path);
+    if (groupExpanded.has(key)) {
+      setGroupExpanded((m) => {
+        const next = new Map(m);
+        next.delete(key);
+        return next;
+      });
+      return;
+    }
+    setGroupExpanded((m) => new Map(m).set(key, { kind: 'loading' }));
+    const depth = path.length;
+    const nextField = groupBy[depth];
+    const scoped = filterForPath(path);
+    try {
+      if (nextField !== undefined) {
+        const buckets = await fetchGroupCounts(scoped, nextField, 200);
+        setGroupExpanded((m) =>
+          new Map(m).set(key, { kind: 'buckets', field: nextField, buckets }),
+        );
+      } else {
+        const entries = await fetchEntries(scoped, 0, 500);
+        setGroupExpanded((m) => new Map(m).set(key, { kind: 'entries', entries }));
+      }
+    } catch (err) {
+      setGroupExpanded((m) =>
+        new Map(m).set(key, {
+          kind: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  };
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual incompat with React Compiler
   const virtualizer = useVirtualizer({
@@ -495,19 +573,105 @@ export const LvViewer = ({
                     </div>
                   </div>
                 ) : (
-                  groupBuckets.map((bucket, i) => (
-                    <LvGroupHeader
-                      key={`${bucket.value ?? '∅'}-${i}`}
-                      bucket={bucket}
-                      field={groupField}
-                      onFocus={() => onGroupDrillDown(bucket, groupField)}
-                      onCopy={() => {
-                        if (bucket.value !== null) {
-                          void navigator.clipboard?.writeText(bucket.value);
-                        }
-                      }}
-                    />
-                  ))
+                  (() => {
+                    const renderBucket = (
+                      bucket: GroupBucket,
+                      field: string,
+                      path: GroupPath,
+                      depth: number,
+                      keySuffix: string,
+                    ): ReactNode => {
+                      const key = pathKey(path);
+                      const node = groupExpanded.get(key);
+                      const isExpanded = node !== undefined;
+                      return (
+                        <Fragment key={`${key}|${keySuffix}`}>
+                          <LvGroupHeader
+                            bucket={bucket}
+                            field={field}
+                            depth={depth}
+                            expanded={isExpanded}
+                            onToggle={() => {
+                              if (bucket.value === null) return;
+                              void toggleGroup(path);
+                            }}
+                            onFocus={() => onGroupDrillDown(bucket, field)}
+                            onCopy={() => {
+                              if (bucket.value !== null) {
+                                void navigator.clipboard?.writeText(bucket.value);
+                              }
+                            }}
+                          />
+                          {node?.kind === 'loading' && (
+                            <div
+                              className="lv-stream-empty"
+                              style={{ paddingLeft: 12 + (depth + 1) * 16 }}
+                            >
+                              Loading…
+                            </div>
+                          )}
+                          {node?.kind === 'error' && (
+                            <div
+                              className="lv-stream-empty"
+                              style={{ paddingLeft: 12 + (depth + 1) * 16 }}
+                            >
+                              {node.message}
+                            </div>
+                          )}
+                          {node?.kind === 'buckets' &&
+                            node.buckets.map((sub, i) =>
+                              renderBucket(
+                                sub,
+                                node.field,
+                                [
+                                  ...path,
+                                  { field: node.field, value: sub.value ?? '' },
+                                ],
+                                depth + 1,
+                                String(i),
+                              ),
+                            )}
+                          {node?.kind === 'entries' &&
+                            node.entries.map((entry, i) => (
+                              <LvRow
+                                key={`${entry.id}-${i}`}
+                                entry={entry}
+                                fileMeta={filesById[entry.sourceId] ?? null}
+                                index={-1}
+                                density={tweaks.density}
+                                showDate={tweaks.showDate}
+                                wrap={tweaks.wrap}
+                                highlight={null}
+                                selected={false}
+                                expanded={expanded.has(entry.id)}
+                                bookmarked={bookmarks.has(bookmarkKeyOf(entry))}
+                                onSelect={() => {}}
+                                onToggleExpand={() => toggleExpand(entry.id)}
+                                onBookmark={() => onBookmark(bookmarkKeyOf(entry))}
+                                onOpenAtLine={openAtLine}
+                                onContextMenu={openAtLine}
+                                onAddFieldFilter={addFieldFilter}
+                                theme={tweaks.theme}
+                                columns={columns}
+                                gridTemplate={gridTemplate}
+                                cellValueOf={cellValueOf}
+                                indentPx={12 + (depth + 1) * 16}
+                                renderDetailEditor={renderDetailEditor}
+                              />
+                            ))}
+                        </Fragment>
+                      );
+                    };
+                    return groupBuckets.map((bucket, i) =>
+                      renderBucket(
+                        bucket,
+                        groupField,
+                        [{ field: groupField, value: bucket.value ?? '' }],
+                        0,
+                        String(i),
+                      ),
+                    );
+                  })()
                 )
               ) : rowCount === 0 ? (
                 <div className="lv-stream-empty">

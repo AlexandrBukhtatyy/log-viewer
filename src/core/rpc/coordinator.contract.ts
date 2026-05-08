@@ -74,6 +74,18 @@ export interface CoordinatorApi {
   getEntry: (id: EntryId) => Promise<LogEntry | null>;
 
   /**
+   * Like `getRange` but takes the filter explicitly instead of using
+   * the active one. Used by inline group expansion (a bucket pulls the
+   * entries that match its `(field=value)` scope without having to
+   * change the global filter).
+   */
+  getEntriesScoped: (
+    filter: LogFilter,
+    from: number,
+    to: number,
+  ) => Promise<ReadonlyArray<LogEntry>>;
+
+  /**
    * Server-side group-by aggregation. `field` is a JSON path inside
    * `fields_json` ("$.<key>") OR one of the entry-level columns: `level`,
    * `source_id`, `service`. Results are sorted by `count DESC, value ASC`.

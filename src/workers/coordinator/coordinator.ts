@@ -480,6 +480,16 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       );
     },
 
+    getEntriesScoped: async (filter, from, to) => {
+      await deps.getIndexer().opening;
+      const pointers = await deps.getIndexer().proxy.search(filter, from, to);
+      return resolvePointersToEntries(
+        pointers,
+        (id) => sources.get(id)?.source ?? null,
+        deps.parserPool,
+      );
+    },
+
     getCount: async () => {
       await deps.getIndexer().opening;
       const [total, filtered] = await Promise.all([
