@@ -1,4 +1,18 @@
-export const LvEmpty = () => (
+export interface LvEmptyProps {
+  /**
+   * `true` when there is at least one source in the sidebar (the
+   * user just hasn't picked any). `false` when the catalog itself
+   * is empty — drives the CTA copy.
+   */
+  readonly hasAnySource: boolean;
+  /**
+   * Called when the user clicks "+ Add source" in the empty-state
+   * card (only rendered when the catalog is empty).
+   */
+  onAddSource?: () => void;
+}
+
+export const LvEmpty = ({ hasAnySource, onAddSource }: LvEmptyProps) => (
   <div className="lv-empty">
     <div className="lv-empty-card">
       <div className="lv-empty-ico">
@@ -21,12 +35,31 @@ export const LvEmpty = () => (
           />
         </svg>
       </div>
-      <div className="lv-empty-title">Pick files from the catalog</div>
-      <div className="lv-empty-sub">
-        Select one or more logs on the left to start searching and filtering. Hold{' '}
-        <span className="lv-kbd">⌘</span> to pick several.
-      </div>
-      <div className="lv-empty-tip">Tip: select a whole folder to stream every file inside it.</div>
+      {hasAnySource ? (
+        <>
+          <div className="lv-empty-title">Select a source to view logs</div>
+          <div className="lv-empty-sub">
+            Pick a file or folder on the left. Hold{' '}
+            <span className="lv-kbd">⌘</span> to select several at once.
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="lv-empty-title">No sources yet</div>
+          <div className="lv-empty-sub">
+            Add a log file, folder, or stream to get started.
+          </div>
+          {onAddSource && (
+            <button
+              type="button"
+              className="lv-btn lv-btn-primary lv-empty-cta"
+              onClick={onAddSource}
+            >
+              + Add source
+            </button>
+          )}
+        </>
+      )}
     </div>
   </div>
 );

@@ -217,6 +217,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   const hydratePersisted = async (): Promise<void> => {
     if (persistedHydrationPromise !== null) return persistedHydrationPromise;
     persistedHydrationPromise = (async () => {
+      let succeeded = false;
       try {
         await deps.getIndexer().opening;
         const handleStore = await deps.handleStoreOpening;
@@ -252,15 +253,21 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
             status: { kind: 'done', entryCount: rec.entryCount },
           });
         }
+        succeeded = true;
       } catch (err) {
         console.warn(
-          '[coordinator] hydratePersisted failed; sidebar starts empty',
+          '[coordinator] hydratePersisted failed; will retry on next call',
           err,
         );
       }
       // Re-emit so any subscriber that already received an empty
       // snapshot now sees the persisted chips appear.
       emitStatus();
+      // On failure, drop the cached promise so a follow-up call (e.g.
+      // resumePersistedSources, listSources, or grantPermission) can
+      // retry — otherwise a transient indexer-open failure would lock
+      // the sidebar in an empty state for the rest of the session.
+      if (!succeeded) persistedHydrationPromise = null;
     })();
     return persistedHydrationPromise;
   };
@@ -396,7 +403,6 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     },
 
     addSource: async (input) => {
-      await deps.getIndexer().opening;
       if (!deps.adapterFactories[input.kind]) {
         throw new Error(
           `addSource: no adapter for source kind '${input.kind}' (probably not implemented yet)`,
@@ -405,31 +411,57 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       const id = newSourceId();
       const source = buildLogSource(input, id);
 
-      await deps.getIndexer().proxy.upsertSource(source);
+      // Surface the source in the sidebar *before* the synchronous
+      // pipeline (indexer.opening / upsertSource / handleStore.put) so
+      // the user gets immediate feedback. The status flips to
+      // loading/indexing/streaming as soon as the adapter starts; if the
+      // pipeline rejects, we replace it with an error status below.
+      sources.set(id, { source, status: { kind: 'queued' }, aborter: null });
+      emitStatus();
 
-      // Persist handle for sources that can be revived after reload. Errors
-      // here are non-fatal — persistence is just a "resume after reload"
-      // affordance; if it fails (e.g. structured-clone of a native
-      // FileSystemDirectoryHandle hits a browser quirk), we still want the
-      // source to show up in the sidebar and start ingesting in this
-      // session. Past behaviour `await`-ed the put and let it reject the
-      // whole addSource, so a put-failure made the source invisible.
-      if (source.kind === 'directory') {
-        try {
-          const handleStore = await deps.handleStoreOpening;
-          await handleStore.put({
-            sourceId: id,
-            kind: 'directory',
-            name: source.name,
-            handle: source.handle,
-            createdAt: Date.now(),
-          });
-        } catch (err) {
-          console.warn(
-            `[coordinator] handleStore.put failed for source ${id} (will not survive reload):`,
-            err instanceof Error ? err.message : err,
-          );
+      try {
+        await deps.getIndexer().opening;
+        await deps.getIndexer().proxy.upsertSource(source);
+
+        // Persist handle for sources that can be revived after reload.
+        // Errors here are non-fatal — persistence is just a "resume after
+        // reload" affordance; if it fails (e.g. structured-clone of a
+        // native FileSystemDirectoryHandle hits a browser quirk), we still
+        // want the source to show up in the sidebar and start ingesting in
+        // this session.
+        if (source.kind === 'directory') {
+          try {
+            const handleStore = await deps.handleStoreOpening;
+            await handleStore.put({
+              sourceId: id,
+              kind: 'directory',
+              name: source.name,
+              handle: source.handle,
+              createdAt: Date.now(),
+            });
+          } catch (err) {
+            console.warn(
+              `[coordinator] handleStore.put failed for source ${id} (will not survive reload):`,
+              err instanceof Error ? err.message : err,
+            );
+          }
         }
+      } catch (err) {
+        // Indexer setup or upsertSource failed — keep the source visible
+        // but mark it as errored so the user can retry/remove.
+        sources.set(id, {
+          source,
+          status: {
+            kind: 'error',
+            error: {
+              name: err instanceof Error ? err.name : 'Error',
+              message: err instanceof Error ? err.message : String(err),
+            },
+          },
+          aborter: null,
+        });
+        emitStatus();
+        throw err;
       }
 
       startIngest(source);

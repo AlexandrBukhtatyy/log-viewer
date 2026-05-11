@@ -88,19 +88,17 @@ export const LvAppContainer = () => {
   // `useDirectoryTrees`). The `filter` useMemo below splits them apart.
   const [selectedIds, setSelectedIdsState] = useState<Set<string>>(() => new Set());
   const [activeTabId, setActiveTabId] = useState<string>('__all__');
-  const [closedTabs, setClosedTabsState] = useState<Set<string>>(() => new Set());
+  // Per-file tabs the user has opened by clicking a filename. Decoupled
+  // from `selectedIds` (which drives the multi-source `__all__` aggregate
+  // tab) — every entry here is a pinned tab that stays around until
+  // explicitly closed.
+  const [openTabs, setOpenTabs] = useState<ReadonlyArray<LvTab>>([]);
   const [groupBy, setGroupBy] = useState<LvGroupBy[]>([]);
   const [liveTail, setLiveTail] = useState(false);
 
   const setSelectedIds = useCallback(
     (updater: (prev: Set<string>) => Set<string>) => {
       setSelectedIdsState((prev) => updater(prev));
-    },
-    [],
-  );
-  const setClosedTabs = useCallback(
-    (updater: (prev: Set<string>) => Set<string>) => {
-      setClosedTabsState((prev) => updater(prev));
     },
     [],
   );
@@ -148,24 +146,32 @@ export const LvAppContainer = () => {
   // Effective filter — combine stored coreFilter with sources/filePaths
   // derived from selection. UI components read this; ViewStore receives this
   // via the sync effect below.
+  // Resolves the source/filePath inputs that go into the effective
+  // filter, based on the current `activeTabId`:
+  //   - `'__all__'` → all sidebar-checked items (multi-select view).
+  //   - any other tab id → only that tab's source (single-file view),
+  //     ignoring `selectedIds` entirely.
+  const tabSelection = useCallback((): { sourcesArr: SourceId[]; filePaths: string[] } => {
+    if (activeTabId === '__all__') {
+      const { sources: s, filePaths } = splitSelection(selectedIds, null);
+      return { sourcesArr: s, filePaths };
+    }
+    return { sourcesArr: [activeTabId as SourceId], filePaths: [] };
+  }, [activeTabId, selectedIds, splitSelection]);
+
   const filter = useMemo<LogFilter>(() => {
-    const restrict = activeTabId === '__all__' ? null : activeTabId;
-    const { sources: sourcesArr, filePaths } = splitSelection(selectedIds, restrict);
+    const { sourcesArr, filePaths } = tabSelection();
     return {
       ...coreFilter,
       sources: sourcesArr.length === 0 ? null : sourcesArr,
       filePaths: filePaths.length === 0 ? null : filePaths,
     };
-  }, [coreFilter, selectedIds, activeTabId, splitSelection]);
+  }, [coreFilter, tabSelection]);
 
   const setFilter = useCallback(
     (next: (prev: LogFilter) => LogFilter) => {
       setCoreFilter((prev) => {
-        const restrict = activeTabId === '__all__' ? null : activeTabId;
-        const { sources: sourcesArr, filePaths } = splitSelection(
-          selectedIds,
-          restrict,
-        );
+        const { sourcesArr, filePaths } = tabSelection();
         const effectivePrev: LogFilter = {
           ...prev,
           sources: sourcesArr.length === 0 ? null : sourcesArr,
@@ -176,7 +182,7 @@ export const LvAppContainer = () => {
         return { ...computed, sources: null, filePaths: null };
       });
     },
-    [activeTabId, selectedIds, splitSelection],
+    [tabSelection],
   );
 
   // Push effective filter to ViewStore (writes a Zustand store outside React's
@@ -255,6 +261,31 @@ export const LvAppContainer = () => {
     [sources, directoryTrees],
   );
   const filesById = useMemo(() => filesByIdFromSources(sources), [sources]);
+
+  // Open (or focus) a pinned tab for `sourceId`. There is no preview
+  // state — every per-file tab is independent and stays around until
+  // the user closes it.
+  const openFileTab = useCallback(
+    (sourceId: string) => {
+      const file = filesById[sourceId];
+      if (!file) return;
+      setOpenTabs((prev) => {
+        if (prev.some((t) => t.id === sourceId)) return prev;
+        return [
+          ...prev,
+          { id: sourceId, name: file.name, path: file.path, kind: file.kind },
+        ];
+      });
+      setActiveTabId(sourceId);
+    },
+    [filesById],
+  );
+
+  const closeTab = useCallback((tabId: string) => {
+    setOpenTabs((prev) => prev.filter((t) => t.id !== tabId));
+    setActiveTabId((cur) => (cur === tabId ? '__all__' : cur));
+  }, []);
+
   // Snapshot of currently-ingested source display names — feeds the
   // "Add source" modal's name-uniqueness validator.
   const existingSourceNames = useMemo(
@@ -262,31 +293,40 @@ export const LvAppContainer = () => {
     [sources],
   );
 
-  // Tabs: __all__ + one tab per selected (non-closed) source.
+  // Tabs render order:
+  //   1. `__all__` aggregate tab — pinned, always present, always first.
+  //      Reflects the sidebar checkboxes (multi-select); when nothing is
+  //      ticked it shows the empty-state copy in LvViewer.
+  //   2. Per-file tabs the user opened by clicking a filename.
+  //
+  // The two are deliberately decoupled: the checkbox column drives the
+  // multi-source aggregate view; clicking a filename opens that source
+  // in its own tab without touching `selectedIds`.
   const tabs = useMemo<LvTab[]>(() => {
     const t: LvTab[] = [
-      { id: '__all__', name: `All selected (${selectedIds.size})`, kind: 'app' },
+      {
+        id: '__all__',
+        name:
+          selectedIds.size > 0
+            ? `All selected (${selectedIds.size})`
+            : 'All selected',
+        kind: 'app',
+      },
     ];
-    for (const id of selectedIds) {
-      const file = filesById[id];
-      if (!file || closedTabs.has(id)) continue;
-      t.push({ id, name: file.name, path: file.path, kind: file.kind });
+    for (const tab of openTabs) {
+      // Filter out tabs whose source vanished from the catalog.
+      if (filesById[tab.id]) t.push(tab);
     }
     return t;
-  }, [selectedIds, closedTabs, filesById]);
+  }, [selectedIds, openTabs, filesById]);
 
-  // Drop activeTabId back to __all__ if its source was deselected/closed —
-  // derived-state pattern (set during render, gated by signature comparison)
-  // avoids the cascading-render lint on a setState-in-effect.
+  // Drop activeTabId back to a sensible default when its tab disappears.
   const [prevTabSig, setPrevTabSig] = useState('');
-  const tabSig = `${activeTabId}|${[...selectedIds].sort().join(',')}|${[...closedTabs].sort().join(',')}`;
+  const tabSig = `${activeTabId}|${tabs.map((x) => x.id).join(',')}`;
   if (tabSig !== prevTabSig) {
     setPrevTabSig(tabSig);
-    if (
-      activeTabId !== '__all__' &&
-      (!selectedIds.has(activeTabId as SourceId) || closedTabs.has(activeTabId))
-    ) {
-      setActiveTabId('__all__');
+    if (!tabs.some((t) => t.id === activeTabId)) {
+      setActiveTabId(tabs[0]?.id ?? '__all__');
     }
   }
 
@@ -369,6 +409,7 @@ export const LvAppContainer = () => {
     let ingestingEntries = 0;
     for (const r of sources) {
       if (
+        r.status.kind === 'queued' ||
         r.status.kind === 'loading' ||
         r.status.kind === 'indexing' ||
         r.status.kind === 'streaming'
@@ -545,7 +586,8 @@ export const LvAppContainer = () => {
       activeTabId={activeTabId}
       setActiveTabId={setActiveTabId}
       tabs={tabs}
-      setClosedTabs={setClosedTabs}
+      onOpenFile={openFileTab}
+      onCloseTab={closeTab}
       onAddRoot={onAddRoot}
       onRemoveRoot={onRemoveRoot}
       onOpenLocalFile={onOpenLocalFile}

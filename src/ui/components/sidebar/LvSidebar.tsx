@@ -19,6 +19,12 @@ export interface LvSidebarProps {
   readonly sourcesHydrated: boolean;
   readonly selectedIds: ReadonlySet<string>;
   setSelectedIds: (next: (prev: Set<string>) => Set<string>) => void;
+  /**
+   * Open a file as a pinned tab. Fires on row click; the checkbox
+   * column on the right edge drives multi-select independently and
+   * does not open a tab.
+   */
+  onOpenFile: (sourceId: string) => void;
   onAddRoot: (sourceType: LvSourceKind) => void;
   onRemoveRoot: (rootId: string) => void;
   onDropFolders?: (names: string[]) => void;
@@ -32,6 +38,7 @@ export const LvSidebar = ({
   sourcesHydrated,
   selectedIds,
   setSelectedIds,
+  onOpenFile,
   onAddRoot,
   onRemoveRoot,
   onDropFolders,
@@ -194,6 +201,7 @@ export const LvSidebar = ({
               selectedIds={selectedIds}
               openFolders={effectiveOpen}
               toggleSelect={toggleSelect}
+              onOpenFile={onOpenFile}
               onToggleFolder={toggleFolder}
               onRemoveRoot={onRemoveRoot}
               onGrantPermission={onGrantPermission}

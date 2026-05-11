@@ -57,6 +57,7 @@ const FILE_KIND: Record<LogSourceKind, LvLogKind> = {
 };
 
 const isLive = (status: SourceStatus): boolean =>
+  status.kind === 'queued' ||
   status.kind === 'streaming' ||
   status.kind === 'indexing' ||
   status.kind === 'loading';
@@ -67,6 +68,7 @@ const newCountOf = (status: SourceStatus): number | undefined => {
 };
 
 const progressLabelOf = (status: SourceStatus): string | undefined => {
+  if (status.kind === 'queued') return 'queued…';
   if (status.kind === 'loading') return 'loading…';
   if (status.kind === 'indexing') {
     const n = status.entriesIndexed;

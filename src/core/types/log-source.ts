@@ -169,6 +169,7 @@ export type LogSourceInput =
 
 export type SourceStatus =
   | { kind: 'idle' }
+  | { kind: 'queued' }
   | { kind: 'permission-required' }
   | { kind: 'loading'; bytesRead?: number; bytesTotal?: number }
   | { kind: 'indexing'; entriesIndexed: number }

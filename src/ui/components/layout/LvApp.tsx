@@ -94,7 +94,9 @@ export interface LvAppProps {
   readonly activeTabId: string;
   setActiveTabId: (id: string) => void;
   readonly tabs: ReadonlyArray<LvTab>;
-  setClosedTabs: (next: (prev: Set<string>) => Set<string>) => void;
+  /** Click on a sidebar file → open as a pinned tab. */
+  onOpenFile: (sourceId: string) => void;
+  onCloseTab: (tabId: string) => void;
 
   // Source-controller actions.
   onAddRoot: (sourceType: LvSourceKind) => void;
@@ -182,7 +184,8 @@ export const LvApp = ({
   activeTabId,
   setActiveTabId,
   tabs,
-  setClosedTabs,
+  onOpenFile,
+  onCloseTab,
   onAddRoot,
   onRemoveRoot,
   onOpenLocalFile,
@@ -422,6 +425,7 @@ export const LvApp = ({
         sourcesHydrated={sourcesHydrated}
         selectedIds={selectedIds}
         setSelectedIds={(updater) => setSelectedIds((prev) => updater(prev))}
+        onOpenFile={onOpenFile}
         onAddRoot={handleAddRoot}
         onRemoveRoot={onRemoveRoot}
         onGrantPermission={onGrantPermission}
@@ -544,7 +548,9 @@ export const LvApp = ({
           onVisibleRangeChange={onVisibleRangeChange}
           isLoading={isLoading}
           hasLoadedEntries={hasLoadedEntries}
-          hasSources={selectedIds.size > 0}
+          hasSources={selectedIds.size > 0 || activeTabId !== '__all__'}
+          hasAnySource={catalog.length > 0}
+          onAddSource={() => handleAddRoot('local-static')}
           filesById={filesById}
           filter={filter}
           setFilter={setFilter}
@@ -556,13 +562,7 @@ export const LvApp = ({
           tabs={tabs}
           activeTabId={activeTabId}
           onActivateTab={setActiveTabId}
-          onCloseTab={(id) =>
-            setClosedTabs((s) => {
-              const n = new Set(s);
-              n.add(id);
-              return n;
-            })
-          }
+          onCloseTab={onCloseTab}
           bookmarks={bookmarks}
           onBookmark={toggleBookmark}
           bookmarkKeyOf={bookmarkKeyOf}

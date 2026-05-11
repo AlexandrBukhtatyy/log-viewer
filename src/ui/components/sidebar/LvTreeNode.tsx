@@ -10,6 +10,12 @@ export interface LvTreeNodeProps {
   readonly selectedIds: ReadonlySet<string>;
   readonly openFolders: Readonly<Record<string, boolean>>;
   toggleSelect: (id: string) => void;
+  /**
+   * Open the file as a pinned tab. Fires on row click; the checkbox
+   * column on the right edge handles selection independently. Folders
+   * ignore this callback (they only expand/collapse).
+   */
+  onOpenFile: (sourceId: string) => void;
   onToggleFolder: (id: string) => void;
   onRemoveRoot?: (id: string) => void;
   /** Click handler for the "Grant access" button on permission-required files. */
@@ -29,6 +35,7 @@ export const LvTreeNode = ({
   selectedIds,
   openFolders,
   toggleSelect,
+  onOpenFile,
   onToggleFolder,
   onRemoveRoot,
   onGrantPermission,
@@ -53,8 +60,11 @@ export const LvTreeNode = ({
         className={`lv-tree-row${selected ? ' is-selected' : ''}${node.root ? ' is-root' : ''}`}
         style={{ paddingLeft: 6 + depth * 12 }}
         onClick={() => {
-          if (isFolder) onToggleFolder(node.id);
-          else toggleSelect(node.id);
+          if (isFolder) {
+            onToggleFolder(node.id);
+          } else {
+            onOpenFile(node.id);
+          }
         }}
       >
         <span className="lv-tree-chevron">
@@ -241,6 +251,7 @@ export const LvTreeNode = ({
             selectedIds={selectedIds}
             openFolders={openFolders}
             toggleSelect={toggleSelect}
+            onOpenFile={onOpenFile}
             onToggleFolder={onToggleFolder}
             onRemoveRoot={onRemoveRoot}
             onGrantPermission={onGrantPermission}

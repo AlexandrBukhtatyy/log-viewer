@@ -140,6 +140,20 @@ export const getOrCreateViewStore = (): ViewStore => {
   return singletonStore;
 };
 
+// Vite HMR cleanup: when this module is hot-reloaded, terminate the existing
+// worker pipeline so the next module instance can re-acquire OPFS SAH locks.
+// Without this, an HMR-replaced module leaks a zombie worker that still holds
+// the SAH lock on `/logs.sqlite`, and the new worker fails its
+// `installOpfsSAHPoolVfs` with NoModificationAllowedError — manifests as an
+// empty sidebar after a code edit (or a full reload that races the prior
+// page's worker shutdown).
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    singletonStore?.getState().destroy();
+    singletonStore = null;
+  });
+}
+
 export const createLogClient = (): ViewStore => {
   // Lazy coordinator worker. We don't spawn it on store creation — the first
   // method call (typically `refresh()`) is what brings the pipeline up. This

@@ -64,6 +64,10 @@ export interface LvViewerProps {
   readonly hasLoadedEntries: boolean;
   /** Whether at least one source is selected; if not, render the empty state. */
   readonly hasSources: boolean;
+  /** Whether the catalog has any source at all (drives empty-state copy). */
+  readonly hasAnySource: boolean;
+  /** Called when the user clicks "+ Add source" in the empty-state card. */
+  onAddSource?: () => void;
 
   readonly filesById: Readonly<Record<string, LvFileNode>>;
 
@@ -133,6 +137,8 @@ export const LvViewer = ({
   isLoading,
   hasLoadedEntries,
   hasSources,
+  hasAnySource,
+  onAddSource,
   filesById,
   filter,
   setFilter,
@@ -390,10 +396,15 @@ export const LvViewer = ({
 
   return (
     <div className="lv-viewer">
-      <LvTabs tabs={tabs} activeId={activeTabId} onActivate={onActivateTab} onClose={onCloseTab} />
+      <LvTabs
+        tabs={tabs}
+        activeId={activeTabId}
+        onActivate={onActivateTab}
+        onClose={onCloseTab}
+      />
 
       {!hasSources ? (
-        <LvEmpty />
+        <LvEmpty hasAnySource={hasAnySource} onAddSource={onAddSource} />
       ) : (
         <>
           <LvFilterBar

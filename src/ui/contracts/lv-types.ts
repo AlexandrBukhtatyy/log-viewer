@@ -135,6 +135,7 @@ export interface LvColumn {
 }
 
 export interface LvTab {
+  /** Unique tab id; for file tabs equals the SourceId so re-opening the same source is detected. `'__all__'` is reserved for the multi-select aggregate tab. */
   id: string;
   name: string;
   path?: string;

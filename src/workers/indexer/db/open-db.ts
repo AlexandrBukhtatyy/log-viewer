@@ -60,6 +60,19 @@ const installRegexpUdf = (db: Database): void => {
   });
 };
 
+const isLockConflict = (err: unknown): boolean =>
+  err instanceof DOMException && err.name === 'NoModificationAllowedError';
+
+/**
+ * `installOpfsSAHPoolVfs` fails with `NoModificationAllowedError` when a SAH
+ * lock from a previous page (or an HMR-replaced worker) hasn't been released
+ * yet. The browser drops these locks once the holder is fully GC'd, so a
+ * short retry loop with backoff is enough to ride out the transient race.
+ */
+const RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1600] as const;
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Opens (or creates) the SQLite database backed by an OPFS SAH Pool VFS.
  * Must be called from a dedicated worker — OPFS is not available on main.
@@ -72,10 +85,22 @@ export const openDb = async (
 ): Promise<OpenedDb> => {
   const sqlite3 = await sqlite3InitModule();
 
-  const poolUtil = await sqlite3.installOpfsSAHPoolVfs({
-    name: DEFAULT_VFS_NAME,
-    initialCapacity: 16,
-  });
+  const installPool = async (): Promise<
+    Awaited<ReturnType<typeof sqlite3.installOpfsSAHPoolVfs>>
+  > => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await sqlite3.installOpfsSAHPoolVfs({
+          name: DEFAULT_VFS_NAME,
+          initialCapacity: 16,
+        });
+      } catch (err) {
+        if (!isLockConflict(err) || attempt >= RETRY_DELAYS_MS.length) throw err;
+        await sleep(RETRY_DELAYS_MS[attempt]);
+      }
+    }
+  };
+  const poolUtil = await installPool();
 
   const db = new poolUtil.OpfsSAHPoolDb(filename);
 
