@@ -2,6 +2,7 @@ import * as Comlink from 'comlink';
 import type { IndexerApi, OpenReport } from '../../core/rpc/indexer.contract.ts';
 import { defaultAdapterFactories } from '../../core/sources/index.ts';
 import { createCoordinatorApi } from './coordinator.ts';
+import { CustomParserStore } from './custom-parsers/store.ts';
 import { HandleStore } from './handles/handle-store.ts';
 import {
   DEFAULT_POOL_IDLE_TTL_MS,
@@ -45,11 +46,17 @@ const getIndexer = (): {
 // so main-thread RPC calls don't race the IDB open.
 const handleStoreOpening = HandleStore.open();
 
+// Custom-parser store (Phase 2.C). Separate IDB from handles so wiping
+// OPFS or persisted source handles doesn't drop user-crafted parser
+// definitions.
+const customParserStoreOpening = CustomParserStore.open();
+
 const coordinatorApi = createCoordinatorApi({
   parserPool,
   getIndexer,
   adapterFactories: defaultAdapterFactories,
   handleStoreOpening,
+  customParserStoreOpening,
 });
 
 Comlink.expose(coordinatorApi);

@@ -22,4 +22,22 @@ export interface LogParser {
   readonly id: string;
   canParse: (line: string) => boolean;
   parseLine: (line: string, ctx: ParseCtx) => ParseResult;
+  /**
+   * Multi-line continuation marker. When present, the ingest
+   * orchestrator buffers consecutive physical lines that match this
+   * pattern and feeds the parser one *joined* block (with embedded
+   * `\n`) instead of each line individually. `parseLine` should be
+   * written to expect that joined input.
+   *
+   * Stored as a regex source string (not `RegExp`) so it can be
+   * shipped across the worker boundary via Comlink — `RegExp`
+   * instances aren't structured-cloneable.
+   */
+  readonly continuationRegex?: string;
+  /**
+   * Optional default columns that a UI may suggest when a source is
+   * detected as this parser's format. Picker still wins if the user
+   * overrides; this just seeds a sensible first-paint layout.
+   */
+  readonly defaultColumns?: ReadonlyArray<string>;
 }

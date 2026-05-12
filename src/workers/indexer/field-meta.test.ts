@@ -184,6 +184,7 @@ describe('aggregateFieldMeta', () => {
 
 describe('aggregateFieldDescriptors', () => {
   const row = (overrides: Partial<FieldMetaRow>): FieldMetaRow => ({
+    source_id: 's1',
     key: 'k',
     type: 'string',
     occurrences: 0,
@@ -221,7 +222,30 @@ describe('aggregateFieldDescriptors', () => {
         { value: 'api', count: 3 },
         { value: 'billing', count: 1 },
       ],
+      perSource: [{ sourceId: 's1', occurrences: 4, presenceRate: 0.4 }],
     });
+  });
+
+  it('builds perSource breakdown when same key appears in multiple sources', () => {
+    const out = aggregateFieldDescriptors([
+      row({ source_id: 's1', key: 'req_id', occurrences: 500, total_seen: 500 }),
+      row({ source_id: 's2', key: 'req_id', occurrences: 100, total_seen: 800 }),
+    ]);
+    expect(out[0]?.perSource).toEqual([
+      { sourceId: 's1', occurrences: 500, presenceRate: 1 },
+      { sourceId: 's2', occurrences: 100, presenceRate: 0.125 },
+    ]);
+  });
+
+  it('groups perSource entries by source_id even when the row order is mixed', () => {
+    const out = aggregateFieldDescriptors([
+      row({ source_id: 's1', key: 'k', occurrences: 1, total_seen: 1 }),
+      row({ source_id: 's2', key: 'k', occurrences: 2, total_seen: 2 }),
+      row({ source_id: 's1', key: 'k', occurrences: 3, total_seen: 3 }),
+    ]);
+    const bySid = new Map(out[0]?.perSource?.map((p) => [p.sourceId, p]) ?? []);
+    expect(bySid.get('s1')?.occurrences).toBe(4);
+    expect(bySid.get('s2')?.occurrences).toBe(2);
   });
 
   it('sums occurrences and merges top values across sources for the same key', () => {

@@ -88,6 +88,31 @@ const ITEMS: RailItem[] = [
       </svg>
     ),
   },
+  {
+    id: 'parsers',
+    label: 'Parsers',
+    icon: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        {/* Outlined `{}` braces — convention for "code/regex/parser". */}
+        <path
+          d="M6 3 L4.5 3 A1.5 1.5 0 0 0 3 4.5 V7 L2 8 L3 9 V11.5 A1.5 1.5 0 0 0 4.5 13 H6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        <path
+          d="M10 3 L11.5 3 A1.5 1.5 0 0 1 13 4.5 V7 L14 8 L13 9 V11.5 A1.5 1.5 0 0 1 11.5 13 H10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
 ];
 
 const SETTINGS_ICON = (

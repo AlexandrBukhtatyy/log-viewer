@@ -26,6 +26,17 @@ export interface ResumeReport {
 
 export type ExportFormat = 'jsonl' | 'csv';
 
+/**
+ * Public metadata about a registered parser, exposed via
+ * `coordinator.listParsers()` for the UI (Phase 2.B). Doesn't carry
+ * the regex/`parseLine` itself — just enough to populate a picker
+ * (id, default-columns hint).
+ */
+export interface ParserInfo {
+  readonly id: string;
+  readonly defaultColumns: ReadonlyArray<string>;
+}
+
 export interface CallOptions {
   readonly taskId?: string;
 }
@@ -118,6 +129,34 @@ export interface CoordinatorApi {
    * and surface usage stats (occurrences, presenceRate, top values).
    */
   getFieldSchema: (filter: LogFilter) => Promise<ReadonlyArray<FieldDescriptor>>;
+
+  /**
+   * Enumerate parsers registered in the worker-side `ParserRegistry`.
+   * UI uses this to populate the parser-override dropdown when adding
+   * a source (Phase 2.B). Returned in priority-descending order so
+   * the auto-detect winner sits at the top of the menu.
+   */
+  listParsers: () => Promise<ReadonlyArray<ParserInfo>>;
+
+  /** List user-defined custom parser definitions (Phase 2.C). */
+  listCustomParsers: () => Promise<
+    ReadonlyArray<import('../parsers/custom-parser-def.ts').CustomParserDef>
+  >;
+  /** Save (insert/update) a custom parser definition; re-registers in workers. */
+  upsertCustomParser: (
+    def: import('../parsers/custom-parser-def.ts').CustomParserDef,
+  ) => Promise<void>;
+  /** Delete a custom parser by id; sources using it fall back to auto-detect on next ingest. */
+  removeCustomParser: (id: string) => Promise<void>;
+
+  /**
+   * Change the parser used by a single source (Phase 2.C.6). `parserId` is
+   * either a registered parser id, or `null` to clear the override (revert
+   * to auto-detect). Wipes existing entries for the source and re-ingests
+   * from scratch so the rows reflect the new parser. No-op if the source
+   * isn't currently live.
+   */
+  setSourceParser: (id: SourceId, parserId: string | null) => Promise<void>;
 
   listSources: () => Promise<ReadonlyArray<SourceRecord>>;
   subscribeStatus: (

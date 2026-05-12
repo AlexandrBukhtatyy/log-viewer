@@ -72,6 +72,8 @@ export interface LvFileNode {
   root?: boolean;
   /** Source kind for the outlined per-source glyph at root level. */
   source?: LvSourceKind;
+  /** Parser id resolved at ingest time (Phase 2.E). Drives the parser-badge on the source row. */
+  parserId?: string;
 }
 
 export interface LvFolderNode {
@@ -90,6 +92,8 @@ export interface LvFolderNode {
   progressLabel?: string;
   /** True while the source is in loading/indexing/streaming. Used to render a spinner. */
   live?: boolean;
+  /** Parser id resolved at ingest time (Phase 2.E). Same semantics as on LvFileNode. */
+  parserId?: string;
   children: LvNode[];
 }
 
@@ -104,7 +108,7 @@ export type LvCatalogRoot =
   | (LvFolderNode & { root: true })
   | (LvFileNode & { root: true });
 
-export type LvRail = 'files' | 'search' | 'bookmarks' | 'alerts' | 'ai';
+export type LvRail = 'files' | 'search' | 'bookmarks' | 'alerts' | 'ai' | 'parsers';
 
 /**
  * Group-by key (ADR-0017). Free-form `FieldKey` — built-in `@`-attribute
@@ -140,4 +144,11 @@ export interface LvTab {
   name: string;
   path?: string;
   kind?: LvLogKind;
+  /**
+   * VS Code-style preview vs pinned. Sidebar single-click opens a preview
+   * tab (italic) and reuses the same slot on the next single-click.
+   * Double-click on the tab itself flips this to `true`. `__all__`
+   * ignores this field.
+   */
+  isPinned?: boolean;
 }

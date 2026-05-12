@@ -99,3 +99,5 @@ flowchart LR
 - [0015. Directory source: per-file LogLineFrame, fields.file_path, filter.filePaths](0015-directory-tree-and-file-frames.md) — proposed
 - [0016. Offset-pointer + minute-bucket index, lazy body read](0016-offset-pointer-index-lazy-body.md) — proposed
 - [0017. Dynamic field schema + `@`-namespace for built-in attributes](0017-dynamic-field-schema.md) — proposed
+- [0018. Parser plugin architecture, custom parsers, and re-parse cycle](0018-parser-plugin-architecture.md) — proposed
+- [0019. Multi-line ingest buffer in orchestrator (option A)](0019-multiline-buffer-in-orchestrator.md) — proposed

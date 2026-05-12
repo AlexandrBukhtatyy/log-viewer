@@ -98,6 +98,7 @@ const fileNodeFromSource = (record: SourceRecord): LvFileNode => ({
   errorMessage:
     record.status.kind === 'error' ? record.status.error.message : undefined,
   progressLabel: progressLabelOf(record.status),
+  parserId: record.parserId,
 });
 
 /**
@@ -131,6 +132,7 @@ const directoryRoot = (
         : undefined,
     live: flat.live,
     progressLabel: flat.progressLabel,
+    parserId: rec.parserId,
     children: tree.children,
   };
 };

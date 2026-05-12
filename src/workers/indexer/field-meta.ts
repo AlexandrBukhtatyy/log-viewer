@@ -99,6 +99,7 @@ export const mergeTopValues = (
  * `aggregateFieldDescriptors`.
  */
 export interface FieldMetaRow {
+  readonly source_id: string;
   readonly key: string;
   readonly type: string;
   readonly occurrences: number | null;
@@ -124,6 +125,8 @@ export const aggregateFieldDescriptors = (
     occurrences: number;
     totalSeen: number;
     topVals: Map<string, number>;
+    /** Per-source rollup — drives the compatibility badges. */
+    perSource: Map<string, { occurrences: number; totalSeen: number }>;
   }
   const byKey = new Map<string, Acc>();
   for (const r of rows) {
@@ -136,11 +139,20 @@ export const aggregateFieldDescriptors = (
         occurrences: 0,
         totalSeen: 0,
         topVals: new Map(),
+        perSource: new Map(),
       };
       byKey.set(r.key, acc);
     }
-    acc.occurrences += Number(r.occurrences ?? 0);
-    acc.totalSeen += Number(r.total_seen ?? 0);
+    const rOcc = Number(r.occurrences ?? 0);
+    const rTot = Number(r.total_seen ?? 0);
+    acc.occurrences += rOcc;
+    acc.totalSeen += rTot;
+    if (r.source_id !== '') {
+      const ps = acc.perSource.get(r.source_id) ?? { occurrences: 0, totalSeen: 0 };
+      ps.occurrences += rOcc;
+      ps.totalSeen += rTot;
+      acc.perSource.set(r.source_id, ps);
+    }
     if (r.type === 'mixed') acc.sawMixed = true;
     else if (r.type === 'string' || r.type === 'number' || r.type === 'boolean') {
       acc.types.add(r.type);
@@ -172,6 +184,15 @@ export const aggregateFieldDescriptors = (
       .map(([value, count]) => ({ value, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, FIELD_META_TOP_K);
+    const perSource = [...acc.perSource.entries()]
+      .map(([sourceId, agg]) => ({
+        sourceId,
+        occurrences: agg.occurrences,
+        ...(agg.totalSeen > 0
+          ? { presenceRate: agg.occurrences / agg.totalSeen }
+          : {}),
+      }))
+      .sort((a, b) => b.occurrences - a.occurrences);
     out.push({
       key,
       label: key,
@@ -180,6 +201,7 @@ export const aggregateFieldDescriptors = (
       occurrences: acc.occurrences,
       ...(presenceRate !== undefined ? { presenceRate } : {}),
       ...(topValues.length > 0 ? { topValues } : {}),
+      ...(perSource.length > 0 ? { perSource } : {}),
     });
   }
   out.sort((a, b) => {

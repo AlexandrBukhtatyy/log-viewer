@@ -15,10 +15,16 @@ const makeCtx = (): ParseCtx => {
 };
 
 describe('ParserRegistry', () => {
-  it('createDefaultRegistry registers json-lines (high prio) and plain-text (low)', () => {
+  it('createDefaultRegistry registers the built-in parsers in priority order', () => {
     const reg = createDefaultRegistry();
     const ids = reg.list().map((p) => p.id);
-    expect(ids).toEqual(['json-lines', 'plain-text']);
+    expect(ids).toEqual([
+      'json-lines',
+      'nginx-combined',
+      'syslog-3164',
+      'app-text',
+      'plain-text',
+    ]);
   });
 
   describe('pick', () => {

@@ -5,8 +5,10 @@ import type {
   ExportFormat,
   GroupBucket,
   HistogramResponse,
+  ParserInfo,
   ResumeReport,
 } from '../core/rpc/coordinator.contract.ts';
+import type { CustomParserDef } from '../core/parsers/custom-parser-def.ts';
 import type {
   CloudProvider,
   DbDialect,
@@ -52,6 +54,7 @@ export interface ViewActions {
     name?: string;
     watch?: boolean;
     glob?: string;
+    parserId?: string;
   }) => Promise<SourceId | null>;
   addText: (name: string, text: string) => Promise<SourceId>;
   addUrl: (
@@ -117,6 +120,11 @@ export interface ViewActions {
     to: number,
   ) => Promise<ReadonlyArray<LogEntry>>;
   getFieldSchema: (filter: LogFilter) => Promise<ReadonlyArray<FieldDescriptor>>;
+  listParsers: () => Promise<ReadonlyArray<ParserInfo>>;
+  listCustomParsers: () => Promise<ReadonlyArray<CustomParserDef>>;
+  upsertCustomParser: (def: CustomParserDef) => Promise<void>;
+  removeCustomParser: (id: string) => Promise<void>;
+  setSourceParser: (id: SourceId, parserId: string | null) => Promise<void>;
   refresh: () => Promise<void>;
   destroy: () => void;
 }
@@ -291,6 +299,7 @@ export const createLogClient = (): ViewStore => {
           handle,
           glob: opts?.glob,
           watch: opts?.watch,
+          parserId: opts?.parserId,
         });
       },
       addText: async (name, text) =>
@@ -382,6 +391,11 @@ export const createLogClient = (): ViewStore => {
       getEntriesScoped: async (filter, from, to) =>
         api().getEntriesScoped(filter, from, to),
       getFieldSchema: async (filter) => api().getFieldSchema(filter),
+      listParsers: async () => api().listParsers(),
+      listCustomParsers: async () => api().listCustomParsers(),
+      upsertCustomParser: async (def) => api().upsertCustomParser(def),
+      removeCustomParser: async (id) => api().removeCustomParser(id),
+      setSourceParser: async (id, parserId) => api().setSourceParser(id, parserId),
       refresh,
       destroy: () => {
         statusUnsubPromise

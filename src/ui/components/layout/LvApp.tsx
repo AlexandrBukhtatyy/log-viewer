@@ -31,6 +31,7 @@ import { LvSearchPanel } from '../panels/LvSearchPanel.tsx';
 import { LvBookmarksPanel } from '../panels/LvBookmarksPanel.tsx';
 import { LvAiPanel } from '../panels/LvAiPanel.tsx';
 import { LvAlertsPanel } from '../panels/LvAlertsPanel.tsx';
+import { LvParsersPanel } from '../panels/LvParsersPanel.tsx';
 import { LvCommandPalette } from '../modals/LvCommandPalette.tsx';
 import { LvShortcutsModal } from '../modals/LvShortcutsModal.tsx';
 import {
@@ -94,9 +95,11 @@ export interface LvAppProps {
   readonly activeTabId: string;
   setActiveTabId: (id: string) => void;
   readonly tabs: ReadonlyArray<LvTab>;
-  /** Click on a sidebar file → open as a pinned tab. */
+  /** Click on a sidebar file → open (or replace) the preview tab. */
   onOpenFile: (sourceId: string) => void;
   onCloseTab: (tabId: string) => void;
+  /** Promote a preview tab to pinned (fires from dbl-click on the tab). */
+  onPinTab: (tabId: string) => void;
 
   // Source-controller actions.
   onAddRoot: (sourceType: LvSourceKind) => void;
@@ -109,6 +112,14 @@ export interface LvAppProps {
   onSubmitAddSource?: (data: LvAddSourceFormData) => void;
   /** Names of already-ingested sources — used to validate uniqueness in the modal. */
   readonly existingSourceNames?: ReadonlySet<string>;
+  /** Available parsers from the worker registry — populates the parser dropdown in Add-Source modal. */
+  readonly availableParsers?: ReadonlyArray<{ readonly id: string }>;
+  /** User-defined custom parsers (Phase 2.C) — rendered in the Parsers rail panel. */
+  readonly customParsers?: ReadonlyArray<import('../../../core/parsers/custom-parser-def.ts').CustomParserDef>;
+  onUpsertCustomParser?: (
+    def: import('../../../core/parsers/custom-parser-def.ts').CustomParserDef,
+  ) => void | Promise<void>;
+  onRemoveCustomParser?: (id: string) => void | Promise<void>;
   onGrantPermission?: (id: string) => void;
   onCancelSource?: (id: string) => void;
 
@@ -149,6 +160,8 @@ export interface LvAppProps {
   readonly columns: ReadonlyArray<LvColumnPref>;
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
+  /** Returns resolved parser id for the entry's source — drives Meta-tab `@parser.id`. */
+  parserIdOf?: (entry: LogEntry) => string | undefined;
 
   /** File menu → Export → JSONL/CSV; container wires `useExport`. */
   onExport?: (format: 'jsonl' | 'csv') => void;
@@ -186,11 +199,16 @@ export const LvApp = ({
   tabs,
   onOpenFile,
   onCloseTab,
+  onPinTab,
   onAddRoot,
   onRemoveRoot,
   onOpenLocalFile,
   onSubmitAddSource,
   existingSourceNames,
+  availableParsers,
+  customParsers = [],
+  onUpsertCustomParser,
+  onRemoveCustomParser,
   onGrantPermission,
   onCancelSource,
   tweaks,
@@ -216,6 +234,7 @@ export const LvApp = ({
   columns,
   onColumnsChange,
   cellValueOf,
+  parserIdOf,
   onExport,
   histogramData,
   stats,
@@ -485,6 +504,12 @@ export const LvApp = ({
           setRail('files');
         }}
       />
+    ) : rail === 'parsers' ? (
+      <LvParsersPanel
+        parsers={customParsers}
+        onUpsert={(def) => onUpsertCustomParser?.(def)}
+        onRemove={(id) => onRemoveCustomParser?.(id)}
+      />
     ) : (
       <LvAlertsPanel />
     );
@@ -563,10 +588,12 @@ export const LvApp = ({
           activeTabId={activeTabId}
           onActivateTab={setActiveTabId}
           onCloseTab={onCloseTab}
+          onPinTab={onPinTab}
           bookmarks={bookmarks}
           onBookmark={toggleBookmark}
           bookmarkKeyOf={bookmarkKeyOf}
           tweaks={tweaks}
+          setTweak={setTweak}
           timelineOn={tweaks.timelineOn}
           onToggleTimeline={() => setTweak('timelineOn', !tweaks.timelineOn)}
           groupBy={groupBy}
@@ -582,6 +609,7 @@ export const LvApp = ({
           columns={columns}
           onColumnsChange={onColumnsChange}
           cellValueOf={cellValueOf}
+          parserIdOf={parserIdOf}
           renderDetailEditor={renderDetailEditor}
         />
       </div>
@@ -602,6 +630,7 @@ export const LvApp = ({
         open={addSourceModal.open}
         initialWatch={addSourceModal.open ? addSourceModal.initialWatch : false}
         existingNames={existingSourceNames}
+        parsers={availableParsers}
         onClose={() => setAddSourceModal({ open: false })}
         onSubmit={(data) => {
           onSubmitAddSource?.(data);

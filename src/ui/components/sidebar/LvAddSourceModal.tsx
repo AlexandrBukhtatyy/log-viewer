@@ -5,6 +5,11 @@ export interface LvAddSourceFormData {
   readonly name: string;
   readonly watch: boolean;
   readonly glob: string | null;
+  /**
+   * Parser override (Phase 2.B). `undefined` ⇒ auto-detect. Otherwise
+   * `registry.pickById(parserId)` wins over the first-line sniff.
+   */
+  readonly parserId?: string;
 }
 
 export interface LvAddSourceModalProps {
@@ -21,6 +26,11 @@ export interface LvAddSourceModalProps {
    * collides with an existing source.
    */
   readonly existingNames?: ReadonlySet<string>;
+  /**
+   * Parsers known to the worker registry — populates the parser-override
+   * dropdown (Phase 2.B). Provider feeds this from `coordinator.listParsers()`.
+   */
+  readonly parsers?: ReadonlyArray<{ readonly id: string }>;
   onClose: () => void;
   onSubmit: (data: LvAddSourceFormData) => void;
 }
@@ -46,6 +56,7 @@ export const LvAddSourceModal = ({
   open,
   initialWatch = false,
   existingNames,
+  parsers,
   onClose,
   onSubmit,
 }: LvAddSourceModalProps) => {
@@ -56,6 +67,11 @@ export const LvAddSourceModal = ({
   const [watch, setWatch] = useState(initialWatch);
   const [glob, setGlob] = useState('');
   const [pickerError, setPickerError] = useState<string | null>(null);
+  // 'auto' means "let the worker pick" (legacy behaviour); any other
+  // value is a parser id from `parsers`. Stored as plain string so the
+  // <select> stays uncontroversial; we translate 'auto' → undefined on
+  // submit so the orchestrator's auto-detect path kicks in.
+  const [parserChoice, setParserChoice] = useState<string>('auto');
 
   // Derived-state reset: when the modal transitions from closed → open
   // (or initialWatch flips between calls), wipe the form. Done as a
@@ -72,6 +88,7 @@ export const LvAddSourceModal = ({
       setWatch(initialWatch);
       setGlob('');
       setPickerError(null);
+      setParserChoice('auto');
     }
   }
 
@@ -117,6 +134,7 @@ export const LvAddSourceModal = ({
       name: finalName,
       watch,
       glob: finalGlob.length > 0 ? finalGlob : null,
+      parserId: parserChoice === 'auto' ? undefined : parserChoice,
     });
   };
 
@@ -220,6 +238,25 @@ export const LvAddSourceModal = ({
               value={glob}
               onChange={(e) => setGlob(e.target.value)}
             />
+          </div>
+
+          <div className="lv-form-row">
+            <label className="lv-form-label" htmlFor="lv-add-src-parser">
+              Parser
+            </label>
+            <select
+              id="lv-add-src-parser"
+              className="lv-form-input"
+              value={parserChoice}
+              onChange={(e) => setParserChoice(e.target.value)}
+            >
+              <option value="auto">Auto-detect</option>
+              {(parsers ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.id}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="lv-modal-ft lv-modal-ft-actions">

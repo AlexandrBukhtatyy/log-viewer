@@ -1,5 +1,6 @@
 import type * as Comlink from 'comlink';
 import type { IndexerApi } from '../../../core/rpc/indexer.contract.ts';
+import type { ParseLineFrame } from '../../../core/rpc/parser.contract.ts';
 import type {
   LogLineFrame,
   LogSourceAdapter,
@@ -15,6 +16,16 @@ export interface IngestParams {
   readonly signal: AbortSignal;
   readonly onStatus: (status: SourceStatus) => void;
   readonly onChange: () => void;
+  /**
+   * Fires once when the orchestrator first picks a parser for this
+   * source (either auto-detect on first batch or — once Phase 2.B
+   * lands — the per-source override). Coordinator uses it to surface
+   * `@parser.id` to the UI and trigger the format-specific column
+   * preset in [LvAppContainer](../../../app/containers/LvAppContainer.tsx).
+   */
+  readonly onParserDetected?: (
+    info: { readonly parserId: string; readonly defaultColumns: ReadonlyArray<string> },
+  ) => void;
 }
 
 const CHUNKER_OPTS = { maxLines: 1000, maxMs: 100 } as const;
@@ -33,7 +44,16 @@ const formatError = (err: unknown): { name: string; message: string } => ({
  * (signal) are silent and just stop the loop.
  */
 export const ingestSource = async (params: IngestParams): Promise<void> => {
-  const { source, adapter, parserPool, indexer, signal, onStatus, onChange } = params;
+  const {
+    source,
+    adapter,
+    parserPool,
+    indexer,
+    signal,
+    onStatus,
+    onChange,
+    onParserDetected,
+  } = params;
 
   // Lazy-import chunker to keep this file dep-free of TransformStream when reused in node tests.
   const { createChunker } = await import('./chunker.ts');
@@ -53,6 +73,7 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
     .getReader();
 
   let parserId: string | null = null;
+  let continuationRegex: RegExp | null = null;
   let entriesIndexed = 0;
   let seq = 0;
 
@@ -64,6 +85,74 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
 
   onStatus(progressStatus(entriesIndexed));
 
+  // Multi-line buffer (Phase 2.D).
+  //
+  // When the active parser declares `continuationRegex`, consecutive
+  // physical lines that match it are folded into the same logical
+  // record. We hold the open frame here, append continuations into
+  // `cont`, and flush either on a non-matching line or on a path
+  // change (continuations don't cross files in a directory source).
+  // The flushed frame ships to parser-pool as one line with `\n`
+  // embedded; the multi-line parser splits it back inside `parseBlock`.
+  let openFrame: ParseLineFrame | null = null;
+  let cont: ParseLineFrame[] = [];
+  let openPath: string | null = null;
+
+  const buildCombinedFrame = (): ParseLineFrame | null => {
+    if (openFrame === null) return null;
+    const tail = cont.length > 0 ? cont[cont.length - 1]! : openFrame;
+    const text =
+      cont.length === 0
+        ? openFrame.line
+        : [openFrame.line, ...cont.map((c) => c.line)].join('\n');
+    return {
+      line: text,
+      byteStart: openFrame.byteStart,
+      byteEnd: tail.byteEnd,
+    };
+  };
+
+  const flushOpen = (out: ParseLineFrame[]): void => {
+    const combined = buildCombinedFrame();
+    if (combined !== null) out.push(combined);
+    openFrame = null;
+    cont = [];
+  };
+
+  /** Fold a batch through the continuation pattern, producing the
+   *  frames that should go to parser-pool. Open frame at the end of
+   *  the batch stays in the buffer for the next batch. */
+  const foldBatch = (
+    lines: ReadonlyArray<ParseLineFrame>,
+    path: string,
+  ): ReadonlyArray<ParseLineFrame> => {
+    if (continuationRegex === null) return lines;
+    // Path boundary — directory sources rotate per-file, and stack
+    // continuations can't cross those.
+    if (openPath !== null && openPath !== path && openFrame !== null) {
+      const flushed: ParseLineFrame[] = [];
+      flushOpen(flushed);
+      openPath = path;
+      const folded = foldBatch(lines, path);
+      return [...flushed, ...folded];
+    }
+    openPath = path;
+
+    const out: ParseLineFrame[] = [];
+    for (const frame of lines) {
+      const isCont = continuationRegex.test(frame.line);
+      if (isCont && openFrame !== null) {
+        cont.push(frame);
+        continue;
+      }
+      // Non-continuation line — flush the previous record (if any) and
+      // start a new one anchored on this frame.
+      flushOpen(out);
+      openFrame = frame;
+    }
+    return out;
+  };
+
   try {
     while (true) {
       if (signal.aborted) break;
@@ -73,20 +162,52 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
       if (batch === undefined || batch.lines.length === 0) continue;
       const { lines, path } = batch;
 
-      // Detect parser on the first non-empty batch.
+      // Detect parser on the first non-empty batch. Once we know which
+      // parser owns this source, grab its multi-line continuation
+      // pattern (if any) so the fold loop below can act on it.
       if (parserId === null) {
-        const sample = lines
-          .slice(0, SAMPLE_LINES_FOR_DETECT)
-          .map((f) => f.line);
-        parserId = await parserPool.withWorker((p) => p.detectParser(sample));
+        // Honor per-source override (Phase 2.B) — if the user (or a
+        // persisted handle) names a parser explicitly, skip detection
+        // and just trust the choice. Auto-detect remains the default
+        // when no override is set.
+        if ('parserId' in source && source.parserId) {
+          parserId = source.parserId;
+        } else {
+          const sample = lines
+            .slice(0, SAMPLE_LINES_FOR_DETECT)
+            .map((f) => f.line);
+          parserId = await parserPool.withWorker((p) => p.detectParser(sample));
+        }
+        const detected = parserId;
+        const meta = await parserPool.withWorker((p) =>
+          p.getParserMeta(detected),
+        );
+        if (meta?.continuationRegex) {
+          try {
+            continuationRegex = new RegExp(meta.continuationRegex);
+          } catch (err) {
+            console.warn(
+              `[ingest] parser '${detected}' has malformed continuationRegex; ignoring`,
+              err,
+            );
+            continuationRegex = null;
+          }
+        }
+        onParserDetected?.({
+          parserId: detected,
+          defaultColumns: meta?.defaultColumns ?? [],
+        });
       }
 
+      const folded = foldBatch(lines, path);
+      if (folded.length === 0) continue;
+
       const startSeq = seq;
-      seq += lines.length;
+      seq += folded.length;
 
       const detectedParserId = parserId;
       const entries = await parserPool.withWorker((p) =>
-        p.parse(lines, {
+        p.parse(folded, {
           sourceId: source.id,
           startSeq,
           parserId: detectedParserId,
@@ -100,6 +221,31 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
       entriesIndexed += entries.length;
       onStatus(progressStatus(entriesIndexed));
       onChange();
+    }
+
+    // Flush any record still buffered at EOF.
+    if (openFrame !== null && parserId !== null) {
+      const tail: ParseLineFrame[] = [];
+      flushOpen(tail);
+      if (tail.length > 0) {
+        const startSeq = seq;
+        seq += tail.length;
+        const detectedParserId = parserId;
+        const path = openPath ?? '';
+        const entries = await parserPool.withWorker((p) =>
+          p.parse(tail, {
+            sourceId: source.id,
+            startSeq,
+            parserId: detectedParserId,
+            filePath: path === '' ? undefined : path,
+          }),
+        );
+        if (entries.length > 0) {
+          await indexer.insertBatch(entries);
+          entriesIndexed += entries.length;
+          onChange();
+        }
+      }
     }
 
     // Emit `done` even on abort — partial entries are real and indexed; UI

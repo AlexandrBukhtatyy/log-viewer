@@ -21,6 +21,13 @@ export interface FieldTopValue {
   readonly count: number;
 }
 
+export interface FieldPerSourceEntry {
+  readonly sourceId: string;
+  readonly occurrences: number;
+  /** occurrences / total_seen for this source; absent when total_seen=0. */
+  readonly presenceRate?: number;
+}
+
 export interface FieldDescriptor {
   readonly key: FieldKey;
   readonly label: string;
@@ -31,6 +38,12 @@ export interface FieldDescriptor {
   /** occurrences / total_seen; absent for builtins or when total_seen=0. */
   readonly presenceRate?: number;
   readonly topValues?: ReadonlyArray<FieldTopValue>;
+  /**
+   * Per-source breakdown used by Phase 3 compatibility badges
+   * (`shared` / `partial` / `unique`). Only populated for dynamic
+   * fields — built-ins are universal so the picker has no need.
+   */
+  readonly perSource?: ReadonlyArray<FieldPerSourceEntry>;
 }
 
 /**

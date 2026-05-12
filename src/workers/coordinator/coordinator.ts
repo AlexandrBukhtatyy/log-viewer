@@ -11,6 +11,7 @@ import type {
 import type { LogSourceAdapterFactory } from '../../core/sources/source-adapter.ts';
 import type {
   EntryId,
+  LogEntry,
   LogFilter,
   LogSource,
   LogSourceInput,
@@ -21,7 +22,15 @@ import type {
 } from '../../core/types/index.ts';
 import { EMPTY_FILTER } from '../../core/types/index.ts';
 import { BUILT_IN_FIELD_DESCRIPTORS } from '../../core/filter/field-descriptor.ts';
+import {
+  compileFreeTextQuery,
+  matchesFreeText,
+  type CompiledQuery,
+} from '../../core/filter/query-match.ts';
 import { newSourceId } from '../../core/util/ids.ts';
+import type { CustomParserDef } from '../../core/parsers/custom-parser-def.ts';
+import { removeSpool } from '../../core/storage/opfs-spool.ts';
+import type { CustomParserStore } from './custom-parsers/store.ts';
 import type { HandleStore } from './handles/handle-store.ts';
 import { ingestSource } from './ingest/ingest-orchestrator.ts';
 import type { ParserPool } from './pool/parser-pool.ts';
@@ -37,12 +46,27 @@ interface SourceEntry {
   source: LogSource;
   status: SourceStatus;
   aborter: AbortController | null;
+  /** Parser id resolved at ingest time. Populated by orchestrator's onParserDetected callback. */
+  parserId?: string;
+  /** Parser's `defaultColumns` snapshot — propagated to `SourceRecord` so UI can auto-apply once. */
+  parserDefaultColumns?: ReadonlyArray<string>;
 }
 
 const buildLogSource = (input: LogSourceInput, id: SourceId): LogSource => {
+  // `parserId` only applies to the kinds whose ingestion goes through
+  // the parser pool (file/directory/text/url/stream). Stub kinds
+  // — remote-ssh/cloud/k8s/bus/db/snapshot — never reach the parser
+  // selection step, so we don't bother carrying the override.
   switch (input.kind) {
     case 'file':
-      return { kind: 'file', id, name: input.name, size: input.size, file: input.file };
+      return {
+        kind: 'file',
+        id,
+        name: input.name,
+        size: input.size,
+        file: input.file,
+        parserId: input.parserId,
+      };
     case 'directory':
       return {
         kind: 'directory',
@@ -51,9 +75,16 @@ const buildLogSource = (input: LogSourceInput, id: SourceId): LogSource => {
         handle: input.handle,
         glob: input.glob,
         watch: input.watch,
+        parserId: input.parserId,
       };
     case 'text':
-      return { kind: 'text', id, name: input.name, text: input.text };
+      return {
+        kind: 'text',
+        id,
+        name: input.name,
+        text: input.text,
+        parserId: input.parserId,
+      };
     case 'url':
       return {
         kind: 'url',
@@ -61,6 +92,7 @@ const buildLogSource = (input: LogSourceInput, id: SourceId): LogSource => {
         name: input.name,
         url: input.url,
         headers: input.headers,
+        parserId: input.parserId,
       };
     case 'stream':
       return {
@@ -69,6 +101,7 @@ const buildLogSource = (input: LogSourceInput, id: SourceId): LogSource => {
         name: input.name,
         transport: input.transport,
         url: input.url,
+        parserId: input.parserId,
       };
     case 'remote-ssh':
       return {
@@ -140,7 +173,9 @@ const buildLogSource = (input: LogSourceInput, id: SourceId): LogSource => {
 const placeholderFromIndexed = (rec: IndexedSourceRecord): LogSource | null => {
   switch (rec.kind) {
     case 'file': {
-      const meta = rec.metaJson ? (JSON.parse(rec.metaJson) as { size?: number }) : {};
+      const meta = rec.metaJson
+        ? (JSON.parse(rec.metaJson) as { size?: number; parserId?: string })
+        : {};
       return {
         kind: 'file',
         id: rec.id,
@@ -150,24 +185,42 @@ const placeholderFromIndexed = (rec: IndexedSourceRecord): LogSource | null => {
         // for byte-range reads, which actually goes through the OPFS
         // spool, not this object.
         file: new File([], rec.name),
+        parserId: meta.parserId,
       };
     }
     case 'directory':
       return null;
-    case 'text':
-      return { kind: 'text', id: rec.id, name: rec.name, text: '' };
+    case 'text': {
+      const meta = rec.metaJson
+        ? (JSON.parse(rec.metaJson) as { parserId?: string })
+        : {};
+      return {
+        kind: 'text',
+        id: rec.id,
+        name: rec.name,
+        text: '',
+        parserId: meta.parserId,
+      };
+    }
     case 'url': {
-      const meta = rec.metaJson ? (JSON.parse(rec.metaJson) as { url?: string }) : {};
+      const meta = rec.metaJson
+        ? (JSON.parse(rec.metaJson) as { url?: string; parserId?: string })
+        : {};
       return {
         kind: 'url',
         id: rec.id,
         name: rec.name,
         url: typeof meta.url === 'string' ? meta.url : '',
+        parserId: meta.parserId,
       };
     }
     case 'stream': {
       const meta = rec.metaJson
-        ? (JSON.parse(rec.metaJson) as { transport?: 'ws' | 'sse'; url?: string })
+        ? (JSON.parse(rec.metaJson) as {
+            transport?: 'ws' | 'sse';
+            url?: string;
+            parserId?: string;
+          })
         : {};
       return {
         kind: 'stream',
@@ -175,6 +228,7 @@ const placeholderFromIndexed = (rec: IndexedSourceRecord): LogSource | null => {
         name: rec.name,
         transport: meta.transport ?? 'ws',
         url: typeof meta.url === 'string' ? meta.url : '',
+        parserId: meta.parserId,
       };
     }
     // Stub-kinds — not persisted (their adapters throw on open). If they
@@ -204,6 +258,8 @@ export interface CoordinatorDeps {
   readonly adapterFactories: Partial<Record<LogSourceKind, LogSourceAdapterFactory>>;
   /** Awaited inside methods that touch handles; keeps Comlink.expose synchronous. */
   readonly handleStoreOpening: Promise<HandleStore>;
+  /** Per-workspace user-defined parser store (Phase 2.C). */
+  readonly customParserStoreOpening: Promise<CustomParserStore>;
 }
 
 export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
@@ -233,7 +289,11 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
             const persisted = handleByIdx.get(rec.id);
             if (persisted && persisted.kind === 'directory') {
               const meta = rec.metaJson
-                ? (JSON.parse(rec.metaJson) as { glob?: string; watch?: boolean })
+                ? (JSON.parse(rec.metaJson) as {
+                    glob?: string;
+                    watch?: boolean;
+                    parserId?: string;
+                  })
                 : {};
               logSource = {
                 kind: 'directory',
@@ -242,15 +302,23 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
                 handle: persisted.handle as FileSystemDirectoryHandle,
                 glob: meta.glob,
                 watch: meta.watch,
+                parserId: meta.parserId,
               };
             }
           } else {
             logSource = placeholderFromIndexed(rec);
           }
           if (logSource === null) continue;
+          // Source.parserId (when present) was stored in meta_json by
+          // `serializeSourceMeta`; surface it on the SourceRecord so
+          // the parser badge in the sidebar and `@parser.id` in Meta
+          // tab survive reload.
+          const persistedParserId =
+            'parserId' in logSource ? logSource.parserId : undefined;
           persistedRecords.set(rec.id, {
             source: logSource,
             status: { kind: 'done', entryCount: rec.entryCount },
+            parserId: persistedParserId,
           });
         }
         succeeded = true;
@@ -274,14 +342,89 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   // Kick off hydration eagerly — emitStatus benefits from it being ready, but it's not awaited there.
   void hydratePersisted();
 
+  // Eagerly load user-defined parsers (Phase 2.C). The pool remembers
+  // the list and replays it on every spawned worker; failures here
+  // are surfaced via console but never block the rest of startup.
+  void (async () => {
+    try {
+      const store = await deps.customParserStoreOpening;
+      const defs = await store.list();
+      if (defs.length > 0) {
+        await deps.parserPool.loadCustomParsers(defs);
+      }
+    } catch (err) {
+      console.warn('[coordinator] custom-parser hydration failed', err);
+    }
+  })();
+
   let activeFilter: LogFilter = EMPTY_FILTER;
   let version = 0;
   let pendingFilteredCount: Promise<number> | null = null;
 
+  // Slow-path cache for free-text query (Phase 1.1 of the multi-format
+  // roadmap). Each entry of this cache holds the array of *resolved*
+  // matching entries for a given (filter+version) tuple, so paging
+  // through the result via repeated `getRange` calls doesn't re-scan
+  // every batch. Invalidated whenever the user filter or the underlying
+  // entry set changes.
+  let freeTextCache: {
+    readonly sig: string;
+    readonly matches: ReadonlyArray<LogEntry>;
+  } | null = null;
+  const invalidateFreeTextCache = (): void => {
+    freeTextCache = null;
+  };
+
+  // Batch size for the slow-path scanner. Pointers are pulled from the
+  // indexer in chunks of this size, each chunk goes through the lazy
+  // resolver (one parser-pool RPC per source), and matches are kept.
+  // Tuned to balance round-trip latency against memory pressure.
+  const FREE_TEXT_BATCH = 500;
+
+  const ensureFreeTextMatches = async (
+    filter: LogFilter,
+    compiled: CompiledQuery,
+  ): Promise<ReadonlyArray<LogEntry>> => {
+    // Cache key includes the version counter so any ingest that adds
+    // rows blows the cache automatically — the same `filter` object
+    // shape could otherwise alias a stale result.
+    const sig = JSON.stringify({ filter, mode: compiled.mode, v: version });
+    if (freeTextCache !== null && freeTextCache.sig === sig) {
+      return freeTextCache.matches;
+    }
+    const matches: LogEntry[] = [];
+    let offset = 0;
+    while (true) {
+      const pointers = await deps.getIndexer().proxy.search(
+        filter,
+        offset,
+        offset + FREE_TEXT_BATCH,
+      );
+      if (pointers.length === 0) break;
+      const resolved = await resolvePointersToEntries(
+        pointers,
+        (id) => sources.get(id)?.source ?? null,
+        deps.parserPool,
+      );
+      for (const e of resolved) {
+        if (matchesFreeText(e, compiled)) matches.push(e);
+      }
+      offset += pointers.length;
+      if (pointers.length < FREE_TEXT_BATCH) break;
+    }
+    freeTextCache = { sig, matches };
+    return matches;
+  };
+
   const snapshotSources = (): SourceRecord[] => {
     const result: SourceRecord[] = [];
     for (const e of sources.values()) {
-      result.push({ source: e.source, status: e.status });
+      result.push({
+        source: e.source,
+        status: e.status,
+        parserId: e.parserId,
+        parserDefaultColumns: e.parserDefaultColumns,
+      });
     }
     for (const [id, rec] of persistedRecords) {
       if (sources.has(id)) continue; // live takes precedence
@@ -337,7 +480,104 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       onChange: () => {
         emitChange();
       },
+      onParserDetected: ({ parserId, defaultColumns }) => {
+        const entry = sources.get(source.id);
+        if (!entry) return;
+        entry.parserId = parserId;
+        entry.parserDefaultColumns = defaultColumns;
+        // Status snapshot now carries the parser metadata — UI picks
+        // it up through the existing subscribeStatus callback without
+        // a separate channel.
+        emitStatus();
+      },
     });
+  };
+
+  /**
+   * Wipe everything we've indexed/spooled for `id` and restart ingest with
+   * the (possibly updated) source object. Used when:
+   *   - User edits/deletes a custom parser → sources pinned to that id
+   *     must be re-parsed so the new compiled regex applies retroactively.
+   *   - User explicitly changes a source's `parserId` via `setSourceParser`.
+   *
+   * Only operates on currently-live sources (those in the `sources` map).
+   * Persisted-only records (after reload, before user resumes them) keep
+   * their `parserId` in `metaJson`; the new parser kicks in when the user
+   * eventually triggers ingest. File/text/url/stream stubs that exist only
+   * because of `placeholderFromIndexed` cannot be re-ingested — their
+   * payload is gone — so we silently skip them.
+   */
+  const reIngestSource = async (newSource: LogSource): Promise<void> => {
+    const live = sources.get(newSource.id);
+    if (!live) return;
+    live.aborter?.abort();
+    try {
+      await deps.getIndexer().proxy.removeSource(newSource.id);
+    } catch (err) {
+      console.warn('[coordinator] reIngestSource: removeSource failed', err);
+    }
+    // Cascade-deletes inside SQLite are synchronous to the DB but the
+    // OPFS spool lives in a separate tree — drop it explicitly so the
+    // next ingest writes byte 0..N afresh instead of growing on top of
+    // the old payload.
+    try {
+      await removeSpool(newSource.id);
+    } catch (err) {
+      console.warn('[coordinator] reIngestSource: removeSpool failed', err);
+    }
+    try {
+      await deps.getIndexer().proxy.upsertSource(newSource);
+    } catch (err) {
+      console.warn('[coordinator] reIngestSource: upsertSource failed', err);
+      return;
+    }
+    startIngest(newSource);
+    emitChange();
+  };
+
+  /**
+   * Build a copy of `source` with `parserId` overridden. Only the kinds
+   * that participate in parser-pool dispatch carry the field — stub
+   * kinds are returned unchanged.
+   */
+  const withParserId = (source: LogSource, parserId: string | undefined): LogSource => {
+    switch (source.kind) {
+      case 'file':
+      case 'directory':
+      case 'text':
+      case 'url':
+      case 'stream':
+        return { ...source, parserId };
+      default:
+        return source;
+    }
+  };
+
+  /**
+   * Walk every live source and re-ingest those whose `parserId` matches
+   * `affectedParserId`. Used after `upsertCustomParser` /
+   * `removeCustomParser` so existing entries reflect the new (or absent)
+   * parser. `nextParserId` is what to set on the source itself:
+   *   - same id (after upsert) → unchanged, but registry now has the new compile
+   *   - `undefined` (after remove) → fall back to auto-detect
+   */
+  const reIngestSourcesWithParser = async (
+    affectedParserId: string,
+    nextParserId: string | undefined,
+  ): Promise<void> => {
+    const affected: LogSource[] = [];
+    for (const entry of sources.values()) {
+      const sourceParser = 'parserId' in entry.source ? entry.source.parserId : undefined;
+      if (sourceParser === affectedParserId) {
+        affected.push(withParserId(entry.source, nextParserId));
+      }
+    }
+    // Sequential to bound peak parser-pool / SQLite pressure when several
+    // sources rely on the same parser; switching all of them in parallel
+    // would queue N full file-scans concurrently.
+    for (const src of affected) {
+      await reIngestSource(src);
+    }
   };
 
   /**
@@ -355,6 +595,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
   const emitChange = (): void => {
     version++;
+    invalidateFreeTextCache();
     if (pendingFilteredCount !== null) return; // coalesce concurrent change events
     pendingFilteredCount = (async () => {
       await deps.getIndexer().opening;
@@ -495,11 +736,19 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       // creating an infinite loop. Main thread is responsible for re-fetching
       // counts/range after it changes the filter.
       activeFilter = filter;
+      // Free-text matches are filter-keyed; drop the cached array so the
+      // next `getRange`/`getCount` rescans against the new filter.
+      invalidateFreeTextCache();
     },
     getFilter: async () => activeFilter,
 
     getRange: async (from, to) => {
       await deps.getIndexer().opening;
+      const compiled = compileFreeTextQuery(activeFilter);
+      if (compiled !== null) {
+        const matches = await ensureFreeTextMatches(activeFilter, compiled);
+        return matches.slice(from, to);
+      }
       const pointers = await deps.getIndexer().proxy.search(
         activeFilter,
         from,
@@ -524,6 +773,14 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     getCount: async () => {
       await deps.getIndexer().opening;
+      const compiled = compileFreeTextQuery(activeFilter);
+      if (compiled !== null) {
+        const [total, matches] = await Promise.all([
+          deps.getIndexer().proxy.count(EMPTY_FILTER),
+          ensureFreeTextMatches(activeFilter, compiled),
+        ]);
+        return { total, filtered: matches.length };
+      }
       const [total, filtered] = await Promise.all([
         deps.getIndexer().proxy.count(EMPTY_FILTER),
         deps.getIndexer().proxy.count(activeFilter),
@@ -563,6 +820,49 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       // Built-ins are appended last — UI can re-sort by occurrences,
       // presenceRate, label, etc. without losing the @-set.
       return [...dynamic, ...BUILT_IN_FIELD_DESCRIPTORS];
+    },
+
+    listParsers: async () => {
+      const metas = await deps.parserPool.withWorker((p) => p.listParsers());
+      return metas.map((m) => ({
+        id: m.id,
+        defaultColumns: m.defaultColumns,
+      }));
+    },
+
+    listCustomParsers: async () => {
+      const store = await deps.customParserStoreOpening;
+      return store.list();
+    },
+
+    upsertCustomParser: async (def: CustomParserDef) => {
+      const store = await deps.customParserStoreOpening;
+      await store.put(def);
+      const all = await store.list();
+      // Push the updated list to every pool worker (and remember it
+      // for late-spawned ones).
+      await deps.parserPool.loadCustomParsers(all);
+      // Re-ingest sources pinned to this parser id so their entries
+      // reflect the new compiled regex; the parserId on the source
+      // itself stays the same.
+      await reIngestSourcesWithParser(def.id, def.id);
+    },
+
+    removeCustomParser: async (id: string) => {
+      const store = await deps.customParserStoreOpening;
+      await store.delete(id);
+      const all = await store.list();
+      await deps.parserPool.loadCustomParsers(all);
+      // Sources that depended on the now-deleted parser fall back to
+      // auto-detect — strip their parserId and re-ingest.
+      await reIngestSourcesWithParser(id, undefined);
+    },
+
+    setSourceParser: async (id, parserId) => {
+      const entry = sources.get(id);
+      if (!entry) return;
+      const next = withParserId(entry.source, parserId ?? undefined);
+      await reIngestSource(next);
     },
 
     listSources: async () => {

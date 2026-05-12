@@ -1,0 +1,17 @@
+{
+  "id": "apache-combined",
+  "label": "Apache combined log",
+  "kind": "grok",
+  "pattern": "%{IPORHOST:remote_addr} - %{USER:remote_user} \\[%{HTTPDATE:@ts}\\] \"%{WORD:method} %{URIPATHPARAM:request_uri} HTTP/%{NUMBER:http_version}\" %{NUMBER:status:int} %{NUMBER:bytes_sent:int} %{QUOTEDSTRING:referer} %{QUOTEDSTRING:user_agent}",
+  "flags": "",
+  "fields": [],
+  "timestampField": "@ts",
+  "timestampTransform": "apache-time",
+  "levelStrategy": "http-status",
+  "levelField": "status",
+  "messageTemplate": "${method} ${request_uri} → ${status}",
+  "defaultColumns": ["method", "request_uri", "status", "bytes_sent", "remote_addr"],
+  "version": 1,
+  "createdAt": 0,
+  "updatedAt": 0
+}

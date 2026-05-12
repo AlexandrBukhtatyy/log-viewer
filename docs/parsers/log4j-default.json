@@ -1,0 +1,17 @@
+{
+  "id": "log4j-default",
+  "label": "Log4j default pattern",
+  "kind": "grok",
+  "pattern": "%{TIMESTAMP_ISO8601:@ts} \\[%{DATA:thread}\\] %{LOGLEVEL:@level}\\s+%{NOTSPACE:logger} - %{GREEDYDATA:msg}",
+  "flags": "",
+  "fields": [],
+  "timestampField": "@ts",
+  "timestampTransform": "iso-time",
+  "levelStrategy": "group-name",
+  "levelField": "@level",
+  "messageTemplate": "${msg}",
+  "defaultColumns": ["@level", "logger", "thread"],
+  "version": 1,
+  "createdAt": 0,
+  "updatedAt": 0
+}

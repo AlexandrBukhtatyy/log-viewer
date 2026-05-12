@@ -53,6 +53,8 @@ export interface LvRowProps {
    * this so LvRow stays free of core/ runtime imports (ADR-0002).
    */
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
+  /** Lookup of parser id for the entry's source — surfaced via Meta-вкладка. */
+  parserIdOf?: (entry: LogEntry) => string | undefined;
   renderDetailEditor?: (props: {
     readonly value: string;
     readonly language: string;
@@ -102,6 +104,7 @@ export const LvRow = ({
   columns,
   gridTemplate,
   cellValueOf,
+  parserIdOf,
   renderDetailEditor,
 }: LvRowProps) => {
   const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -122,8 +125,14 @@ export const LvRow = ({
     (isFindCurrent ? ' is-find-current' : '');
   const tsTitle =
     entry.timestamp === null ? '' : new Date(entry.timestamp).toISOString();
-  const fileName = fileMeta?.name ?? '—';
-  const filePath = fileMeta?.path ?? '';
+  // For directory sources entries carry a relative path inside the
+  // walked tree (`sub/a.log`); show that, not the parent source name.
+  // Single-file/text/url/stream sources leave `entry.filePath` empty,
+  // so we fall back to the source's display name.
+  const fileName = entry.filePath || fileMeta?.name || '—';
+  const filePath = entry.filePath
+    ? `${fileMeta?.name ?? ''}${entry.filePath ? '/' + entry.filePath : ''}`
+    : (fileMeta?.path ?? '');
   const fileKind: LvLogKind | undefined = fileMeta?.kind;
   const service = serviceFromEntry(entry, fileMeta);
   const renderCell = (text: string) =>
@@ -248,6 +257,7 @@ export const LvRow = ({
             onAddFieldFilter={onAddFieldFilter}
             theme={theme}
             renderEditor={renderDetailEditor}
+            parserId={parserIdOf?.(entry)}
           />
         </div>
       )}

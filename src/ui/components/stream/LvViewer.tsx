@@ -18,7 +18,6 @@ import type {
   LvTweaks,
 } from '../../contracts/lv-types.ts';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
-import { LvColumnPicker } from '../filter/LvColumnPicker.tsx';
 import { LvFilterBar } from '../filter/LvFilterBar.tsx';
 import { LvTimeline } from '../timeline/LvTimeline.tsx';
 import { LvEmpty } from './LvEmpty.tsx';
@@ -85,6 +84,8 @@ export interface LvViewerProps {
   readonly activeTabId: string;
   onActivateTab: (id: string) => void;
   onCloseTab: (id: string) => void;
+  /** Promote a preview tab to pinned (dbl-click on the tab). */
+  onPinTab: (id: string) => void;
 
   readonly bookmarks: ReadonlySet<string>;
   onBookmark: (id: string) => void;
@@ -92,6 +93,7 @@ export interface LvViewerProps {
   bookmarkKeyOf: (entry: LogEntry) => string;
 
   readonly tweaks: LvTweaks;
+  setTweak: <K extends keyof LvTweaks>(key: K, value: LvTweaks[K]) => void;
   readonly timelineOn: boolean;
   onToggleTimeline: () => void;
 
@@ -125,6 +127,8 @@ export interface LvViewerProps {
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
   /** Extracts the cell value for a `(entry, columnKey)` pair. */
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
+  /** Resolves the parser id for an entry's source. Shown in the Meta-vкладке of `LvRowDetail`. */
+  parserIdOf?: (entry: LogEntry) => string | undefined;
 
   renderDetailEditor?: RenderDetailEditor;
 }
@@ -151,10 +155,12 @@ export const LvViewer = ({
   activeTabId,
   onActivateTab,
   onCloseTab,
+  onPinTab,
   bookmarks,
   onBookmark,
   bookmarkKeyOf,
   tweaks,
+  setTweak,
   timelineOn,
   onToggleTimeline,
   groupBy,
@@ -170,6 +176,7 @@ export const LvViewer = ({
   columns,
   onColumnsChange,
   cellValueOf,
+  parserIdOf,
   renderDetailEditor,
 }: LvViewerProps) => {
   const gridTemplate = useMemo(() => gridTemplateForColumns(columns), [columns]);
@@ -401,6 +408,7 @@ export const LvViewer = ({
         activeId={activeTabId}
         onActivate={onActivateTab}
         onClose={onCloseTab}
+        onPin={onPinTab}
       />
 
       {!hasSources ? (
@@ -422,6 +430,11 @@ export const LvViewer = ({
             groupBy={groupBy}
             onGroupByChange={setGroupBy}
             fieldDescriptors={fieldDescriptors}
+            tweaks={tweaks}
+            setTweak={setTweak}
+            columns={columns}
+            onColumnsChange={onColumnsChange}
+            filesById={filesById}
           />
 
           {timelineOn && (
@@ -560,13 +573,7 @@ export const LvViewer = ({
                 </span>
               ))}
               <span className="lv-sh lv-sh-msg">message</span>
-              <span className="lv-sh lv-sh-act">
-                <LvColumnPicker
-                  columns={columns}
-                  descriptors={fieldDescriptors}
-                  onChange={onColumnsChange}
-                />
-              </span>
+              <span className="lv-sh lv-sh-act" />
             </div>
 
             <div
@@ -666,6 +673,7 @@ export const LvViewer = ({
                                 columns={columns}
                                 gridTemplate={gridTemplate}
                                 cellValueOf={cellValueOf}
+                                parserIdOf={parserIdOf}
                                 indentPx={12 + (depth + 1) * 16}
                                 renderDetailEditor={renderDetailEditor}
                               />
@@ -769,6 +777,7 @@ export const LvViewer = ({
                             columns={columns}
                             gridTemplate={gridTemplate}
                             cellValueOf={cellValueOf}
+                            parserIdOf={parserIdOf}
                             renderDetailEditor={renderDetailEditor}
                           />
                         )}

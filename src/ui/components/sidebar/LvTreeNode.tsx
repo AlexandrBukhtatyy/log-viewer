@@ -16,7 +16,13 @@ export interface LvTreeNodeProps {
    * ignore this callback (they only expand/collapse).
    */
   onOpenFile: (sourceId: string) => void;
-  onToggleFolder: (id: string) => void;
+  /**
+   * Toggle a folder's open state. Receives the current effective `open`
+   * value (after applying the `openFolders[id] ?? !!node.open` fallback)
+   * so the parent flips it without re-deriving — important for newly-
+   * arrived folders that aren't in `openFolders` yet.
+   */
+  onToggleFolder: (id: string, currentOpen: boolean) => void;
   onRemoveRoot?: (id: string) => void;
   /** Click handler for the "Grant access" button on permission-required files. */
   onGrantPermission?: (id: string) => void;
@@ -42,7 +48,13 @@ export const LvTreeNode = ({
   onCancelSource,
 }: LvTreeNodeProps) => {
   const isFolder = node.type === 'folder';
-  const open = isFolder ? !!openFolders[node.id] : false;
+  // Fall back to the node's own `open` flag when the user hasn't
+  // toggled this folder yet. Directory roots default to `open: true`;
+  // without the fallback the first click would have no visible effect
+  // because the state map starts empty.
+  const open = isFolder
+    ? (openFolders[node.id] ?? !!(node as { open?: boolean }).open)
+    : false;
   const selected = !isFolder && selectedIds.has(node.id);
 
   let folderState: 'all' | 'some' | 'none' = 'none';
@@ -61,7 +73,7 @@ export const LvTreeNode = ({
         style={{ paddingLeft: 6 + depth * 12 }}
         onClick={() => {
           if (isFolder) {
-            onToggleFolder(node.id);
+            onToggleFolder(node.id, open);
           } else {
             onOpenFile(node.id);
           }
@@ -116,6 +128,14 @@ export const LvTreeNode = ({
               </span>
             )}
             {node.root && <LvRootBadge node={node} />}
+            {node.root && node.parserId && (
+              <span
+                className="lv-tree-parser-badge"
+                title={`Parser: ${node.parserId}`}
+              >
+                {node.parserId}
+              </span>
+            )}
             {folderState !== 'none' && (
               <span className={`lv-tree-pick lv-tree-pick-${folderState}`} aria-label="selected">
                 {folderState === 'all' ? '●' : '◐'}
@@ -201,6 +221,14 @@ export const LvTreeNode = ({
               </span>
             )}
             {node.root && <LvRootBadge node={node} />}
+            {node.root && node.parserId && (
+              <span
+                className="lv-tree-parser-badge"
+                title={`Parser: ${node.parserId}`}
+              >
+                {node.parserId}
+              </span>
+            )}
             <span className="lv-tree-meta">{node.count}</span>
             <span
               className={`lv-tree-check${selected ? ' is-on' : ''}`}

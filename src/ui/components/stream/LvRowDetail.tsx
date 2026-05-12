@@ -3,12 +3,14 @@ import type { ReactNode } from 'react';
 import type { FieldFilter, LogEntry } from '../../../core/types/index.ts';
 import type { LvLogKind, LvTweakTheme } from '../../contracts/lv-types.ts';
 
-type DetailView = 'fields' | 'pretty' | 'stack' | 'raw';
+type DetailView = 'fields' | 'meta' | 'pretty' | 'stack' | 'raw';
 
 export interface LvRowDetailProps {
   readonly entry: LogEntry;
   readonly kind?: LvLogKind;
   readonly theme?: LvTweakTheme;
+  /** Parser id resolved for this entry's source (Phase 2.E). Surfaced in Meta-tab. */
+  readonly parserId?: string;
   onAddFieldFilter: (filter: FieldFilter) => void;
   renderEditor?: (props: {
     readonly value: string;
@@ -23,6 +25,7 @@ export const LvRowDetail = ({
   entry,
   kind,
   theme,
+  parserId,
   onAddFieldFilter,
   renderEditor,
 }: LvRowDetailProps) => {
@@ -37,8 +40,21 @@ export const LvRowDetail = ({
         ? 'stack'
         : kind === 'json'
           ? 'pretty'
-          : 'raw',
+          : 'meta',
   );
+
+  // Built-in `@`-attributes from ADR-0017. Lives in its own `Meta` tab
+  // so it doesn't clutter app-supplied fields. We only include the ones
+  // materialised on every entry — @source.kind/@source.name live on
+  // the SourceRecord, not the entry.
+  const metaFields: Array<readonly [string, string]> = [];
+  if (entry.timestamp !== null) {
+    metaFields.push(['@ts', new Date(entry.timestamp).toISOString()]);
+  }
+  metaFields.push(['@level', entry.level]);
+  metaFields.push(['@source.id', entry.sourceId]);
+  if (entry.filePath) metaFields.push(['@file.path', entry.filePath]);
+  if (parserId) metaFields.push(['@parser.id', parserId]);
 
   const body =
     view === 'pretty'
@@ -46,12 +62,17 @@ export const LvRowDetail = ({
       : view === 'stack'
         ? stackLines.join('\n')
         : view === 'fields'
-          ? Object.entries(fields)
-              .map(([k, v]) => `${k}\t${String(v)}`)
-              .join('\n')
-          : entry.raw;
+          ? Object.entries(fields).map(([k, v]) => `${k}\t${String(v)}`).join('\n')
+          : view === 'meta'
+            ? metaFields.map(([k, v]) => `${k}\t${v}`).join('\n')
+            : entry.raw;
 
-  const copyText = view === 'fields' ? JSON.stringify(fields, null, 2) : body;
+  const copyText =
+    view === 'fields'
+      ? JSON.stringify(fields, null, 2)
+      : view === 'meta'
+        ? JSON.stringify(Object.fromEntries(metaFields), null, 2)
+        : body;
 
   return (
     <div className="lv-det">
@@ -90,6 +111,14 @@ export const LvRowDetail = ({
             onClick={() => setView('raw')}
           >
             Raw
+          </button>
+          <button
+            type="button"
+            className={`lv-det-viewopt${view === 'meta' ? ' is-on' : ''}`}
+            onClick={() => setView('meta')}
+            title="Log-viewer @-attributes (timestamp, level, source, file path)"
+          >
+            Meta
           </button>
         </span>
         <button
@@ -132,6 +161,23 @@ export const LvRowDetail = ({
                   className="lv-det-add"
                   title={`Filter where ${k} = ${String(v)}`}
                   onClick={() => onAddFieldFilter({ key: k, op: '=', value: String(v) })}
+                >
+                  ＋
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : view === 'meta' ? (
+          <div className="lv-det-tbl">
+            {metaFields.map(([k, v]) => (
+              <div key={k} className="lv-det-row is-system">
+                <span className="lv-det-k">{k}</span>
+                <span className="lv-det-v">{v}</span>
+                <button
+                  type="button"
+                  className="lv-det-add"
+                  title={`Filter where ${k} = ${v}`}
+                  onClick={() => onAddFieldFilter({ key: k, op: '=', value: v })}
                 >
                   ＋
                 </button>

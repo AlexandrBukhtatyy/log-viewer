@@ -1,4 +1,6 @@
 import { createDefaultRegistry } from '../../core/parsers/index.ts';
+import { compileCustomParser } from '../../core/parsers/custom-parser-def.ts';
+import type { CustomParserDef } from '../../core/parsers/custom-parser-def.ts';
 import type {
   ParseLineFrame,
   ParserApi,
@@ -10,6 +12,9 @@ import { newEntryId } from '../../core/util/ids.ts';
 
 const WORKER_ID = crypto.randomUUID();
 const registry = createDefaultRegistry();
+
+/** Ids of custom parsers currently registered — used by `loadCustomParsers` to unregister stale entries. */
+const customParserIds = new Set<string>();
 
 const buildCtx = (req: ParseRequestCtx): ParseCtx => {
   let seq = req.startSeq;
@@ -29,6 +34,37 @@ export const parserApi: ParserApi = {
   ping: async () => `parser-worker:${WORKER_ID}`,
 
   detectParser: async (sample) => registry.pick(sample).id,
+
+  getParserMeta: async (parserId) => {
+    const parser = registry.pickById(parserId);
+    if (parser === null) return null;
+    return {
+      id: parser.id,
+      continuationRegex: parser.continuationRegex ?? null,
+      defaultColumns: parser.defaultColumns ?? [],
+    };
+  },
+
+  listParsers: async () =>
+    registry.list().map((p) => ({
+      id: p.id,
+      continuationRegex: p.continuationRegex ?? null,
+      defaultColumns: p.defaultColumns ?? [],
+    })),
+
+  loadCustomParsers: async (defs: ReadonlyArray<CustomParserDef>) => {
+    // Drop previously-registered custom parsers so an upsert/remove
+    // doesn't leave a stale ghost in the registry. Re-register from
+    // scratch — cheap, definitions are small and few.
+    for (const id of customParserIds) registry.unregister(id);
+    customParserIds.clear();
+    for (const def of defs) {
+      const parser = compileCustomParser(def);
+      if (parser === null) continue;
+      registry.register(parser, 50);
+      customParserIds.add(parser.id);
+    }
+  },
 
   parse: async (frames, ctx) => {
     const parseCtx = buildCtx(ctx);

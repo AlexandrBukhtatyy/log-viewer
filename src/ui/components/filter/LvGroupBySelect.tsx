@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { LvGroupBy } from '../../contracts/lv-types.ts';
+import { compatBadgeText, compatOf } from '../../utils/field-compatibility.ts';
 
 export interface LvGroupBySelectProps {
   readonly value: ReadonlyArray<LvGroupBy>;
   readonly descriptors: ReadonlyArray<FieldDescriptor>;
   onChange: (value: LvGroupBy[]) => void;
+  /** Used to compute compatibility badges (Phase 3). */
+  readonly activeSources?: ReadonlyArray<{ id: string; name: string }>;
 }
 
 const labelFor = (
@@ -46,7 +49,16 @@ export const LvGroupBySelect = ({
   value,
   descriptors,
   onChange,
+  activeSources,
 }: LvGroupBySelectProps) => {
+  const activeIds = useMemo(
+    () => (activeSources ?? []).map((s) => s.id),
+    [activeSources],
+  );
+  const sourceNameById = useMemo(
+    () => new Map((activeSources ?? []).map((s) => [s.id, s.name])),
+    [activeSources],
+  );
   const [open, setOpen] = useState(false);
   const [comboOpen, setComboOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -270,6 +282,7 @@ export const LvGroupBySelect = ({
                       {filtered.map((d, idx) => {
                         const on = active.includes(d.key);
                         const isHi = idx === effectiveIdx;
+                        const isSys = d.origin === 'builtin';
                         return (
                           <div
                             key={d.key}
@@ -278,7 +291,8 @@ export const LvGroupBySelect = ({
                             className={
                               'lv-group-search-item' +
                               (isHi ? ' is-active' : '') +
-                              (on ? ' is-on' : '')
+                              (on ? ' is-on' : '') +
+                              (isSys ? ' is-sys' : '')
                             }
                             onMouseEnter={() => setHighlightedIdx(idx)}
                             // Use mousedown so the click lands before
@@ -288,7 +302,28 @@ export const LvGroupBySelect = ({
                               toggle(d.key);
                             }}
                           >
-                            <span className="lv-group-search-key">{d.label || d.key}</span>
+                            <span className="lv-group-search-key">
+                              {isSys && <span className="lv-group-search-sys">{d.key}</span>}
+                              {d.label || d.key}
+                            </span>
+                            {(() => {
+                              const c = compatOf(d, activeIds);
+                              const txt = compatBadgeText(c, sourceNameById);
+                              return txt !== null ? (
+                                <span
+                                  className={`lv-fld-compat lv-fld-compat-${c.kind}`}
+                                  title={
+                                    c.kind === 'unique'
+                                      ? `Field exists only in ${c.presentSources
+                                          .map((id) => sourceNameById.get(id) ?? id)
+                                          .join(', ')}`
+                                      : `Field present in ${c.presentIn} of ${c.total} active sources`
+                                  }
+                                >
+                                  {txt}
+                                </span>
+                              ) : null;
+                            })()}
                             <span className="lv-group-search-meta">
                               {d.origin === 'dynamic' && d.presenceRate !== undefined
                                 ? `${Math.round(d.presenceRate * 100)}%`

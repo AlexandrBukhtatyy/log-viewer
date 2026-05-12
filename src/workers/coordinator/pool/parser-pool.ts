@@ -1,4 +1,5 @@
 import * as Comlink from 'comlink';
+import type { CustomParserDef } from '../../../core/parsers/custom-parser-def.ts';
 import type { ParserApi } from '../../../core/rpc/parser.contract.ts';
 
 export interface ParserPoolOptions {
@@ -43,9 +44,29 @@ export class ParserPool {
   private readonly slots: PoolSlot[] = [];
   private readonly waiters: PendingRequest[] = [];
   private readonly options: ParserPoolOptions;
+  /**
+   * Pool-level mirror of the custom-parser definitions registered in
+   * every worker (Phase 2.C). Updated via `loadCustomParsers`; replayed
+   * to each freshly-spawned worker before it accepts its first call.
+   */
+  private customParsers: ReadonlyArray<CustomParserDef> = [];
 
   constructor(options: ParserPoolOptions) {
     this.options = options;
+  }
+
+  /**
+   * Push the latest custom-parser definitions to every alive worker
+   * and remember them so the next spawn picks them up. Called from
+   * `coordinator.upsertCustomParser` / `removeCustomParser` /
+   * `loadCustomParsers` after the IDB write completes.
+   */
+  async loadCustomParsers(defs: ReadonlyArray<CustomParserDef>): Promise<void> {
+    this.customParsers = defs;
+    if (this.slots.length === 0) return;
+    await Promise.all(
+      this.slots.map((s) => s.proxy.loadCustomParsers(defs)),
+    );
   }
 
   /** Number of currently-spawned workers (busy + idle). Dynamic over time. */
@@ -114,6 +135,20 @@ export class ParserPool {
         reapTimer: null,
       };
       this.slots.push(slot);
+      // Replay custom-parser registrations so the freshly-spawned
+      // worker knows about them before its first `parse` / `detect`
+      // call. Errors here are non-fatal — the worker simply won't
+      // recognise that subset of parsers until the next broadcast.
+      if (this.customParsers.length > 0) {
+        try {
+          await proxy.loadCustomParsers(this.customParsers);
+        } catch (err) {
+          console.warn(
+            '[parser-pool] custom-parser replay failed for new worker',
+            err,
+          );
+        }
+      }
       return slot;
     }
     // Cap reached — wait for someone to release.

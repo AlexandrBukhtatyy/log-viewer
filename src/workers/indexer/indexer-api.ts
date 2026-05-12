@@ -119,20 +119,43 @@ const runScalar = (
 };
 
 const serializeSourceMeta = (source: LogSource): string => {
+  // `parserId` (Phase 2.B) is persisted alongside the kind-specific
+  // payload for the source kinds whose ingestion actually consults a
+  // parser. It survives reload and is restored in `hydratePersisted`.
+  const withParser = (
+    payload: Record<string, unknown>,
+    parserId?: string,
+  ): Record<string, unknown> =>
+    parserId ? { ...payload, parserId } : payload;
   switch (source.kind) {
     case 'file':
-      return JSON.stringify({ size: source.size });
+      return JSON.stringify(withParser({ size: source.size }, source.parserId));
     case 'directory':
-      return JSON.stringify({
-        glob: source.glob ?? null,
-        watch: source.watch ?? false,
-      });
+      return JSON.stringify(
+        withParser(
+          {
+            glob: source.glob ?? null,
+            watch: source.watch ?? false,
+          },
+          source.parserId,
+        ),
+      );
     case 'text':
-      return JSON.stringify({});
+      return JSON.stringify(withParser({}, source.parserId));
     case 'url':
-      return JSON.stringify({ url: source.url, headers: source.headers ?? null });
+      return JSON.stringify(
+        withParser(
+          { url: source.url, headers: source.headers ?? null },
+          source.parserId,
+        ),
+      );
     case 'stream':
-      return JSON.stringify({ transport: source.transport, url: source.url });
+      return JSON.stringify(
+        withParser(
+          { transport: source.transport, url: source.url },
+          source.parserId,
+        ),
+      );
     case 'remote-ssh':
       return JSON.stringify({
         host: source.host,
@@ -602,13 +625,14 @@ export const indexerApi: IndexerApi = {
     const placeholders = sourceIds.map(() => '?').join(', ');
     const rows = runRows(
       db,
-      `SELECT key, type, occurrences, total_seen, top_values_json
+      `SELECT source_id, key, type, occurrences, total_seen, top_values_json
          FROM field_meta
         WHERE source_id IN (${placeholders})`,
       sourceIds as ReadonlyArray<SqlValue>,
     );
     return aggregateFieldDescriptors(
       rows.map((r): FieldMetaRow => ({
+        source_id: String(r.source_id ?? ''),
         key: String(r.key ?? ''),
         type: String(r.type ?? ''),
         occurrences: r.occurrences as number | null,

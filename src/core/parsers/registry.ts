@@ -14,6 +14,14 @@ export class ParserRegistry {
     this.entries.sort((a, b) => b.priority - a.priority);
   }
 
+  /** Remove a parser by id. Returns `true` if it was present. */
+  unregister(id: string): boolean {
+    const idx = this.entries.findIndex((e) => e.parser.id === id);
+    if (idx === -1) return false;
+    this.entries.splice(idx, 1);
+    return true;
+  }
+
   list(): ReadonlyArray<LogParser> {
     return this.entries.map((e) => e.parser);
   }

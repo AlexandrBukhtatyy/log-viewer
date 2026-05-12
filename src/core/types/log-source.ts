@@ -1,6 +1,15 @@
 import type { SourceId } from './log-entry.ts';
 
-export type FileLogSource = {
+/**
+ * Per-source parser override (Phase 2.B). When set, ingest-orchestrator
+ * bypasses auto-detect and uses `registry.pickById(parserId)`. `undefined`
+ * keeps the legacy behaviour (auto-detect on the first non-empty line).
+ */
+export interface ParserOverride {
+  readonly parserId?: string;
+}
+
+export type FileLogSource = ParserOverride & {
   readonly kind: 'file';
   readonly id: SourceId;
   readonly name: string;
@@ -8,7 +17,7 @@ export type FileLogSource = {
   readonly file: File;
 };
 
-export type DirectoryLogSource = {
+export type DirectoryLogSource = ParserOverride & {
   readonly kind: 'directory';
   readonly id: SourceId;
   readonly name: string;
@@ -24,14 +33,14 @@ export type DirectoryLogSource = {
   readonly watch?: boolean;
 };
 
-export type TextLogSource = {
+export type TextLogSource = ParserOverride & {
   readonly kind: 'text';
   readonly id: SourceId;
   readonly name: string;
   readonly text: string;
 };
 
-export type UrlLogSource = {
+export type UrlLogSource = ParserOverride & {
   readonly kind: 'url';
   readonly id: SourceId;
   readonly name: string;
@@ -39,7 +48,7 @@ export type UrlLogSource = {
   readonly headers?: Readonly<Record<string, string>>;
 };
 
-export type StreamLogSource = {
+export type StreamLogSource = ParserOverride & {
   readonly kind: 'stream';
   readonly id: SourceId;
   readonly name: string;
@@ -129,17 +138,27 @@ export type LogSource =
 export type LogSourceKind = LogSource['kind'];
 
 export type LogSourceInput =
-  | { kind: 'file'; name: string; size: number; file: File }
-  | {
+  | ({ kind: 'file'; name: string; size: number; file: File } & ParserOverride)
+  | ({
       kind: 'directory';
       name: string;
       handle: FileSystemDirectoryHandle;
       glob?: string;
       watch?: boolean;
-    }
-  | { kind: 'text'; name: string; text: string }
-  | { kind: 'url'; name: string; url: string; headers?: Readonly<Record<string, string>> }
-  | { kind: 'stream'; name: string; transport: 'ws' | 'sse'; url: string }
+    } & ParserOverride)
+  | ({ kind: 'text'; name: string; text: string } & ParserOverride)
+  | ({
+      kind: 'url';
+      name: string;
+      url: string;
+      headers?: Readonly<Record<string, string>>;
+    } & ParserOverride)
+  | ({
+      kind: 'stream';
+      name: string;
+      transport: 'ws' | 'sse';
+      url: string;
+    } & ParserOverride)
   | {
       kind: 'remote-ssh';
       name: string;
@@ -180,4 +199,19 @@ export type SourceStatus =
 export interface SourceRecord {
   readonly source: LogSource;
   readonly status: SourceStatus;
+  /**
+   * Parser id resolved at ingest time (either auto-detected from the
+   * first non-empty line or — once Phase 2.B lands — taken from
+   * `source.parserId` override). `undefined` while the source is
+   * still queued/loading and the parser hasn't been picked yet, or
+   * for stub adapters that haven't produced any data.
+   */
+  readonly parserId?: string;
+  /**
+   * Columns the active parser would like to see first when the user
+   * has no custom column selection yet. Drives the Phase 2.E
+   * format-specific column auto-pick in
+   * [LvAppContainer](../../app/containers/LvAppContainer.tsx).
+   */
+  readonly parserDefaultColumns?: ReadonlyArray<string>;
 }

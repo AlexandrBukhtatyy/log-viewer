@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { FieldFilter, FieldFilterOp } from '../../../core/types/index.ts';
+import { compatBadgeText, compatOf } from '../../utils/field-compatibility.ts';
 
 export interface LvAddFieldFilterProps {
   readonly descriptors: ReadonlyArray<FieldDescriptor>;
   onAdd: (filter: FieldFilter) => void;
+  /** Used to compute compatibility badges (Phase 3). */
+  readonly activeSources?: ReadonlyArray<{ id: string; name: string }>;
 }
 
 const isBuiltIn = (key: string): boolean => key.startsWith('@');
@@ -16,11 +19,19 @@ const isBuiltIn = (key: string): boolean => key.startsWith('@');
  * datalist. The value input pulls suggestions from `topValues` of
  * the currently selected descriptor.
  */
-export const LvAddFieldFilter = ({ descriptors, onAdd }: LvAddFieldFilterProps) => {
+export const LvAddFieldFilter = ({ descriptors, onAdd, activeSources }: LvAddFieldFilterProps) => {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState<string>('');
   const [op, setOp] = useState<FieldFilterOp>('=');
   const [value, setValue] = useState('');
+  const activeIds = useMemo(
+    () => (activeSources ?? []).map((s) => s.id),
+    [activeSources],
+  );
+  const sourceNameById = useMemo(
+    () => new Map((activeSources ?? []).map((s) => [s.id, s.name])),
+    [activeSources],
+  );
 
   const sortedDescriptors = useMemo(() => {
     const dyn = descriptors.filter((d) => d.origin === 'dynamic').slice();
@@ -131,16 +142,34 @@ export const LvAddFieldFilter = ({ descriptors, onAdd }: LvAddFieldFilterProps) 
             {sortedDescriptors.dynamic.length > 0 && (
               <>
                 <span className="lv-field-hints-lbl">Fields</span>
-                {sortedDescriptors.dynamic.slice(0, 6).map((d) => (
-                  <button
-                    type="button"
-                    key={d.key}
-                    className="lv-field-hint"
-                    onClick={() => setKey(d.key)}
-                  >
-                    {d.key}
-                  </button>
-                ))}
+                {sortedDescriptors.dynamic.slice(0, 6).map((d) => {
+                  const c = compatOf(d, activeIds);
+                  const txt = compatBadgeText(c, sourceNameById);
+                  return (
+                    <button
+                      type="button"
+                      key={d.key}
+                      className="lv-field-hint"
+                      onClick={() => setKey(d.key)}
+                    >
+                      {d.key}
+                      {txt !== null && (
+                        <span
+                          className={`lv-fld-compat lv-fld-compat-${c.kind}`}
+                          title={
+                            c.kind === 'unique'
+                              ? `Only in ${c.presentSources
+                                  .map((id) => sourceNameById.get(id) ?? id)
+                                  .join(', ')}`
+                              : `Present in ${c.presentIn} of ${c.total} active sources`
+                          }
+                        >
+                          {txt}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </>
             )}
             {sortedDescriptors.dynamic.length === 0 && sortedDescriptors.builtin.length === 0 && (

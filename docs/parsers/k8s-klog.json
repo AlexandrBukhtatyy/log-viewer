@@ -1,0 +1,17 @@
+{
+  "id": "k8s-klog",
+  "label": "Kubernetes klog (kube-apiserver, kubelet, …)",
+  "kind": "grok",
+  "pattern": "(?<sev>[IWEF])%{MONTHNUM}%{MONTHDAY}\\s+%{TIME}\\s+%{NUMBER:thread}\\s+%{NOTSPACE:source}\\] %{GREEDYDATA:msg}",
+  "flags": "",
+  "fields": [],
+  "timestampField": "",
+  "timestampTransform": "iso-time",
+  "levelStrategy": "",
+  "levelField": "",
+  "messageTemplate": "${msg}",
+  "defaultColumns": ["source", "thread"],
+  "version": 1,
+  "createdAt": 0,
+  "updatedAt": 0
+}

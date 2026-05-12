@@ -14,6 +14,7 @@ export interface UseSourceController {
     name?: string;
     watch?: boolean;
     glob?: string;
+    parserId?: string;
   }) => Promise<SourceId | null>;
   addText: (name: string, text: string) => Promise<SourceId>;
   addUrl: (

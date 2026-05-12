@@ -45,26 +45,21 @@ export const LvSidebar = ({
   onGrantPermission,
   onCancelSource,
 }: LvSidebarProps) => {
-  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => {
-    const o: Record<string, boolean> = {};
-    const walkAll = (nodes: ReadonlyArray<LvNode>): void => {
-      nodes.forEach((n) => {
-        if (n.type === 'folder') {
-          o[n.id] = !!n.open;
-          walkAll(n.children);
-        }
-      });
-    };
-    walkAll(catalog);
-    return o;
-  });
+  // Overrides over the node's own `open` flag. Only contains folders the
+  // user has explicitly toggled. The render path uses `openFolders[id] ??
+  // !!node.open` so freshly-arrived folders honor their default (directory
+  // roots default to `open: true`) without needing to seed state from
+  // `catalog` — a lazy initializer would only have run once at mount and
+  // missed everything that hydrated later.
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState('');
   const [filterCase, setFilterCase] = useState(false);
   const [filterWord, setFilterWord] = useState(false);
   const [filterRegex, setFilterRegex] = useState(false);
   const [dropActive, setDropActive] = useState(false);
 
-  const toggleFolder = (id: string) => setOpenFolders((o) => ({ ...o, [id]: !o[id] }));
+  const toggleFolder = (id: string, currentOpen: boolean) =>
+    setOpenFolders((o) => ({ ...o, [id]: !currentOpen }));
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {

@@ -26,11 +26,14 @@ import { useSavedSearches } from '../../hooks/use-saved-searches.ts';
 import { LvApp } from '../../ui/components/layout/LvApp.tsx';
 import type {
   LvGroupBy,
+  LvLogKind,
+  LvNode,
   LvSavedSearch,
   LvSourceKind,
   LvTab,
   LvTweaks,
 } from '../../ui/contracts/lv-types.ts';
+import type { CustomParserDef as LvCustomParserDef } from '../../core/parsers/custom-parser-def.ts';
 
 const HISTOGRAM_BUCKETS = 80;
 const GROUP_LIMIT = 200;
@@ -149,14 +152,24 @@ export const LvAppContainer = () => {
   // Resolves the source/filePath inputs that go into the effective
   // filter, based on the current `activeTabId`:
   //   - `'__all__'` → all sidebar-checked items (multi-select view).
-  //   - any other tab id → only that tab's source (single-file view),
-  //     ignoring `selectedIds` entirely.
+  //   - plain SourceId → only that source (single-file view).
+  //   - compound `<sourceId>::<relPath>` (nested file inside a walked
+  //     directory) → that source restricted to the one file path.
   const tabSelection = useCallback((): { sourcesArr: SourceId[]; filePaths: string[] } => {
     if (activeTabId === '__all__') {
       const { sources: s, filePaths } = splitSelection(selectedIds, null);
       return { sourcesArr: s, filePaths };
     }
-    return { sourcesArr: [activeTabId as SourceId], filePaths: [] };
+    const sep = activeTabId.indexOf('::');
+    if (sep === -1) {
+      return { sourcesArr: [activeTabId as SourceId], filePaths: [] };
+    }
+    const baseSrc = activeTabId.slice(0, sep) as SourceId;
+    const relPath = activeTabId.slice(sep + 2);
+    return {
+      sourcesArr: [baseSrc],
+      filePaths: relPath && !relPath.endsWith('/') ? [relPath] : [],
+    };
   }, [activeTabId, selectedIds, splitSelection]);
 
   const filter = useMemo<LogFilter>(() => {
@@ -209,6 +222,33 @@ export const LvAppContainer = () => {
     },
     [tweaks],
   );
+
+  // Phase 2.E: auto-apply parser's `defaultColumns` the first time a
+  // source reports them, *and only if* the user hasn't picked any
+  // columns yet. Tracked via a render-time signature so the new
+  // `react-hooks/set-state-in-effect` rule doesn't trip; the actual
+  // `tweaks.setTweak` is deferred to a microtask because it writes
+  // to an external store (Zustand), and React 19 warns when that
+  // happens during another component's render.
+  const [parserHintSig, setParserHintSig] = useState('');
+  const liveParserHintSig = sources
+    .filter((r) => r.parserId && (r.parserDefaultColumns?.length ?? 0) > 0)
+    .map((r) => r.source.id)
+    .sort()
+    .join(',');
+  if (liveParserHintSig !== parserHintSig) {
+    setParserHintSig(liveParserHintSig);
+    if (tweaks.columns.length === 0) {
+      const candidate = sources.find(
+        (r) => r.parserId && (r.parserDefaultColumns?.length ?? 0) > 0,
+      );
+      const cols = candidate?.parserDefaultColumns ?? [];
+      if (cols.length > 0) {
+        const next = cols.map((k) => ({ key: k, widthPx: 140 }));
+        queueMicrotask(() => tweaks.setTweak('columns', next));
+      }
+    }
+  }
   const sourceRecordsById = useMemo(() => {
     const m = new Map<SourceId, (typeof sources)[number]>();
     for (const r of sources) m.set(r.source.id, r);
@@ -217,6 +257,11 @@ export const LvAppContainer = () => {
   const cellValueOf = useCallback(
     (entry: LogEntry, key: string) =>
       getEntryFieldValue(entry, key, sourceRecordsById.get(entry.sourceId) ?? null),
+    [sourceRecordsById],
+  );
+  const parserIdOf = useCallback(
+    (entry: LogEntry): string | undefined =>
+      sourceRecordsById.get(entry.sourceId)?.parserId,
     [sourceRecordsById],
   );
 
@@ -262,24 +307,64 @@ export const LvAppContainer = () => {
   );
   const filesById = useMemo(() => filesByIdFromSources(sources), [sources]);
 
-  // Open (or focus) a pinned tab for `sourceId`. There is no preview
-  // state — every per-file tab is independent and stays around until
-  // the user closes it.
+  // VS Code-style preview/pinned tabs. A single-click on a sidebar file
+  // opens (or replaces) one preview slot — at most one preview tab lives
+  // alongside any pinned tabs. Double-click on the tab itself promotes
+  // it to pinned; from there it behaves like any other tab.
   const openFileTab = useCallback(
-    (sourceId: string) => {
-      const file = filesById[sourceId];
-      if (!file) return;
+    (rawId: string) => {
+      // Resolve the node. For root-level file sources the click delivers
+      // a plain SourceId and `filesById` is enough. For files *inside* a
+      // walked directory the id is compound (`<sourceId>::<relPath>`); we
+      // walk the catalog to find the actual node so the tab inherits the
+      // nested file's own `name`/`path`/`kind`, not its parent source.
+      type FileLike = { id: string; name: string; path?: string; kind: LvLogKind };
+      let file: FileLike | null = filesById[rawId] ?? null;
+      if (file === null) {
+        const walk = (nodes: ReadonlyArray<LvNode>): FileLike | null => {
+          for (const n of nodes) {
+            if (n.type === 'file' && n.id === rawId) return n;
+            if (n.type === 'folder') {
+              const hit = walk(n.children);
+              if (hit) return hit;
+            }
+          }
+          return null;
+        };
+        file = walk(catalog);
+      }
+      if (file === null) return;
+      const resolved = file;
       setOpenTabs((prev) => {
-        if (prev.some((t) => t.id === sourceId)) return prev;
-        return [
-          ...prev,
-          { id: sourceId, name: file.name, path: file.path, kind: file.kind },
-        ];
+        if (prev.some((t) => t.id === rawId)) return prev;
+        const newTab: LvTab = {
+          id: rawId,
+          name: resolved.name,
+          path: resolved.path,
+          kind: resolved.kind,
+          isPinned: false,
+        };
+        // Preview: replace any existing preview slot, otherwise append.
+        const previewIdx = prev.findIndex((t) => !t.isPinned);
+        if (previewIdx === -1) return [...prev, newTab];
+        const next = prev.slice();
+        next[previewIdx] = newTab;
+        return next;
       });
-      setActiveTabId(sourceId);
+      setActiveTabId(rawId);
     },
-    [filesById],
+    [filesById, catalog],
   );
+
+  const pinTab = useCallback((tabId: string) => {
+    setOpenTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === tabId);
+      if (idx === -1 || prev[idx].isPinned) return prev;
+      const next = prev.slice();
+      next[idx] = { ...prev[idx], isPinned: true };
+      return next;
+    });
+  }, []);
 
   const closeTab = useCallback((tabId: string) => {
     setOpenTabs((prev) => prev.filter((t) => t.id !== tabId));
@@ -291,6 +376,52 @@ export const LvAppContainer = () => {
   const existingSourceNames = useMemo(
     () => new Set(sources.map((r) => r.source.name)),
     [sources],
+  );
+
+  // Parsers registered in the worker — populates the parser-override
+  // dropdown in `LvAddSourceModal` (Phase 2.B). Loaded once after the
+  // worker is up; the list is static for the lifetime of the page.
+  const [availableParsers, setAvailableParsers] = useState<
+    ReadonlyArray<{ readonly id: string }>
+  >([]);
+  // User-defined parser definitions (Phase 2.C). Editable from the
+  // Parsers rail panel; the coordinator broadcasts changes to every
+  // pool worker through `loadCustomParsers`. Re-fetched whenever the
+  // panel saves so the same list drives both the rail panel and the
+  // Add-Source dropdown.
+  const [customParsers, setCustomParsers] = useState<
+    ReadonlyArray<LvCustomParserDef>
+  >([]);
+  const [parsersLoaded, setParsersLoaded] = useState(false);
+  const reloadAvailableParsers = useCallback(async () => {
+    try {
+      const [all, custom] = await Promise.all([
+        viewStore.getState().listParsers(),
+        viewStore.getState().listCustomParsers(),
+      ]);
+      setAvailableParsers(all);
+      setCustomParsers(custom);
+    } catch (err) {
+      console.warn('[LvAppContainer] listParsers failed', err);
+    }
+  }, [viewStore]);
+  if (!parsersLoaded) {
+    setParsersLoaded(true);
+    void reloadAvailableParsers();
+  }
+  const onUpsertCustomParser = useCallback(
+    async (def: LvCustomParserDef) => {
+      await viewStore.getState().upsertCustomParser(def);
+      await reloadAvailableParsers();
+    },
+    [viewStore, reloadAvailableParsers],
+  );
+  const onRemoveCustomParser = useCallback(
+    async (id: string) => {
+      await viewStore.getState().removeCustomParser(id);
+      await reloadAvailableParsers();
+    },
+    [viewStore, reloadAvailableParsers],
   );
 
   // Tabs render order:
@@ -314,8 +445,13 @@ export const LvAppContainer = () => {
       },
     ];
     for (const tab of openTabs) {
-      // Filter out tabs whose source vanished from the catalog.
-      if (filesById[tab.id]) t.push(tab);
+      // Filter out tabs whose source vanished from the catalog. Tab ids
+      // for nested files inside a walked directory are compound
+      // (`<sourceId>::<relPath>`); split before the lookup so they
+      // survive while their parent source is still around.
+      const sep = tab.id.indexOf('::');
+      const baseSrc = sep === -1 ? tab.id : tab.id.slice(0, sep);
+      if (filesById[baseSrc]) t.push(tab);
     }
     return t;
   }, [selectedIds, openTabs, filesById]);
@@ -449,6 +585,7 @@ export const LvAppContainer = () => {
       name: string;
       watch: boolean;
       glob: string | null;
+      parserId?: string;
     }) => {
       try {
         await sourceCtrl.addDirectory({
@@ -456,6 +593,7 @@ export const LvAppContainer = () => {
           name: data.name,
           watch: data.watch,
           glob: data.glob ?? undefined,
+          parserId: data.parserId,
         });
       } catch (e) {
         console.warn('addDirectory failed', e);
@@ -588,11 +726,16 @@ export const LvAppContainer = () => {
       tabs={tabs}
       onOpenFile={openFileTab}
       onCloseTab={closeTab}
+      onPinTab={pinTab}
       onAddRoot={onAddRoot}
       onRemoveRoot={onRemoveRoot}
       onOpenLocalFile={onOpenLocalFile}
       onSubmitAddSource={onSubmitAddSource}
       existingSourceNames={existingSourceNames}
+      availableParsers={availableParsers}
+      customParsers={customParsers}
+      onUpsertCustomParser={onUpsertCustomParser}
+      onRemoveCustomParser={onRemoveCustomParser}
       onGrantPermission={onGrantPermission}
       onCancelSource={onCancelSource}
       tweaks={{
@@ -628,6 +771,7 @@ export const LvAppContainer = () => {
       columns={tweaks.columns}
       onColumnsChange={onColumnsChange}
       cellValueOf={cellValueOf}
+      parserIdOf={parserIdOf}
       onExport={onExport}
       histogramData={histogramData}
       stats={stats}
