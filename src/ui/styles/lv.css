@@ -1009,7 +1009,7 @@ button{font-family:inherit}
 .lv-btn.is-on .lv-btn-badge{background:var(--lv-accent); color:#0a0e1a}
 
 .lv-fbtn-wrap{position:relative}
-.lv-filters-pop{min-width:340px; max-width:min(440px, calc(100vw - 32px))}
+.lv-filters-pop{width:min(820px, calc(100vw - 32px)); min-width:520px}
 .lv-filters-pop .lv-pop-hd-sub{
   margin-top:6px; padding-top:8px;
   border-top:1px solid var(--lv-border);
@@ -1115,13 +1115,16 @@ button{font-family:inherit}
 .lv-chip-add:hover, .lv-chip-add.is-active{color:var(--lv-accent); border-color:var(--lv-accent)}
 .lv-chip-add.is-active{background:rgba(122,162,247,.08)}
 
-.lv-field-add{position:relative}
+.lv-field-add{position:relative; flex-basis:100%}
 .lv-field-pop{
-  position:absolute; z-index:30; left:0; top:calc(100% + 6px);
-  width:420px; padding:8px; background:var(--lv-bg-1); border:1px solid var(--lv-border);
-  border-radius:8px; box-shadow:var(--lv-shadow-pop);
+  margin-top:8px; padding:8px;
+  background:var(--lv-bg-2); border:1px solid var(--lv-border);
+  border-radius:6px;
 }
-.lv-field-pop-row{display:flex; gap:4px; align-items:center}
+.lv-field-pop-row{display:flex; flex-wrap:wrap; gap:4px; align-items:center}
+.lv-field-pop-row .lv-field-input{flex:1 1 140px; min-width:0}
+.lv-field-pop-row .lv-field-op{flex:0 0 auto}
+.lv-field-pop-row .lv-btn{flex:0 0 auto}
 .lv-field-input{
   height:26px; padding:0 8px; background:var(--lv-bg-2); border:1px solid var(--lv-border);
   border-radius:5px; color:var(--lv-fg); font:inherit; font-size:12px; outline:none;
@@ -1154,7 +1157,6 @@ button{font-family:inherit}
   font-size:11.5px; color:var(--lv-fg-3);
 }
 .lv-count-n{color:var(--lv-fg); font-weight:600}
-.lv-count-lbl{margin-left:4px; color:var(--lv-fg-3); text-transform:uppercase; font-size:10px; letter-spacing:.08em}
 
 /* ──────────────────────── Timeline ──────────────────────── */
 .lv-timeline{

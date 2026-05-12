@@ -24,7 +24,6 @@ import type {
   LvTweaks,
 } from '../../contracts/lv-types.ts';
 import { compatOf } from '../../utils/field-compatibility.ts';
-import { LvLevelPill } from './LvLevelPill.tsx';
 import { LvGroupBySelect } from './LvGroupBySelect.tsx';
 import { LvAddFieldFilter } from './LvAddFieldFilter.tsx';
 import { LvTableSettings } from './LvTableSettings.tsx';
@@ -74,7 +73,6 @@ export interface LvFilterBarProps {
 export const LvFilterBar = ({
   filters,
   setFilters,
-  levelCounts,
   savedSearches,
   liveTail,
   onToggleLiveTail,
@@ -121,15 +119,9 @@ export const LvFilterBar = ({
     [fieldDescriptors],
   );
 
-  // null in core LogFilter means "all on"; UI displays each pill as active.
-  const activeLevels: Set<LogLevel> = filters.levels === null
-    ? new Set(ALL_LEVELS)
-    : new Set(filters.levels);
-
   const fieldFilters = filters.fieldFilters ?? [];
   const activeFieldsCount = fieldFilters.length;
-  const inactiveLevelsCount = ALL_LEVELS.length - activeLevels.size;
-  const filtersBadge = activeFieldsCount + (inactiveLevelsCount > 0 ? 1 : 0);
+  const filtersBadge = activeFieldsCount;
 
   useEffect(() => {
     if (!filtersOpen && !savedOpen) return;
@@ -155,20 +147,6 @@ export const LvFilterBar = ({
       document.removeEventListener('keydown', onKey);
     };
   }, [filtersOpen, savedOpen]);
-
-  const toggleLevel = (lvl: LogLevel) => {
-    setFilters((f) => {
-      const cur = f.levels === null ? new Set(ALL_LEVELS) : new Set(f.levels);
-      if (cur.has(lvl)) cur.delete(lvl);
-      else cur.add(lvl);
-      const arr = ALL_LEVELS.filter((l) => cur.has(l));
-      return {
-        ...f,
-        levels: arr.length === ALL_LEVELS.length ? null : arr,
-      };
-    });
-  };
-  const resetLevels = () => setFilters((f) => ({ ...f, levels: null }));
 
   const setQuery = (q: string) => setFilters((f) => ({ ...f, query: q }));
   const toggleCase = () => setFilters((f) => ({ ...f, caseSensitive: !f.caseSensitive }));
@@ -282,7 +260,6 @@ export const LvFilterBar = ({
           <span className="lv-count-n">{resultCount.toLocaleString()}</span>
           <span className="lv-count-sep">/</span>
           <span className="lv-count-t">{totalCount.toLocaleString()}</span>
-          <span className="lv-count-lbl">lines</span>
         </div>
 
         <div className="lv-fbar-spacer" />
@@ -322,26 +299,6 @@ export const LvFilterBar = ({
           {filtersOpen && (
             <div className="lv-pop lv-filters-pop" role="dialog">
               <div className="lv-pop-hd">
-                <span>Levels</span>
-                {inactiveLevelsCount > 0 && (
-                  <button type="button" className="lv-pop-clear" onClick={resetLevels}>
-                    Reset
-                  </button>
-                )}
-              </div>
-              <div className="lv-levels lv-filters-levels">
-                {ALL_LEVELS.map((lvl) => (
-                  <LvLevelPill
-                    key={lvl}
-                    level={lvl}
-                    active={activeLevels.has(lvl)}
-                    count={levelCounts[lvl] ?? 0}
-                    onToggle={() => toggleLevel(lvl)}
-                  />
-                ))}
-              </div>
-
-              <div className="lv-pop-hd lv-pop-hd-sub">
                 <span>Field filters</span>
                 {activeFieldsCount > 0 && (
                   <button type="button" className="lv-pop-clear" onClick={clearFieldFilters}>
