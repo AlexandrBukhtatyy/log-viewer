@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { getOrCreateViewStore } from '../../worker-client/log-client.ts';
 import type { ViewStore } from '../../worker-client/log-client.ts';
@@ -17,6 +17,14 @@ export interface WorkerClientProviderProps {
  */
 export const WorkerClientProvider = ({ children }: WorkerClientProviderProps) => {
   const [store] = useState<ViewStore>(() => getOrCreateViewStore());
+
+  // Eagerly hydrate persisted sources on mount. Without this the coordinator
+  // worker stays asleep (lazy by ADR-0014) until the first user action — so
+  // the sidebar is empty after reload, and the next Add Source races with
+  // resume and produces a duplicate. resumePersistedSources is idempotent.
+  useEffect(() => {
+    void store.getState().resumePersistedSources();
+  }, [store]);
 
   return <ViewStoreContext.Provider value={store}>{children}</ViewStoreContext.Provider>;
 };
