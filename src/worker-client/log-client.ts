@@ -253,6 +253,7 @@ export const createLogClient = (): ViewStore => {
       setFilter: (next) => {
         const prev = get().filter;
         const filter = typeof next === 'function' ? next(prev) : next;
+        if (filter === prev) return;
         set({ filter, entries: new Map() });
         void refresh();
       },

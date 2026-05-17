@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { LogFilter } from '../types/log-filter.ts';
 import { EMPTY_FILTER } from '../types/log-filter.ts';
 import type { SourceId } from '../types/log-entry.ts';
-import { buildClause, ORDER_BY_DEFAULT } from './query.ts';
+import { buildClause, ORDER_BY_DEFAULT, orderByForFilter } from './query.ts';
 
 const f = (overrides: Partial<LogFilter> = {}): LogFilter => ({
   ...EMPTY_FILTER,
@@ -198,5 +198,21 @@ describe('ORDER_BY_DEFAULT', () => {
     expect(ORDER_BY_DEFAULT).toContain('entry.source_id');
     expect(ORDER_BY_DEFAULT).toContain('entry.seq');
     expect(ORDER_BY_DEFAULT).toContain('IS NULL');
+  });
+});
+
+describe('orderByForFilter', () => {
+  it("'time' (default) returns ORDER_BY_DEFAULT", () => {
+    expect(orderByForFilter(f({ orderBy: 'time' }))).toBe(ORDER_BY_DEFAULT);
+  });
+
+  it('undefined orderBy falls back to ORDER_BY_DEFAULT', () => {
+    expect(orderByForFilter(f())).toBe(ORDER_BY_DEFAULT);
+  });
+
+  it("'physical' orders by (source_id, seq) without ts", () => {
+    const order = orderByForFilter(f({ orderBy: 'physical' }));
+    expect(order).toBe('ORDER BY entry.source_id ASC, entry.seq ASC');
+    expect(order).not.toContain('entry.ts');
   });
 });

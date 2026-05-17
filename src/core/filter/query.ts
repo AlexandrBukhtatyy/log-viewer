@@ -146,3 +146,15 @@ const buildFieldFilterClause = (ff: FieldFilter): FieldClause => {
 
 export const ORDER_BY_DEFAULT =
   'ORDER BY entry.ts IS NULL, entry.ts ASC, entry.source_id ASC, entry.seq ASC';
+
+const ORDER_BY_PHYSICAL =
+  'ORDER BY entry.source_id ASC, entry.seq ASC';
+
+/**
+ * Choose the `ORDER BY` clause for entry listings based on the filter's
+ * `orderBy` knob. `'physical'` (single source open) preserves the file's
+ * write order; `'time'` (default) merges multiple sources by timestamp
+ * with `(source_id, seq)` as a tie-breaker.
+ */
+export const orderByForFilter = (filter: LogFilter): string =>
+  filter.orderBy === 'physical' ? ORDER_BY_PHYSICAL : ORDER_BY_DEFAULT;
