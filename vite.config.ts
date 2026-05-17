@@ -5,6 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/log-viewer/',
   plugins: [
     react(),
     tailwindcss(),
@@ -22,7 +23,8 @@ export default defineConfig({
         theme_color: '#1f2937',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/',
+        start_url: '/log-viewer/',
+        scope: '/log-viewer/',
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -45,6 +47,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,wasm}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        navigateFallback: '/log-viewer/index.html',
       },
     }),
   ],
