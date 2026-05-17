@@ -956,7 +956,7 @@ button{font-family:inherit}
 .lv-search:focus-within{border-color:var(--lv-accent); background:var(--lv-bg-3)}
 .lv-search-ico{flex-shrink:0}
 .lv-search-input{
-  flex:1; border:0; background:transparent; color:var(--lv-fg);
+  flex:1; min-width:0; border:0; background:transparent; color:var(--lv-fg);
   font:inherit; font-size:12.5px; outline:none;
   font-family:var(--lv-font-mono);
 }
