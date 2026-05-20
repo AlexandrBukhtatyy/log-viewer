@@ -30,66 +30,34 @@
       }
       .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
 
-      /* Hero — screenshot is the backdrop, title/CTA overlay on top */
-      .hero {
-        position: relative;
-        isolation: isolate;
-        overflow: hidden;
-        min-height: 78vh;
+      /* Top bar — name left, CTA right (content lives inside .container,
+         mirroring the footer layout so widths line up with .lead / .features). */
+      .topbar { padding: 24px 0; }
+      .topbar-row {
         display: flex;
         align-items: center;
-        justify-content: center;
-        text-align: center;
+        justify-content: space-between;
+        gap: 16px;
       }
-      .hero-bg {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        object-position: center top;
-        z-index: -2;
-        opacity: 1;
-      }
-      .hero-overlay {
-        position: absolute;
-        inset: 0;
-        z-index: -1;
-        /* Tight halo just behind the title for legibility + soft fade
-           into the features section. The rest of the screenshot stays
-           fully visible. */
-        background:
-          radial-gradient(
-            ellipse 55% 45% at center,
-            rgba(12, 17, 22, 0.25) 0%,
-            rgba(12, 17, 22, 0.4) 60%,
-            rgba(12, 17, 22, 0.15) 100%
-          ),
-          linear-gradient(
-            180deg,
-            rgba(12, 17, 22, 0) 60%,
-            rgba(12, 17, 22, 1) 100%
-          );
-      }
-      .hero-content { padding: 96px 24px; max-width: 720px; }
-      .hero h1 {
-        font-size: clamp(40px, 6.5vw, 72px);
-        margin: 0 0 32px;
-        letter-spacing: -0.03em;
+      .topbar .brand {
+        font-size: clamp(22px, 2.6vw, 32px);
         font-weight: 700;
-        text-shadow: 0 2px 32px rgba(0, 0, 0, 0.5);
+        letter-spacing: -0.02em;
+        margin: 0;
+        color: var(--fg);
       }
       .cta {
         display: inline-block;
-        padding: 14px 26px;
+        padding: 10px 20px;
         border-radius: 10px;
         background: var(--accent);
         color: white;
         text-decoration: none;
         font-weight: 600;
-        font-size: 15px;
+        font-size: 14px;
         transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
         box-shadow: 0 8px 24px -8px rgba(59, 130, 246, 0.6);
+        white-space: nowrap;
       }
       .cta:hover {
         background: var(--accent-hi);
@@ -97,9 +65,33 @@
         box-shadow: 0 12px 28px -8px rgba(96, 165, 250, 0.7);
       }
 
+      /* Hero — just the screenshot, 40 % shorter than before */
+      .hero {
+        position: relative;
+        overflow: hidden;
+        height: 47vh;
+        min-height: 280px;
+      }
+      .hero img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center top;
+      }
+      .hero::after {
+        /* Soft fade into the body background under the image. */
+        content: '';
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 80px;
+        background: linear-gradient(180deg, rgba(12,17,22,0) 0%, var(--bg) 100%);
+        pointer-events: none;
+      }
+
       /* Lead — short pitch between the hero screenshot and the feature grid */
       .lead {
-        padding: 64px 24px 8px;
+        padding: 56px 24px 8px;
         text-align: center;
         max-width: 760px;
       }
@@ -148,6 +140,38 @@
         color: var(--fg-2);
         line-height: 1.5;
       }
+      .card { position: relative; }
+      .card-soon {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent-hi);
+        background: rgba(96, 165, 250, 0.12);
+        border: 1px solid rgba(96, 165, 250, 0.35);
+        padding: 2px 6px;
+        border-radius: 999px;
+      }
+      .card-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 12px;
+        font-size: 12px;
+      }
+      .card-links a {
+        color: var(--accent-hi);
+        text-decoration: none;
+        border-bottom: 1px dotted rgba(96, 165, 250, 0.4);
+        transition: color 120ms ease, border-color 120ms ease;
+      }
+      .card-links a:hover {
+        color: var(--fg);
+        border-bottom-color: var(--fg);
+      }
 
       /* Footer */
       footer {
@@ -178,30 +202,31 @@
       }
       .footer-links a:hover { color: var(--fg); }
       .footer-links svg { width: 18px; height: 18px; }
-      @media (max-width: 480px) {
-        .footer-row { flex-direction: column; gap: 10px; text-align: center; }
-      }
 
       @media (max-width: 600px) {
-        .hero { min-height: 60vh; }
-        .hero-content { padding: 72px 20px; }
-        .features { gap: 12px; padding: 40px 0 64px; }
+        .topbar { padding: 16px 0; }
+        .hero { height: 40vh; min-height: 220px; }
+        .features { gap: 12px; padding: 32px 0 56px; }
+      }
+      @media (max-width: 480px) {
+        .footer-row { flex-direction: column; gap: 10px; text-align: center; }
       }
     </style>
   </head>
   <body>
+    <header class="topbar">
+      <div class="container topbar-row">
+        <h1 class="brand">Log Viewer</h1>
+        <a class="cta" href="app/">Open the app →</a>
+      </div>
+    </header>
+
     <main>
-      <section class="hero" aria-label="Log Viewer">
+      <section class="hero" aria-label="Скриншот приложения">
         <img
-          class="hero-bg"
           src="landing-hero.png"
           alt="Скриншот Log Viewer: открыт pino.jsonl, виден таймлайн, virtual scroll и колонки @seq / timestamp / level / service / @file / message."
         />
-        <div class="hero-overlay" aria-hidden="true"></div>
-        <div class="hero-content">
-          <h1>Log Viewer</h1>
-          <a class="cta" href="app/">Open the app →</a>
-        </div>
       </section>
 
       <section class="lead container" aria-label="О приложении">
@@ -254,6 +279,41 @@
           </svg>
           <h3>PWA, ставится одним кликом</h3>
           <p>Устанавливается на macOS, Windows, Android. Работает офлайн, service worker кэширует ассеты и WASM.</p>
+        </article>
+
+        <article class="card">
+          <span class="card-soon">скоро</span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          <h3>Личные настройки источников</h3>
+          <p>Цветной ярлык, alias, набор колонок и предзаданные фильтры — отдельно для каждого источника. Открываете тот же файл — раскладка восстанавливается из памяти браузера.</p>
+        </article>
+
+        <article class="card">
+          <span class="card-soon">скоро</span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="3 8 7 4 11 8" />
+            <line x1="7" y1="4" x2="7" y2="20" />
+            <polyline points="21 16 17 20 13 16" />
+            <line x1="17" y1="20" x2="17" y2="4" />
+          </svg>
+          <h3>Импорт и экспорт фильтров</h3>
+          <p>Сохраняйте набор условий поиска в JSON-файл, делитесь с командой или переносите между устройствами. Импорт одним кликом возвращает фильтр и сохранённые поиски.</p>
+        </article>
+
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="3 17 9 11 13 15 21 7" />
+            <polyline points="14 7 21 7 21 14" />
+          </svg>
+          <h3>Дальше — лучше</h3>
+          <p>Проект активно развивается: новые парсеры, удобства поиска, кастомизация. Идеи, баг-репорты и pull-requests приветствуются — заходите.</p>
+          <div class="card-links">
+            <a href="https://github.com/aleksandrbuhtatyj/log-viewer/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
+            <a href="https://github.com/aleksandrbuhtatyj/log-viewer/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Как контрибьютить</a>
+          </div>
         </article>
       </section>
     </main>
