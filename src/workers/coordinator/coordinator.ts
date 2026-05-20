@@ -707,6 +707,60 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       const id = newSourceId();
       const source = buildLogSource(input, id);
 
+      // Directory dedupe: a fresh picker selection may point at a folder
+      // we already track (live or persisted). FileSystemDirectoryHandle
+      // is not reference-equal across picker invocations, so we ask the
+      // platform via `isSameEntry`. On match we either surface the
+      // existing id outright (live case) or promote a persisted-only
+      // record back to live, reusing the same indexer rows.
+      if (source.kind === 'directory') {
+        for (const [existingId, entry] of sources) {
+          if (entry.source.kind !== 'directory') continue;
+          try {
+            if (await source.handle.isSameEntry(entry.source.handle)) {
+              return existingId;
+            }
+          } catch {
+            /* incompatible handles — fall through */
+          }
+        }
+        for (const [existingId, rec] of persistedRecords) {
+          if (rec.source.kind !== 'directory') continue;
+          try {
+            if (await source.handle.isSameEntry(rec.source.handle)) {
+              // Promote persisted → live with the freshly-granted handle.
+              // Reuse the existing id so indexer rows stay attached.
+              const promoted: LogSource = {
+                ...rec.source,
+                handle: source.handle,
+                glob: source.glob ?? rec.source.glob,
+                watch: source.watch ?? rec.source.watch,
+                parserId: source.parserId ?? rec.source.parserId,
+              };
+              try {
+                const handleStore = await deps.handleStoreOpening;
+                await handleStore.put({
+                  sourceId: existingId,
+                  kind: 'directory',
+                  name: promoted.name,
+                  handle: source.handle,
+                  createdAt: Date.now(),
+                });
+              } catch (err) {
+                console.warn(
+                  `[coordinator] addSource: handleStore.put failed during promote of ${existingId}:`,
+                  err instanceof Error ? err.message : err,
+                );
+              }
+              startIngest(promoted);
+              return existingId;
+            }
+          } catch {
+            /* incompatible handles — fall through */
+          }
+        }
+      }
+
       // Surface the source in the sidebar *before* the synchronous
       // pipeline (indexer.opening / upsertSource / handleStore.put) so
       // the user gets immediate feedback. The status flips to
