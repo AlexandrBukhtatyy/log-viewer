@@ -63,11 +63,13 @@ export interface LvFileNode {
   /** Free-text error from a failed adapter (`SourceStatus.kind === 'error'`). */
   errorMessage?: string;
   /**
-   * Optional human label rendered next to the spinner while the source is
-   * loading/indexing/streaming. Examples: `"loading…"`, `"indexing 1234"`,
-   * `"streaming 42"`. `undefined` when the source is idle/done.
+   * Compact progress value shown next to the spinner. A percent string when
+   * the orchestrator knows the byte total (`"73%"`); otherwise the raw
+   * entry counter (`"1,234"`) or `"…"` for transitional states.
    */
   progressLabel?: string;
+  /** Human-readable explanation of `progressLabel` — surfaced as the tooltip. */
+  progressTitle?: string;
   /** True for catalog top-level file-source roots (LvCatalogRoot file variant). */
   root?: boolean;
   /** Source kind for the outlined per-source glyph at root level. */
@@ -90,6 +92,8 @@ export interface LvFolderNode {
   readOnly?: boolean;
   /** Mirrors LvFileNode.progressLabel for directory roots whose source is ingesting. */
   progressLabel?: string;
+  /** Mirrors LvFileNode.progressTitle — tooltip for the directory-root progress badge. */
+  progressTitle?: string;
   /** True while the source is in loading/indexing/streaming. Used to render a spinner. */
   live?: boolean;
   /** Parser id resolved at ingest time (Phase 2.E). Same semantics as on LvFileNode. */

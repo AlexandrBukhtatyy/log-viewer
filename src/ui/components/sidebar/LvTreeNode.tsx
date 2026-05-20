@@ -118,12 +118,15 @@ export const LvTreeNode = ({
             {node.live && (
               <span
                 className="lv-spinner"
-                title={node.progressLabel ?? 'Ingesting…'}
-                aria-label={node.progressLabel ?? 'Ingesting'}
+                title={node.progressTitle ?? 'Ingesting…'}
+                aria-label={node.progressTitle ?? 'Ingesting'}
               />
             )}
             {node.progressLabel && (
-              <span className="lv-tree-progress" title={node.progressLabel}>
+              <span
+                className="lv-tree-progress"
+                title={node.progressTitle ?? node.progressLabel}
+              >
                 {node.progressLabel}
               </span>
             )}
@@ -174,12 +177,15 @@ export const LvTreeNode = ({
             {node.live && (
               <span
                 className="lv-spinner"
-                title={node.progressLabel ?? 'Ingesting…'}
-                aria-label={node.progressLabel ?? 'Ingesting'}
+                title={node.progressTitle ?? 'Ingesting…'}
+                aria-label={node.progressTitle ?? 'Ingesting'}
               />
             )}
             {node.progressLabel && (
-              <span className="lv-tree-progress" title={node.progressLabel}>
+              <span
+                className="lv-tree-progress"
+                title={node.progressTitle ?? node.progressLabel}
+              >
                 {node.progressLabel}
               </span>
             )}

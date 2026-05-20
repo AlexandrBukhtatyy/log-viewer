@@ -67,18 +67,52 @@ const newCountOf = (status: SourceStatus): number | undefined => {
   return undefined;
 };
 
+const formatPercent = (read: number, total: number): string | undefined => {
+  if (total <= 0) return undefined;
+  const pct = Math.min(100, Math.max(0, Math.round((read / total) * 100)));
+  return `${pct}%`;
+};
+
 const progressLabelOf = (status: SourceStatus): string | undefined => {
-  if (status.kind === 'queued') return 'queued…';
-  if (status.kind === 'loading') return 'loading…';
+  if (status.kind === 'queued') return '…';
+  if (status.kind === 'loading') {
+    if (status.bytesRead !== undefined && status.bytesTotal !== undefined) {
+      return formatPercent(status.bytesRead, status.bytesTotal) ?? '…';
+    }
+    return '…';
+  }
   if (status.kind === 'indexing') {
+    if (status.bytesRead !== undefined && status.bytesTotal !== undefined) {
+      const pct = formatPercent(status.bytesRead, status.bytesTotal);
+      if (pct !== undefined) return pct;
+    }
     const n = status.entriesIndexed;
-    return n > 0 ? `indexing ${n.toLocaleString()}` : 'indexing…';
+    return n > 0 ? n.toLocaleString() : '…';
   }
   if (status.kind === 'streaming') {
     const n = status.entriesIndexed;
-    return n > 0 ? `streaming ${n.toLocaleString()}` : 'streaming…';
+    return n > 0 ? n.toLocaleString() : '…';
   }
   return undefined;
+};
+
+const progressTitleOf = (status: SourceStatus): string | undefined => {
+  switch (status.kind) {
+    case 'queued':
+      return 'Queued for ingest';
+    case 'loading':
+      return status.bytesTotal !== undefined
+        ? 'Loading — % of source bytes read'
+        : 'Loading source';
+    case 'indexing':
+      return status.bytesTotal !== undefined
+        ? 'Indexing — % of source bytes processed'
+        : `Indexing — ${status.entriesIndexed.toLocaleString()} entries parsed`;
+    case 'streaming':
+      return `Streaming — ${status.entriesIndexed.toLocaleString()} new entries`;
+    default:
+      return undefined;
+  }
 };
 
 const statusLabel = (status: SourceStatus): string | undefined => {
@@ -98,6 +132,7 @@ const fileNodeFromSource = (record: SourceRecord): LvFileNode => ({
   errorMessage:
     record.status.kind === 'error' ? record.status.error.message : undefined,
   progressLabel: progressLabelOf(record.status),
+  progressTitle: progressTitleOf(record.status),
   parserId: record.parserId,
 });
 
@@ -132,6 +167,7 @@ const directoryRoot = (
         : undefined,
     live: flat.live,
     progressLabel: flat.progressLabel,
+    progressTitle: flat.progressTitle,
     parserId: rec.parserId,
     children: tree.children,
   };

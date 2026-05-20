@@ -191,7 +191,16 @@ export type SourceStatus =
   | { kind: 'queued' }
   | { kind: 'permission-required' }
   | { kind: 'loading'; bytesRead?: number; bytesTotal?: number }
-  | { kind: 'indexing'; entriesIndexed: number }
+  | {
+      kind: 'indexing';
+      entriesIndexed: number;
+      /** Optional ingest-progress byte counters; used to surface a percent
+       *  in the sidebar. The orchestrator may emit them when a total size
+       *  is known up-front (file/text/snapshot/url), otherwise they stay
+       *  undefined and the UI falls back to the entry counter. */
+      bytesRead?: number;
+      bytesTotal?: number;
+    }
   | { kind: 'streaming'; entriesIndexed: number }
   | { kind: 'done'; entryCount: number }
   | { kind: 'error'; error: { name: string; message: string } };
