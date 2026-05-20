@@ -54,10 +54,13 @@ UI-скриншоты, которые **должны** попасть в git (д
 
 ## Архитектура
 
-Standard Vite SPA:
-- [src/main.tsx](src/main.tsx) — точка входа, монтирует `<App />` в `#root`
-- [src/App.tsx](src/App.tsx) — корневой компонент (пока стартовая страница Vite)
-- [index.html](index.html) — единственный HTML, содержит PWA-метатеги (theme-color, apple-touch-icon)
+Multi-page Vite-сборка с двумя HTML-entry:
+- [index.html](index.html) — статический **лендинг** (без React, без PWA-JS), отдаётся на `/log-viewer/`. Inline-стили, одна ссылка-CTA `app/`.
+- [app/index.html](app/index.html) — entry самой **демки**, отдаётся на `/log-viewer/app/`. Подключает `/src/main.tsx`.
+- [src/main.tsx](src/main.tsx) — точка входа демки, монтирует `<App />` в `#root`.
+- [src/App.tsx](src/App.tsx) — корневой компонент.
+
+PWA `manifest.scope = /log-viewer/app/` — install-prompt появляется только на демо-странице, лендинг остаётся обычной web-страницей. `workbox.navigateFallback` = `/log-viewer/app/index.html`, **deny-list** исключает `/log-viewer/` и `/log-viewer/index.html`, чтобы SW не подменял лендинг на демо.
 
 PWA-слой:
 - [vite.config.ts](vite.config.ts) — конфиг `VitePWA({ registerType: 'autoUpdate', injectRegister: 'auto', ... })`. SW регистрируется автоматически через виртуальный модуль плагина — вручную ничего регистрировать не нужно.

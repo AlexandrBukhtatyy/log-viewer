@@ -29,7 +29,7 @@ import {
 } from '../../core/filter/query-match.ts';
 import { newSourceId } from '../../core/util/ids.ts';
 import type { CustomParserDef } from '../../core/parsers/custom-parser-def.ts';
-import { removeSpool } from '../../core/storage/opfs-spool.ts';
+import { removeAllSpool, removeSpool } from '../../core/storage/opfs-spool.ts';
 import type { CustomParserStore } from './custom-parsers/store.ts';
 import type { HandleStore } from './handles/handle-store.ts';
 import { ingestSource } from './ingest/ingest-orchestrator.ts';
@@ -46,6 +46,13 @@ interface SourceEntry {
   source: LogSource;
   status: SourceStatus;
   aborter: AbortController | null;
+  /**
+   * Resolves when the background `ingestSource(...)` task fully exits
+   * (either reaches EOF or honours an abort). `removeSource` awaits this
+   * before deleting the indexer rows so an in-flight `insertBatch` cannot
+   * race past the delete and leave orphaned rows in `entry`.
+   */
+  ingest?: Promise<void>;
   /** Parser id resolved at ingest time. Populated by orchestrator's onParserDetected callback. */
   parserId?: string;
   /** Parser's `defaultColumns` snapshot — propagated to `SourceRecord` so UI can auto-apply once. */
@@ -361,6 +368,18 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   let version = 0;
   let pendingFilteredCount: Promise<number> | null = null;
 
+  // Ingest fires `onChange` once per inserted batch (see
+  // ingest-orchestrator). A large file produces dozens of batches per
+  // second, and each propagation through the change pipeline (count RPC →
+  // subscriber callback → main-thread refresh) blocks the user-perceived
+  // path for ~10–20 ms. Throttling here coalesces a burst of inserts into
+  // one user-visible update: the **first** event of a burst fires
+  // immediately (start of ingest is responsive), subsequent events inside
+  // the window get collapsed and re-fired once when the window closes.
+  const CHANGE_THROTTLE_MS = 200;
+  let lastChangeEmittedAt = 0;
+  let throttledChangeTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Slow-path cache for free-text query (Phase 1.1 of the multi-format
   // roadmap). Each entry of this cache holds the array of *resolved*
   // matching entries for a given (filter+version) tuple, so paging
@@ -465,7 +484,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     emitStatus();
 
     const adapter = factory(source);
-    void ingestSource({
+    const ingestPromise = ingestSource({
       source,
       adapter,
       parserPool: deps.parserPool,
@@ -473,11 +492,16 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       signal: aborter.signal,
       onStatus: (status) => {
         const entry = sources.get(source.id);
-        if (!entry) return;
+        if (!entry) return; // source already removed — drop stale status
         entry.status = status;
         emitStatus();
       },
       onChange: () => {
+        // Drop stale change notices for a source that was removed mid-batch
+        // (sources.delete in removeSource happens before we await the ingest
+        // task). Without this guard a final `insertBatch` would trigger an
+        // emitChange against an indexer row set that's about to be deleted.
+        if (!sources.has(source.id)) return;
         emitChange();
       },
       onParserDetected: ({ parserId, defaultColumns }) => {
@@ -490,7 +514,18 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         // a separate channel.
         emitStatus();
       },
+    }).catch((err: unknown) => {
+      // Aborts surface as AbortError-shaped throws; everything else is a
+      // real ingest failure. Swallow here so `removeSource`'s await
+      // never re-throws; ingestSource itself surfaces errors via
+      // onStatus({ kind: 'error', ... }) for the UI.
+      const name = err instanceof Error ? err.name : '';
+      if (name !== 'AbortError') {
+        console.warn(`[coordinator] ingest task for ${source.id} crashed`, err);
+      }
     });
+    const entry = sources.get(source.id);
+    if (entry) entry.ingest = ingestPromise;
   };
 
   /**
@@ -593,10 +628,9 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     emitStatus();
   };
 
-  const emitChange = (): void => {
-    version++;
-    invalidateFreeTextCache();
-    if (pendingFilteredCount !== null) return; // coalesce concurrent change events
+  const dispatchChangeNotice = (): void => {
+    lastChangeEmittedAt = Date.now();
+    if (pendingFilteredCount !== null) return; // already in-flight; will reflect latest version
     pendingFilteredCount = (async () => {
       await deps.getIndexer().opening;
       return deps.getIndexer().proxy.count(activeFilter);
@@ -614,6 +648,27 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       .finally(() => {
         pendingFilteredCount = null;
       });
+  };
+
+  const emitChange = (): void => {
+    version++;
+    invalidateFreeTextCache();
+    const now = Date.now();
+    const elapsed = now - lastChangeEmittedAt;
+    if (elapsed >= CHANGE_THROTTLE_MS && throttledChangeTimer === null) {
+      // Leading edge of a quiet period — fire immediately so the user
+      // sees the first ingest delta with no delay.
+      dispatchChangeNotice();
+      return;
+    }
+    // Inside the window — coalesce. The trailing dispatch picks up the
+    // latest `version` because `version` is module-scoped, not captured.
+    if (throttledChangeTimer !== null) return;
+    const wait = Math.max(0, CHANGE_THROTTLE_MS - elapsed);
+    throttledChangeTimer = setTimeout(() => {
+      throttledChangeTimer = null;
+      dispatchChangeNotice();
+    }, wait);
   };
 
   return {
@@ -713,15 +768,40 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     removeSource: async (id) => {
       await deps.getIndexer().opening;
       const entry = sources.get(id);
+      // Order matters: abort the ingest signal, drop the entry from the
+      // live map (so any stale onStatus/onChange callbacks early-return),
+      // THEN await the ingest task to fully exit. Only after it's gone
+      // can we safely delete indexer rows without an in-flight
+      // insertBatch landing on top of the delete and leaving orphans.
+      const ingestPromise = entry?.ingest;
       if (entry) {
         entry.aborter?.abort();
         sources.delete(id);
       }
       persistedRecords.delete(id);
+      if (ingestPromise) {
+        try {
+          await ingestPromise;
+        } catch {
+          // ingestPromise is `.catch`-wrapped in startIngest so it never
+          // rejects; this is just a belt-and-braces safety net.
+        }
+      }
       const handleStore = await deps.handleStoreOpening;
       await Promise.all([
         deps.getIndexer().proxy.removeSource(id),
         handleStore.delete(id),
+        // OPFS-spool cleanup — text/url/snapshot/stream sources write
+        // their body bytes to `lv-spool/<id>/`. Directory/file sources
+        // read from the user-supplied FS handle, so they have no spool
+        // and `removeSpool` is a no-op for them (it tolerates absent
+        // directories).
+        removeSpool(id).catch((err: unknown) => {
+          console.warn(
+            `[coordinator] removeSpool failed for ${id}:`,
+            err instanceof Error ? err.message : err,
+          );
+        }),
       ]);
       emitStatus();
       emitChange();
@@ -872,13 +952,20 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     subscribeStatus: async (cb) => {
       statusListeners.add(cb);
-      // Send the current snapshot immediately so the sidebar gets
-      // its first render even if hydration is still running (or has
-      // failed). Hydration kicks off `emitStatus()` once it lands, so
-      // persisted directory chips appear automatically without
-      // blocking this initial paint.
+      // Send whatever snapshot we have right now (possibly empty if
+      // the eager hydration hasn't landed yet). This unsticks the
+      // sidebar skeleton even when the indexer worker stalls.
       void cb(snapshotSources());
-      void hydratePersisted();
+      // Then re-send to *this specific cb* after hydration completes —
+      // covers the race where eager hydration finished before this
+      // subscriber existed, so the in-IIFE `emitStatus` had no
+      // listeners. Without this, persistedRecords would be populated
+      // but the sidebar would never learn about it until the next
+      // unrelated `emitStatus` (e.g. user adds a source).
+      void hydratePersisted().then(() => {
+        if (!statusListeners.has(cb)) return; // unsubscribed in the meantime
+        void cb(snapshotSources());
+      });
       return Comlink.proxy(() => {
         statusListeners.delete(cb);
       });
@@ -981,15 +1068,48 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     clearAll: async () => {
       await deps.getIndexer().opening;
+      // Same order as removeSource (ADR-0022): abort + drop from `sources`
+      // first so stale onStatus/onChange callbacks early-return, then await
+      // every ingest task before deleting indexer rows.
+      const ingestPromises: Promise<void>[] = [];
       for (const entry of sources.values()) {
         entry.aborter?.abort();
+        if (entry.ingest) ingestPromises.push(entry.ingest);
       }
       sources.clear();
       persistedRecords.clear();
-      const handleStore = await deps.handleStoreOpening;
-      await Promise.all([deps.getIndexer().proxy.clearAll(), handleStore.clearAll()]);
+      // Emit the empty snapshot immediately so the sidebar visually
+      // clears within milliseconds. The heavy cleanup (ingest drain,
+      // SQLite DELETE, OPFS recursive remove) keeps running below but
+      // the user already sees the result.
       emitStatus();
       emitChange();
+      if (ingestPromises.length > 0) {
+        try {
+          await Promise.all(ingestPromises);
+        } catch {
+          /* ingestPromises are .catch-wrapped in startIngest */
+        }
+      }
+      const handleStore = await deps.handleStoreOpening;
+      const customParserStore = await deps.customParserStoreOpening;
+      await Promise.all([
+        deps.getIndexer().proxy.clearAll(),
+        handleStore.clearAll(),
+        // Custom parser definitions live in their own IDB (separate from
+        // handles, see ADR-0018). User explicitly asked for "clear all",
+        // so wipe these too.
+        customParserStore.clearAll(),
+        // OPFS bodies for text/url/snapshot/stream sources — same gap
+        // that ADR-0022 fixed for `removeSource`, now extended to the
+        // bulk path.
+        removeAllSpool().catch((err: unknown) => {
+          console.warn(
+            '[coordinator] removeAllSpool failed:',
+            err instanceof Error ? err.message : err,
+          );
+        }),
+      ]);
     },
 
     clearSource: async (id) => {

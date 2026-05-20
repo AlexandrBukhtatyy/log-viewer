@@ -22,6 +22,13 @@ import { EMPTY_FILTER } from '../core/types/index.ts';
 import type { FieldDescriptor } from '../core/filter/field-descriptor.ts';
 
 const OVERSCAN = 200;
+/**
+ * Cached entries outside `[from - EVICT_MARGIN, to + EVICT_MARGIN]` are
+ * dropped when merging a new window. EVICT_MARGIN > OVERSCAN so small
+ * scroll bounces don't churn the cache — rows that just left the OVERSCAN
+ * buffer stick around for the next refresh.
+ */
+const EVICT_MARGIN = OVERSCAN * 3;
 
 export interface ViewState {
   readonly filter: LogFilter;
@@ -182,11 +189,20 @@ export const createLogClient = (): ViewStore => {
     );
     changeUnsubPromise = a.subscribeChanges(
       Comlink.proxy((notice) => {
+        // Ingest is append-only: indices of already-loaded rows do not
+        // shift when new batches land, only the tail grows. So if the
+        // filtered count only grew, we keep `entries` intact and let the
+        // user's scroll position decide whether to fetch more. A drop in
+        // count means the ground truth changed (source removal,
+        // re-ingest) — fall back to a full refresh.
+        const prev = store.getState().filteredCount;
         store.setState({
           version: notice.version,
           filteredCount: notice.filteredCount,
         });
-        void store.getState().refresh();
+        if (notice.filteredCount < prev) {
+          void store.getState().refresh();
+        }
       }),
     );
     void a.resumePersistedSources().catch((err: unknown) => {
@@ -206,9 +222,36 @@ export const createLogClient = (): ViewStore => {
   };
 
   let refreshToken = 0;
+  let windowRefreshScheduled = false;
+  /**
+   * Schedule a window-only refresh on the next animation frame. Multiple
+   * `setVisibleRange` calls landing in the same frame (typical for inertial
+   * scroll) collapse into a single coordinator round-trip — without this,
+   * each `useEffect` firing from TanStack Virtual produces its own RPC and
+   * the queue piles up behind the user's scroll position.
+   */
+  const scheduleWindowRefresh = (refreshWindow: () => Promise<void>): void => {
+    if (windowRefreshScheduled) return;
+    windowRefreshScheduled = true;
+    const fire = (): void => {
+      windowRefreshScheduled = false;
+      void refreshWindow();
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(fire);
+    } else {
+      queueMicrotask(fire);
+    }
+  };
 
   const store = createStore<ViewState & ViewActions>((set, get) => {
-    const refresh = async (): Promise<void> => {
+    /**
+     * Full refresh — re-syncs filter into the coordinator and pulls fresh
+     * count + window. Used when ground truth changed (filter, source set,
+     * ingest delta). Replaces `entries` outright because cached rows can
+     * be stale after a filter change or source removal.
+     */
+    const refreshAll = async (): Promise<void> => {
       const token = ++refreshToken;
       set({ isLoading: true });
       const { filter, windowFrom, windowTo } = get();
@@ -232,10 +275,44 @@ export const createLogClient = (): ViewStore => {
           isLoading: false,
         });
       } catch (err) {
-        console.error('[log-client] refresh failed', err);
+        console.error('[log-client] refreshAll failed', err);
         if (token === refreshToken) set({ isLoading: false });
       }
     };
+
+    /**
+     * Window-only refresh — invoked on scroll. Skips `setFilter`/`getCount`
+     * because neither changes during scrolling, and **merges** the new
+     * range into the existing `entries` map instead of replacing it.
+     * Rows just outside the overscan buffer remain cached and avoid the
+     * skeleton flash on small scroll-back. `isLoading` stays off here —
+     * undefined rows render as skeletons via `getRow(i) === undefined`,
+     * the global loading overlay is reserved for filter/data changes.
+     */
+    const refreshWindow = async (): Promise<void> => {
+      const token = ++refreshToken;
+      const { windowFrom, windowTo } = get();
+      const from = Math.max(0, windowFrom - OVERSCAN);
+      const to = Math.max(from, windowTo + OVERSCAN);
+      if (to === from) return;
+      try {
+        const range = await api().getRange(from, to);
+        if (token !== refreshToken) return;
+        const prev = get().entries;
+        const next = new Map(prev);
+        const evictBefore = Math.max(0, windowFrom - EVICT_MARGIN);
+        const evictAfter = windowTo + EVICT_MARGIN;
+        for (const k of next.keys()) {
+          if (k < evictBefore || k >= evictAfter) next.delete(k);
+        }
+        range.forEach((e, i) => next.set(from + i, e));
+        set({ entries: next });
+      } catch (err) {
+        console.error('[log-client] refreshWindow failed', err);
+      }
+    };
+
+    const refresh = refreshAll;
 
     return {
       filter: EMPTY_FILTER,
@@ -266,7 +343,7 @@ export const createLogClient = (): ViewStore => {
         const s = get();
         if (from === s.windowFrom && to === s.windowTo) return;
         set({ windowFrom: from, windowTo: to });
-        void refresh();
+        scheduleWindowRefresh(refreshWindow);
       },
       addFile: async (file) =>
         api().addSource({

@@ -289,6 +289,16 @@ export const LvViewer = ({
     }
   }, [liveTail, rowCount]);
 
+  // Switching to a different file/source in the same viewer tab swaps the
+  // underlying entry set wholesale — the prior scroll position points at
+  // an unrelated row and would leave the user mid-content for the wrong
+  // file. Reset to the top so the new source starts at row 0.
+  useEffect(() => {
+    if (streamRef.current) {
+      streamRef.current.scrollTop = 0;
+    }
+  }, [activeTabId]);
+
   const toggleExpand = (id: string) =>
     setExpanded((s) => {
       const n = new Set(s);
@@ -561,12 +571,12 @@ export const LvViewer = ({
             )}
 
             <div className="lv-stream-hd" style={{ gridTemplateColumns: gridTemplate }}>
-              <span className="lv-sh lv-sh-ln">ln</span>
+              <span className="lv-sh lv-sh-ln" title="@seq">@seq</span>
               <span className="lv-sh lv-sh-caret"></span>
               <span className="lv-sh lv-sh-ts">timestamp</span>
               <span className="lv-sh lv-sh-lvl">level</span>
               <span className="lv-sh lv-sh-svc">service</span>
-              <span className="lv-sh lv-sh-file">file</span>
+              <span className="lv-sh lv-sh-file" title="@file">@file</span>
               {columns.map((c) => (
                 <span key={c.key} className="lv-sh" title={c.key}>
                   {c.label || c.key}

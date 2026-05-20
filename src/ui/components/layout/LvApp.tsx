@@ -34,6 +34,8 @@ import { LvAlertsPanel } from '../panels/LvAlertsPanel.tsx';
 import { LvParsersPanel } from '../panels/LvParsersPanel.tsx';
 import { LvCommandPalette } from '../modals/LvCommandPalette.tsx';
 import { LvShortcutsModal } from '../modals/LvShortcutsModal.tsx';
+import { LvClearDataModal } from '../modals/LvClearDataModal.tsx';
+import type { LvClearDataScope } from '../modals/LvClearDataModal.tsx';
 import {
   LvAddSourceModal,
   type LvAddSourceFormData,
@@ -166,6 +168,18 @@ export interface LvAppProps {
   /** File menu → Export → JSONL/CSV; container wires `useExport`. */
   onExport?: (format: 'jsonl' | 'csv') => void;
 
+  /**
+   * File menu → Clear Application Data… — runs after the user confirms
+   * scope checkboxes. Container is responsible for wiring worker clearAll,
+   * localStorage wipe, and PWA cache reset based on the selection, and
+   * reloading the page when PWA cache is included.
+   */
+  onClearAppData?: (scope: {
+    indexData: boolean;
+    uiState: boolean;
+    pwaCache: boolean;
+  }) => Promise<void>;
+
   // Server-aggregated histogram (Phase 2).
   readonly histogramData: HistogramResponse;
 
@@ -236,6 +250,7 @@ export const LvApp = ({
   cellValueOf,
   parserIdOf,
   onExport,
+  onClearAppData,
   histogramData,
   stats,
   onAiComplete,
@@ -246,6 +261,7 @@ export const LvApp = ({
   const [cmdOpen, setCmdOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [clearDataOpen, setClearDataOpen] = useState(false);
   const [tweaksPanelOpen, setTweaksPanelOpen] = useState(false);
   const [addSourceModal, setAddSourceModal] = useState<
     { open: true; initialWatch: boolean } | { open: false }
@@ -541,6 +557,10 @@ export const LvApp = ({
             setCmdOpen(true);
             return;
           }
+          if (id === 'clear-data') {
+            setClearDataOpen(true);
+            return;
+          }
           runCommand(id);
         }}
         recentFiles={recentFiles}
@@ -632,6 +652,16 @@ export const LvApp = ({
       />
 
       <LvShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      {clearDataOpen && (
+        <LvClearDataModal
+          open
+          onClose={() => setClearDataOpen(false)}
+          onConfirm={async (scope: LvClearDataScope) => {
+            if (onClearAppData) await onClearAppData(scope);
+          }}
+        />
+      )}
 
       <LvAddSourceModal
         open={addSourceModal.open}

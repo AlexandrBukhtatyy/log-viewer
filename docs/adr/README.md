@@ -101,3 +101,7 @@ flowchart LR
 - [0017. Dynamic field schema + `@`-namespace for built-in attributes](0017-dynamic-field-schema.md) — proposed
 - [0018. Parser plugin architecture, custom parsers, and re-parse cycle](0018-parser-plugin-architecture.md) — proposed
 - [0019. Multi-line ingest buffer in orchestrator (option A)](0019-multiline-buffer-in-orchestrator.md) — proposed
+- [0020. Batched contiguous blob reads в `SourceBlobReader`](0020-batched-contiguous-blob-reads.md) — proposed
+- [0021. Window-only refresh + entry cache в `log-client`](0021-window-only-refresh-and-entry-cache.md) — proposed
+- [0022. Полная очистка ресурсов при `removeSource` (включая live-ingest)](0022-source-removal-cleanup.md) — proposed
+- [0023. File → Clear application data — три скоупа очистки](0023-clear-application-data.md) — proposed

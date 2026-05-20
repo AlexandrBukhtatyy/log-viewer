@@ -23,6 +23,7 @@ import { useUiPrefs } from '../../hooks/use-ui-prefs.ts';
 import { useBookmarks } from '../../hooks/use-bookmarks.ts';
 import { useRecentFiles } from '../../hooks/use-recent-files.ts';
 import { useSavedSearches } from '../../hooks/use-saved-searches.ts';
+import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
 import { LvApp } from '../../ui/components/layout/LvApp.tsx';
 import type {
   LvGroupBy,
@@ -297,6 +298,37 @@ export const LvAppContainer = () => {
       void exportHook.exportFiltered(format);
     },
     [exportHook],
+  );
+
+  // File menu → Clear Application Data… — three independent scopes.
+  // Worker-side data goes through the existing `clearAll` action (which
+  // also handles ingest-abort + spool wipe per ADR-0022). UI-state and
+  // PWA-cache clears live in `clear-app-data.ts`. PWA scope reloads the
+  // page so the SW unregister actually takes effect on the next nav.
+  //
+  // Performance: the three scopes hit independent storage backends, so
+  // we kick them in parallel and only await the union via Promise.all.
+  // The synchronous LocalStorage wipe fires first so even if the worker
+  // round-trip is slow, prefs are already gone.
+  const onClearAppData = useCallback(
+    async (scope: {
+      indexData: boolean;
+      uiState: boolean;
+      pwaCache: boolean;
+    }): Promise<void> => {
+      if (scope.uiState) clearUiState();
+      const tasks: Promise<unknown>[] = [];
+      if (scope.indexData) tasks.push(sourceCtrl.clearAll());
+      if (scope.pwaCache) tasks.push(clearPwaCache());
+      await Promise.all(tasks);
+      // SW unregister and LocalStorage wipe only take effect on a fresh
+      // navigation — reload last so the modal close + caller-side
+      // notifications happen first.
+      if (scope.pwaCache || scope.uiState) {
+        location.reload();
+      }
+    },
+    [sourceCtrl],
   );
 
   // Catalog + filesById from live SourceRecord[].
@@ -773,6 +805,7 @@ export const LvAppContainer = () => {
       cellValueOf={cellValueOf}
       parserIdOf={parserIdOf}
       onExport={onExport}
+      onClearAppData={onClearAppData}
       histogramData={histogramData}
       stats={stats}
     />

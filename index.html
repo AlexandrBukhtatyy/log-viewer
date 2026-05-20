@@ -5,12 +5,271 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1f2937" />
-    <meta name="description" content="PWA для просмотра логов" />
-    <title>Log Viewer</title>
+    <meta name="theme-color" content="#0c1116" />
+    <meta name="description" content="Log Viewer — PWA для просмотра логов в браузере. Локально, приватно, без серверов." />
+    <title>Log Viewer — PWA для просмотра логов</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0c1116;
+        --bg-2: #131922;
+        --fg: #e6e8eb;
+        --fg-2: #9aa3ad;
+        --fg-3: #6b7280;
+        --accent: #3b82f6;
+        --accent-hi: #60a5fa;
+        --border: #1f2937;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+        line-height: 1.55;
+      }
+      .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+      /* Hero — screenshot is the backdrop, title/CTA overlay on top */
+      .hero {
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        min-height: 78vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .hero-bg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center top;
+        z-index: -2;
+        opacity: 1;
+      }
+      .hero-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        /* Tight halo just behind the title for legibility + soft fade
+           into the features section. The rest of the screenshot stays
+           fully visible. */
+        background:
+          radial-gradient(
+            ellipse 55% 45% at center,
+            rgba(12, 17, 22, 0.25) 0%,
+            rgba(12, 17, 22, 0.4) 60%,
+            rgba(12, 17, 22, 0.15) 100%
+          ),
+          linear-gradient(
+            180deg,
+            rgba(12, 17, 22, 0) 60%,
+            rgba(12, 17, 22, 1) 100%
+          );
+      }
+      .hero-content { padding: 96px 24px; max-width: 720px; }
+      .hero h1 {
+        font-size: clamp(40px, 6.5vw, 72px);
+        margin: 0 0 32px;
+        letter-spacing: -0.03em;
+        font-weight: 700;
+        text-shadow: 0 2px 32px rgba(0, 0, 0, 0.5);
+      }
+      .cta {
+        display: inline-block;
+        padding: 14px 26px;
+        border-radius: 10px;
+        background: var(--accent);
+        color: white;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 15px;
+        transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+        box-shadow: 0 8px 24px -8px rgba(59, 130, 246, 0.6);
+      }
+      .cta:hover {
+        background: var(--accent-hi);
+        transform: translateY(-1px);
+        box-shadow: 0 12px 28px -8px rgba(96, 165, 250, 0.7);
+      }
+
+      /* Lead — short pitch between the hero screenshot and the feature grid */
+      .lead {
+        padding: 64px 24px 8px;
+        text-align: center;
+        max-width: 760px;
+      }
+      .lead p {
+        font-size: clamp(17px, 1.6vw, 20px);
+        line-height: 1.55;
+        margin: 0 0 12px;
+        color: var(--fg);
+      }
+      .lead p + p {
+        color: var(--fg-2);
+        font-size: clamp(15px, 1.4vw, 17px);
+        margin-bottom: 0;
+      }
+
+      /* Features grid */
+      .features {
+        padding: 40px 0 80px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        transition: border-color 120ms ease, transform 120ms ease;
+      }
+      .card:hover { border-color: #2d3a4b; transform: translateY(-1px); }
+      .card .icon {
+        width: 28px;
+        height: 28px;
+        color: var(--accent-hi);
+        margin-bottom: 12px;
+      }
+      .card h3 {
+        font-size: 15px;
+        margin: 0 0 6px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .card p {
+        font-size: 13px;
+        margin: 0;
+        color: var(--fg-2);
+        line-height: 1.5;
+      }
+
+      /* Footer */
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 20px 0;
+        font-size: 13px;
+        color: var(--fg-3);
+      }
+      .footer-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .footer-copy { color: var(--fg-3); }
+      .footer-links {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .footer-links a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--fg-2);
+        text-decoration: none;
+        transition: color 120ms ease;
+      }
+      .footer-links a:hover { color: var(--fg); }
+      .footer-links svg { width: 18px; height: 18px; }
+      @media (max-width: 480px) {
+        .footer-row { flex-direction: column; gap: 10px; text-align: center; }
+      }
+
+      @media (max-width: 600px) {
+        .hero { min-height: 60vh; }
+        .hero-content { padding: 72px 20px; }
+        .features { gap: 12px; padding: 40px 0 64px; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <main>
+      <section class="hero" aria-label="Log Viewer">
+        <img
+          class="hero-bg"
+          src="landing-hero.png"
+          alt="Скриншот Log Viewer: открыт pino.jsonl, виден таймлайн, virtual scroll и колонки @seq / timestamp / level / service / @file / message."
+        />
+        <div class="hero-overlay" aria-hidden="true"></div>
+        <div class="hero-content">
+          <h1>Log Viewer</h1>
+          <a class="cta" href="app/">Open the app →</a>
+        </div>
+      </section>
+
+      <section class="lead container" aria-label="О приложении">
+        <p>Log Viewer — самостоятельное PWA-приложение, которое превращает браузер в полноценный лог-инспектор.</p>
+        <p>Никаких серверов, аплоадов и аккаунтов — только ваши файлы и быстрый ответ на вопрос «что пошло не так».</p>
+      </section>
+
+      <section class="features container" aria-label="Возможности">
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <h3>Локально и приватно</h3>
+          <p>Файлы не покидают браузер. Парсинг и индексация — в Web Worker'ах, БД и кэш тел записей — в OPFS.</p>
+        </article>
+
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
+          <h3>Тянет большие логи</h3>
+          <p>Virtual scroll и batched contiguous reads. 50k+ строк на одном файле — без подвисаний даже на ноуте.</p>
+        </article>
+
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2 2 7l10 5 10-5-10-5z" />
+            <path d="M2 17l10 5 10-5" />
+            <path d="M2 12l10 5 10-5" />
+          </svg>
+          <h3>Любой формат</h3>
+          <p>JSONL (pino, bunyan), plain-text, nginx-combined, syslog. Не хватает — добавь свой парсер на Grok или regex.</p>
+        </article>
+
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7h4l2-2h6l2 2h4v13H3z" />
+            <circle cx="12" cy="13" r="3" />
+          </svg>
+          <h3>Источники любых типов, выборка по файлам</h3>
+          <p>Локальные файлы и директории, drag-and-drop, paste-текст, URL, WS/SSE-потоки, zip/tar-архивы. Отмечай чекбоксами только нужные файлы — фильтр, таймлайн и поиск работают по выделенному.</p>
+        </article>
+
+        <article class="card">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <h3>PWA, ставится одним кликом</h3>
+          <p>Устанавливается на macOS, Windows, Android. Работает офлайн, service worker кэширует ассеты и WASM.</p>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container footer-row">
+        <span class="footer-copy">© 2026 Alexandr Bukhtatyy</span>
+        <nav class="footer-links" aria-label="External links">
+          <a href="https://github.com/aleksandrbuhtatyj/log-viewer" target="_blank" rel="noopener" aria-label="GitHub repository" title="GitHub">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1-.02-1.96-3.2.69-3.87-1.54-3.87-1.54-.52-1.34-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.13 0 1.54-.01 2.78-.01 3.16 0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
+            </svg>
+            <span>GitHub</span>
+          </a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

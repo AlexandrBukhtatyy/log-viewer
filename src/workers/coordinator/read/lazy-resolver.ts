@@ -76,18 +76,31 @@ export const resolvePointersToEntries = async (
   }
   if (needsResolve.length === 0) return rows;
 
-  // Group by source — each source has at most one reader instance per
-  // resolve call, and parser-RPC is one batch per source.
-  const groups = new Map<SourceId, LogEntry[]>();
+  // Group by (source, filePath). Same-file ranges share one reader call —
+  // see source-blob-reader.readBatch / ADR-0020. For directory sources the
+  // window of pointer rows can span multiple files; mixing them into one
+  // batch would either re-walk the dir tree per range (old behaviour) or
+  // read the wrong file. Same-source groups still share one parser RPC.
+  const sourceGroups = new Map<SourceId, LogEntry[]>();
+  const fileGroups = new Map<SourceId, Map<string, LogEntry[]>>();
   for (const r of needsResolve) {
-    const list = groups.get(r.sourceId) ?? [];
-    list.push(r);
-    groups.set(r.sourceId, list);
+    const sList = sourceGroups.get(r.sourceId) ?? [];
+    sList.push(r);
+    sourceGroups.set(r.sourceId, sList);
+
+    let perFile = fileGroups.get(r.sourceId);
+    if (!perFile) {
+      perFile = new Map<string, LogEntry[]>();
+      fileGroups.set(r.sourceId, perFile);
+    }
+    const fList = perFile.get(r.filePath) ?? [];
+    fList.push(r);
+    perFile.set(r.filePath, fList);
   }
 
   const enriched = new Map<EntryId, LogEntry>();
 
-  for (const [sourceId, srows] of groups) {
+  for (const [sourceId, srows] of sourceGroups) {
     const source = lookupSource(sourceId);
     const reader = source ? readerForSource(source) : null;
     if (!reader) {
@@ -95,33 +108,44 @@ export const resolvePointersToEntries = async (
       continue;
     }
 
-    // Read each row's bytes. Failures keep the row in the output but with a
+    // For each filePath inside the source, one batched read fills in lines
+    // for all its rows. Failures keep the rows in the output but with a
     // blank body — ingest pointers can outlive the FS handle (e.g. browser
     // released access after a permission-required reload).
-    const frames: (ParseLineFrame | null)[] = await Promise.all(
-      srows.map(async (r): Promise<ParseLineFrame | null> => {
+    const lineByEntryId = new Map<EntryId, string>();
+    const perFile = fileGroups.get(sourceId)!;
+    await Promise.all(
+      Array.from(perFile, async ([filePath, rows]) => {
         try {
-          const line = await reader.read(r.filePath, r.byteStart, r.byteEnd);
-          return { line, byteStart: r.byteStart, byteEnd: r.byteEnd };
+          const lines = await reader.readBatch(
+            filePath,
+            rows.map((r) => ({ byteStart: r.byteStart, byteEnd: r.byteEnd })),
+          );
+          for (let i = 0; i < rows.length; i++) {
+            const line = lines[i];
+            if (line !== undefined) lineByEntryId.set(rows[i]!.id, line);
+          }
         } catch (err) {
           console.warn(
-            `[lazy-resolver] read failed for ${sourceId}::${r.filePath} [${r.byteStart}, ${r.byteEnd}):`,
+            `[lazy-resolver] readBatch failed for ${sourceId}::${filePath} (${rows.length} ranges):`,
             err instanceof Error ? err.message : err,
           );
-          return null;
         }
       }),
     );
 
+    // Build frames in `srows` order (matters for parser output alignment).
+    const frames: (ParseLineFrame | null)[] = srows.map((r) => {
+      const line = lineByEntryId.get(r.id);
+      if (line === undefined) return null;
+      return { line, byteStart: r.byteStart, byteEnd: r.byteEnd };
+    });
+
     // Batch-parse so message gets reconstructed in one parser-pool RPC.
     const goodFrames: ParseLineFrame[] = [];
-    const goodIdx: number[] = [];
     for (let i = 0; i < frames.length; i++) {
       const f = frames[i];
-      if (f !== null) {
-        goodFrames.push(f);
-        goodIdx.push(i);
-      }
+      if (f !== null) goodFrames.push(f);
     }
 
     const parsed =
@@ -146,8 +170,7 @@ export const resolvePointersToEntries = async (
         continue;
       }
       // The parser preserves input order; `parsed` may be shorter when
-      // empty/unrecognised lines were skipped, so we walk it sparsely
-      // alongside `goodIdx`.
+      // empty/unrecognised lines were skipped, so we walk it sparsely.
       let message = frame.line;
       while (parsedIdx < parsed.length) {
         const p = parsed[parsedIdx]!;

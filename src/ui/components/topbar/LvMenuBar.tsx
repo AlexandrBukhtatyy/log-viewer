@@ -93,6 +93,7 @@ export const LvMenuBar = ({
         { id: 'prefs-keys', label: 'Keyboard Shortcuts', hint: '⌘K ⌘S', onRun: () => onCommand?.('open-keys') },
       ],
     },
+    { id: 'clear-data', label: 'Clear Application Data…', onRun: () => onCommand?.('clear-data') },
     { kind: 'sep' },
     { id: 'exit', label: 'Exit', hint: '⌘Q', onRun: () => onCommand?.('exit') },
   ];

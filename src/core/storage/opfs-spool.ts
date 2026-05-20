@@ -214,3 +214,19 @@ export const removeSpool = async (
     /* nothing to remove */
   }
 };
+
+/**
+ * Recursively wipe the entire `lv-spool/` directory — used by `clearAll`
+ * to drop body bytes for *every* source in one shot. No-op when the
+ * directory doesn't exist (fresh install, or already cleared).
+ */
+export const removeAllSpool = async (
+  rootProvider: OpfsRootProvider = defaultOpfsRoot,
+): Promise<void> => {
+  const root = await rootProvider.getRoot();
+  try {
+    await root.removeEntry(SPOOL_ROOT, { recursive: true });
+  } catch {
+    /* nothing to remove */
+  }
+};
