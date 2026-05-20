@@ -704,18 +704,28 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
           `addSource: no adapter for source kind '${input.kind}' (probably not implemented yet)`,
         );
       }
+
+      const id = newSourceId();
+      const source = buildLogSource(input, id);
+
+      // Optimistic insert: surface the source in the sidebar BEFORE the
+      // hydrate-await, the dedup loops, and the indexer/handle-store IO.
+      // The user sees the spinner the moment they hit "Add" and the rest
+      // of the addSource flow continues asynchronously. If the directory
+      // dedup decides this is a duplicate, the optimistic row is removed
+      // below before the existing id is returned (or the persisted record
+      // is promoted).
+      sources.set(id, { source, status: { kind: 'queued' }, aborter: null });
+      emitStatus();
+
       // Wait for the initial hydrate so `persistedRecords` is fully
       // populated before the directory dedup loop runs. Without this an
       // `addSource` call that races the page-load hydrate (user clicks
       // "+ Add source" within the first ~50 ms after reload) sees an
       // empty `persistedRecords`, misses the existing handle, and
-      // creates a parallel duplicate of the same folder. `hydratePersisted`
-      // is memoised so this is a no-op once the eager kick-off has
-      // resolved.
+      // creates a parallel duplicate. `hydratePersisted` is memoised so
+      // this is a no-op once the eager kick-off has resolved.
       await hydratePersisted();
-
-      const id = newSourceId();
-      const source = buildLogSource(input, id);
 
       // Directory dedupe: a fresh picker selection may point at a folder
       // we already track (live or persisted). FileSystemDirectoryHandle
@@ -725,9 +735,12 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       // record back to live, reusing the same indexer rows.
       if (source.kind === 'directory') {
         for (const [existingId, entry] of sources) {
+          if (existingId === id) continue; // skip our own optimistic row
           if (entry.source.kind !== 'directory') continue;
           try {
             if (await source.handle.isSameEntry(entry.source.handle)) {
+              sources.delete(id);
+              emitStatus();
               return existingId;
             }
           } catch {
@@ -739,7 +752,10 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
           try {
             if (await source.handle.isSameEntry(rec.source.handle)) {
               // Promote persisted → live with the freshly-granted handle.
-              // Reuse the existing id so indexer rows stay attached.
+              // Reuse the existing id so indexer rows stay attached. Drop
+              // the optimistic row before promoting so the sidebar
+              // doesn't briefly show two rows.
+              sources.delete(id);
               const promoted: LogSource = {
                 ...rec.source,
                 handle: source.handle,
@@ -762,6 +778,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
                   err instanceof Error ? err.message : err,
                 );
               }
+              // startIngest emits status with the promoted row; no manual
+              // emit needed for the optimistic delete above.
               startIngest(promoted);
               return existingId;
             }
@@ -770,14 +788,6 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
           }
         }
       }
-
-      // Surface the source in the sidebar *before* the synchronous
-      // pipeline (indexer.opening / upsertSource / handleStore.put) so
-      // the user gets immediate feedback. The status flips to
-      // loading/indexing/streaming as soon as the adapter starts; if the
-      // pipeline rejects, we replace it with an error status below.
-      sources.set(id, { source, status: { kind: 'queued' }, aborter: null });
-      emitStatus();
 
       try {
         await deps.getIndexer().opening;
