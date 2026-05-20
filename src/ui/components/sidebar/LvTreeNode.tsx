@@ -122,23 +122,7 @@ export const LvTreeNode = ({
                 aria-label={node.progressTitle ?? 'Ingesting'}
               />
             )}
-            {node.progressLabel && (
-              <span
-                className="lv-tree-progress"
-                title={node.progressTitle ?? node.progressLabel}
-              >
-                {node.progressLabel}
-              </span>
-            )}
             {node.root && <LvRootBadge node={node} />}
-            {node.root && node.parserId && (
-              <span
-                className="lv-tree-parser-badge"
-                title={`Parser: ${node.parserId}`}
-              >
-                {node.parserId}
-              </span>
-            )}
             {folderState !== 'none' && (
               <span className={`lv-tree-pick lv-tree-pick-${folderState}`} aria-label="selected">
                 {folderState === 'all' ? '●' : '◐'}
@@ -181,14 +165,6 @@ export const LvTreeNode = ({
                 aria-label={node.progressTitle ?? 'Ingesting'}
               />
             )}
-            {node.progressLabel && (
-              <span
-                className="lv-tree-progress"
-                title={node.progressTitle ?? node.progressLabel}
-              >
-                {node.progressLabel}
-              </span>
-            )}
             {!node.progressLabel && node.newCount ? (
               <span className="lv-file-new" title={`${node.newCount} new`}>
                 +{node.newCount}
@@ -227,14 +203,6 @@ export const LvTreeNode = ({
               </span>
             )}
             {node.root && <LvRootBadge node={node} />}
-            {node.root && node.parserId && (
-              <span
-                className="lv-tree-parser-badge"
-                title={`Parser: ${node.parserId}`}
-              >
-                {node.parserId}
-              </span>
-            )}
             <span className="lv-tree-meta">{node.count}</span>
             <span
               className={`lv-tree-check${selected ? ' is-on' : ''}`}
