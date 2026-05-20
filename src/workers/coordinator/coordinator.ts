@@ -704,6 +704,16 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
           `addSource: no adapter for source kind '${input.kind}' (probably not implemented yet)`,
         );
       }
+      // Wait for the initial hydrate so `persistedRecords` is fully
+      // populated before the directory dedup loop runs. Without this an
+      // `addSource` call that races the page-load hydrate (user clicks
+      // "+ Add source" within the first ~50 ms after reload) sees an
+      // empty `persistedRecords`, misses the existing handle, and
+      // creates a parallel duplicate of the same folder. `hydratePersisted`
+      // is memoised so this is a no-op once the eager kick-off has
+      // resolved.
+      await hydratePersisted();
+
       const id = newSourceId();
       const source = buildLogSource(input, id);
 
