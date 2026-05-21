@@ -21,6 +21,7 @@ export type {
 } from './log-source.ts';
 export {
   EMPTY_FILTER,
+  filtersEqual,
 } from './log-filter.ts';
 export type {
   FieldFilter,

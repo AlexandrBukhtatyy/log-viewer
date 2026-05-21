@@ -87,3 +87,57 @@ export const EMPTY_FILTER: LogFilter = {
   filePaths: null,
   orderBy: 'time',
 };
+
+const sameArr = <T>(
+  a: ReadonlyArray<T> | null | undefined,
+  b: ReadonlyArray<T> | null | undefined,
+  eq: (x: T, y: T) => boolean = Object.is,
+): boolean => {
+  if (a === b) return true;
+  if (a == null || b == null) return (a ?? null) === (b ?? null);
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (!eq(a[i]!, b[i]!)) return false;
+  return true;
+};
+
+/**
+ * Structural equality for `LogFilter`. Used by `ViewStore.setFilter` to
+ * short-circuit no-op updates: the container recomputes the filter
+ * object on every render that touches `selectedIds`, `activeTabId` or
+ * `coreFilter`, even when the resulting contents are identical (e.g.
+ * toggling a sidebar checkbox while a file-tab is active doesn't change
+ * the file-tab's `sources`). Skipping the worker round-trip and the
+ * entry-cache wipe keeps the open tab from flickering.
+ */
+export const filtersEqual = (a: LogFilter, b: LogFilter): boolean => {
+  if (a === b) return true;
+  if (
+    a.query !== b.query ||
+    a.queryMode !== b.queryMode ||
+    a.caseSensitive !== b.caseSensitive ||
+    a.wholeWord !== b.wholeWord ||
+    (a.orderBy ?? 'time') !== (b.orderBy ?? 'time')
+  ) {
+    return false;
+  }
+  if (!sameArr(a.levels, b.levels)) return false;
+  if (!sameArr(a.sources, b.sources)) return false;
+  if (!sameArr(a.services, b.services)) return false;
+  if (!sameArr(a.filePaths, b.filePaths)) return false;
+  const at = a.timeRange;
+  const bt = b.timeRange;
+  if (at !== bt) {
+    if (at == null || bt == null) return false;
+    if (at.from !== bt.from || at.to !== bt.to) return false;
+  }
+  if (
+    !sameArr(
+      a.fieldFilters,
+      b.fieldFilters,
+      (x, y) => x.key === y.key && x.op === y.op && x.value === y.value,
+    )
+  ) {
+    return false;
+  }
+  return true;
+};

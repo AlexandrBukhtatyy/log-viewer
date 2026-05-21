@@ -18,7 +18,7 @@ import type {
   SourceId,
   SourceRecord,
 } from '../core/types/index.ts';
-import { EMPTY_FILTER } from '../core/types/index.ts';
+import { EMPTY_FILTER, filtersEqual } from '../core/types/index.ts';
 import type { FieldDescriptor } from '../core/filter/field-descriptor.ts';
 
 const OVERSCAN = 200;
@@ -330,7 +330,14 @@ export const createLogClient = (): ViewStore => {
       setFilter: (next) => {
         const prev = get().filter;
         const filter = typeof next === 'function' ? next(prev) : next;
-        if (filter === prev) return;
+        // Structural compare, not `===` — the container recomputes the
+        // filter object on every render that touches `selectedIds` or
+        // `activeTabId`, even when the result is identical (e.g.
+        // toggling a sidebar checkbox while a file-tab is active
+        // doesn't change the file-tab's `sources`). Without this
+        // short-circuit the worker re-fetches and the entry cache is
+        // wiped, which the user sees as the open tab flickering.
+        if (filtersEqual(filter, prev)) return;
         set({ filter, entries: new Map() });
         void refresh();
       },
