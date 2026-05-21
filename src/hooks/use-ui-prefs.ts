@@ -40,7 +40,7 @@ const DEFAULTS: LvTweaks = {
   wrap: false,
   showDate: false,
   accent: '#7aa2f7',
-  timelineOn: true,
+  timelineOn: false,
   sidebarWidth: 260,
   sidebarCollapsed: false,
   columns: [],
