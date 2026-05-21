@@ -23,6 +23,16 @@ export interface LogLineFrame {
   readonly line: string;
   readonly byteStart: number;
   readonly byteEnd: number;
+  /**
+   * 1-based physical line number within `path`. Used downstream to stamp
+   * `LogEntry.lineNumber` so the gutter and "Open at line" target the
+   * actual line in the source file, not the global ingest sequence.
+   * Counter resets when `path` changes — directory adapter creates a
+   * fresh splitter per file; snapshot adapter resets explicitly; stream
+   * adapter keeps a single running counter across its chunk-files since
+   * the user perceives the source as one continuous log.
+   */
+  readonly lineNumber: number;
 }
 
 /**
@@ -63,6 +73,7 @@ export const tagLineStream = (
 ): ReadableStream<LogLineFrame> => {
   const encoder = new TextEncoder();
   let cursor = 0;
+  let lineNo = 0;
   return source.pipeThrough(
     new TransformStream<string, LogLineFrame>({
       transform(line, controller) {
@@ -70,7 +81,8 @@ export const tagLineStream = (
         const byteStart = cursor;
         const byteEnd = byteStart + byteLen;
         cursor = byteEnd + 1; // +1 for the synthetic `\n` terminator
-        controller.enqueue({ path, line, byteStart, byteEnd });
+        lineNo += 1;
+        controller.enqueue({ path, line, byteStart, byteEnd, lineNumber: lineNo });
       },
     }),
   );

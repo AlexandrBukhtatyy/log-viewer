@@ -3,6 +3,7 @@ import type { FieldFilter, LogEntry } from '../../../core/types/index.ts';
 import type {
   LvColumnPref,
   LvFileNode,
+  LvGutterMode,
   LvLogKind,
   LvTweakDensity,
   LvTweakTheme,
@@ -36,6 +37,13 @@ export interface LvRowProps {
   readonly bookmarked: boolean;
   readonly isFindMatch?: boolean;
   readonly isFindCurrent?: boolean;
+  /**
+   * Controls what the gutter cell shows. `line` (default) renders the
+   * physical line number in the source file; `entry` renders the
+   * per-file logical record ordinal; `both` renders them as
+   * `<line>·<entry>`.
+   */
+  readonly gutterMode?: LvGutterMode;
   onSelect: () => void;
   onToggleExpand: () => void;
   onBookmark: () => void;
@@ -106,6 +114,7 @@ export const LvRow = ({
   cellValueOf,
   parserIdOf,
   renderDetailEditor,
+  gutterMode = 'line',
 }: LvRowProps) => {
   const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (
@@ -145,6 +154,23 @@ export const LvRow = ({
           highlight.wholeWord,
         )
       : text;
+  // Gutter content depends on the user's choice. Fall back to `seq`
+  // for pre-v5 rows (lineNumber/fileSeq=0) so the column never goes
+  // blank for old persisted entries.
+  const lineNum = entry.lineNumber > 0 ? entry.lineNumber : entry.seq;
+  const entryNum = entry.fileSeq > 0 ? entry.fileSeq : entry.seq;
+  const gutterText =
+    gutterMode === 'entry'
+      ? String(entryNum)
+      : gutterMode === 'both'
+        ? `${lineNum}·${entryNum}`
+        : String(lineNum);
+  const gutterTitle =
+    gutterMode === 'both'
+      ? `line ${lineNum} · entry ${entryNum}`
+      : gutterMode === 'entry'
+        ? `entry #${entryNum}`
+        : `line ${lineNum}`;
   return (
     <>
       <div
@@ -161,8 +187,12 @@ export const LvRow = ({
           onContextMenu(e, entry);
         }}
       >
-        <span className="lv-row-gutter">
-          {bookmarked ? <span className="lv-bm">●</span> : <span className="lv-ln">{entry.seq}</span>}
+        <span className="lv-row-gutter" title={gutterTitle}>
+          {bookmarked ? (
+            <span className="lv-bm">●</span>
+          ) : (
+            <span className="lv-ln">{gutterText}</span>
+          )}
         </span>
         <span className="lv-row-caret">
           <svg

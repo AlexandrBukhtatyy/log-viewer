@@ -83,6 +83,7 @@ export const parserApi: ParserApi = {
       record: ParsedRecord,
       byteStart: number,
       byteEnd: number,
+      lineNumber: number,
     ): LogEntry => ({
       ...record,
       fields:
@@ -92,6 +93,11 @@ export const parserApi: ParserApi = {
       filePath: filePath ?? '',
       byteStart,
       byteEnd,
+      lineNumber,
+      // `fileSeq` is assigned by the orchestrator once it sees the
+      // returned entries in file order — the parser doesn't know about
+      // pre-existing records in the file, so it can't number them.
+      fileSeq: 0,
     });
 
     const result: LogEntry[] = [];
@@ -99,12 +105,12 @@ export const parserApi: ParserApi = {
       if (frame.line === '') continue;
       const { entry } = primary.parseLine(frame.line, parseCtx);
       if (entry !== null) {
-        result.push(enrich(entry, frame.byteStart, frame.byteEnd));
+        result.push(enrich(entry, frame.byteStart, frame.byteEnd, frame.lineNumber));
         continue;
       }
       const fallback = registry.parseAny(frame.line, parseCtx);
       if (fallback !== null) {
-        result.push(enrich(fallback, frame.byteStart, frame.byteEnd));
+        result.push(enrich(fallback, frame.byteStart, frame.byteEnd, frame.lineNumber));
       }
     }
     return result;

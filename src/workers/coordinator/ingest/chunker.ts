@@ -67,6 +67,7 @@ export const createChunker = (
         line: frame.line,
         byteStart: frame.byteStart,
         byteEnd: frame.byteEnd,
+        lineNumber: frame.lineNumber,
       });
       if (batch.length >= maxLines) {
         emit();

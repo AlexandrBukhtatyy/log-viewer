@@ -3,6 +3,7 @@ import { Settings } from 'lucide-react';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type {
   LvColumnPref,
+  LvGutterMode,
   LvTweakDensity,
   LvTweaks,
 } from '../../contracts/lv-types.ts';
@@ -158,6 +159,7 @@ export const LvTableSettings = ({
   };
 
   const setDensity = (d: LvTweakDensity): void => setTweak('density', d);
+  const setGutter = (m: LvGutterMode): void => setTweak('gutterMode', m);
 
   return (
     <div className="lv-tset-wrap" ref={wrapRef}>
@@ -209,6 +211,35 @@ export const LvTableSettings = ({
               />
               <span>Show date in timestamp</span>
             </label>
+            <div className="lv-tset-row">
+              <span className="lv-tset-lbl">Gutter shows</span>
+              <div className="lv-tset-segs">
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.gutterMode === 'line' ? ' is-on' : ''}`}
+                  onClick={() => setGutter('line')}
+                  title="Physical line number in the source file"
+                >
+                  Line
+                </button>
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.gutterMode === 'entry' ? ' is-on' : ''}`}
+                  onClick={() => setGutter('entry')}
+                  title="Per-file log-record ordinal"
+                >
+                  Entry
+                </button>
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.gutterMode === 'both' ? ' is-on' : ''}`}
+                  onClick={() => setGutter('both')}
+                  title="Line · Entry"
+                >
+                  Both
+                </button>
+              </div>
+            </div>
           </div>
           <div className="lv-tset-sep" role="separator" />
           <div className="lv-tset-sec">

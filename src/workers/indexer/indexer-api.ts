@@ -236,19 +236,23 @@ const rowToEntry = (row: Record<string, SqlValue>): LogEntry => ({
   filePath: (row.file_path as string | null) ?? '',
   byteStart: Number(row.byte_start ?? 0),
   byteEnd: Number(row.byte_end ?? 0),
+  lineNumber: Number(row.line_number ?? 0),
+  fileSeq: Number(row.file_seq ?? 0),
 });
 
 const ENTRY_COLS_UNQUALIFIED =
-  'id, source_id, seq, ts, level, file_path, byte_start, byte_end, fields_json';
+  'id, source_id, seq, ts, level, file_path, byte_start, byte_end, ' +
+  'line_number, file_seq, fields_json';
 const ENTRY_COLS_SELECT =
   'entry.id AS id, entry.source_id AS source_id, entry.seq AS seq, ' +
   'entry.ts AS ts, entry.level AS level, ' +
   'entry.file_path AS file_path, entry.byte_start AS byte_start, ' +
-  'entry.byte_end AS byte_end, entry.fields_json AS fields_json';
+  'entry.byte_end AS byte_end, entry.line_number AS line_number, ' +
+  'entry.file_seq AS file_seq, entry.fields_json AS fields_json';
 
 const INSERT_ENTRY_SQL = `
   INSERT OR IGNORE INTO entry (${ENTRY_COLS_UNQUALIFIED})
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -380,6 +384,8 @@ export const indexerApi: IndexerApi = {
             e.filePath,
             e.byteStart,
             e.byteEnd,
+            e.lineNumber,
+            e.fileSeq,
             JSON.stringify(e.fields),
           ])
           .step();

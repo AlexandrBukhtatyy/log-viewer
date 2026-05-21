@@ -5,6 +5,7 @@ import type {
   LogLineFrame,
   LogSourceAdapter,
 } from '../../../core/sources/source-adapter.ts';
+import type { LogEntry } from '../../../core/types/log-entry.ts';
 import type { LogSource, SourceStatus } from '../../../core/types/log-source.ts';
 import type { ParserPool } from '../pool/parser-pool.ts';
 
@@ -98,6 +99,21 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
   let cont: ParseLineFrame[] = [];
   let openPath: string | null = null;
 
+  // Per-(source, file) running entry counter so `LogEntry.fileSeq` is a
+  // dense 1-based ordinal inside its file regardless of which physical
+  // lines the parser ended up emitting records for. The parser doesn't
+  // know about previously-ingested records, so the orchestrator owns
+  // this — `parser-api.enrich` writes `fileSeq: 0` and we overwrite it
+  // here. Keyed by the same `filePath` we already pass to parse(); empty
+  // string for single-file/spool sources.
+  const fileSeqByPath = new Map<string, number>();
+  const stampFileSeq = (entry: LogEntry): LogEntry => {
+    const key = entry.filePath;
+    const next = (fileSeqByPath.get(key) ?? 0) + 1;
+    fileSeqByPath.set(key, next);
+    return { ...entry, fileSeq: next };
+  };
+
   const buildCombinedFrame = (): ParseLineFrame | null => {
     if (openFrame === null) return null;
     const tail = cont.length > 0 ? cont[cont.length - 1]! : openFrame;
@@ -109,6 +125,10 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
       line: text,
       byteStart: openFrame.byteStart,
       byteEnd: tail.byteEnd,
+      // Keep the lineNumber of the block's first physical line — the
+      // gutter and "Open at line" target that line, not the
+      // continuations.
+      lineNumber: openFrame.lineNumber,
     };
   };
 
@@ -217,8 +237,9 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
 
       if (entries.length === 0) continue;
 
-      await indexer.insertBatch(entries);
-      entriesIndexed += entries.length;
+      const stamped = entries.map(stampFileSeq);
+      await indexer.insertBatch(stamped);
+      entriesIndexed += stamped.length;
       onStatus(progressStatus(entriesIndexed));
       onChange();
     }
@@ -241,8 +262,9 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
           }),
         );
         if (entries.length > 0) {
-          await indexer.insertBatch(entries);
-          entriesIndexed += entries.length;
+          const stamped = entries.map(stampFileSeq);
+          await indexer.insertBatch(stamped);
+          entriesIndexed += stamped.length;
           onChange();
         }
       }

@@ -780,6 +780,7 @@ export const LvAppContainer = () => {
         sidebarWidth: tweaks.sidebarWidth,
         sidebarCollapsed: tweaks.sidebarCollapsed,
         columns: tweaks.columns,
+        gutterMode: tweaks.gutterMode,
       }}
       setTweak={setTweak}
       bookmarks={bookmarksHook.ids as ReadonlySet<string>}

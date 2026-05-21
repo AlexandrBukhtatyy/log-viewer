@@ -70,6 +70,11 @@ export const createStreamAdapter: LogSourceAdapterFactory = (source) => {
       let tail: Uint8Array = new Uint8Array(0);
       const encoder = new TextEncoder();
       const decoder = new TextDecoder('utf-8', { fatal: false });
+      // Stream sources are perceived by the user as one continuous log
+      // even though the OPFS spool splits them into per-message chunk
+      // files. Keep a single running counter so `LogEntry.lineNumber` is
+      // monotonic across the whole stream.
+      let lineNo = 0;
 
       const flushQueue = () => {
         if (controller === null) return;
@@ -147,11 +152,13 @@ export const createStreamAdapter: LogSourceAdapterFactory = (source) => {
             lineEnd -= 1;
           }
           if (lineEnd > lineStart) {
+            lineNo += 1;
             enqueueFrame({
               path,
               line: decoder.decode(complete.subarray(lineStart, lineEnd)),
               byteStart: lineStart,
               byteEnd: lineEnd,
+              lineNumber: lineNo,
             });
           }
           lineStart = i + 1;

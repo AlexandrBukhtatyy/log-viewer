@@ -33,6 +33,8 @@ const mkEntry = (
   filePath: '',
   byteStart: 0,
   byteEnd: 0,
+  lineNumber: 0,
+  fileSeq: 0,
 });
 
 describe('inferFieldType', () => {

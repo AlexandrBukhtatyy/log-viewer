@@ -3,6 +3,13 @@ import { persist } from 'zustand/middleware';
 
 export type LvTweakTheme = 'dark' | 'light';
 export type LvTweakDensity = 'compact' | 'comfortable';
+/**
+ * What the leftmost (gutter) column of the table shows.
+ *   - `line`  — physical line number in the source file (default)
+ *   - `entry` — per-file 1-based ordinal of the log record
+ *   - `both`  — `<line> · <entry>`
+ */
+export type LvGutterMode = 'line' | 'entry' | 'both';
 
 /**
  * One user-added column persisted in UI prefs (ADR-0017 Phase 5).
@@ -32,18 +39,25 @@ export interface LvTweaks {
    * MESSAGE/ACTIONS) are not in this list — they are always shown.
    */
   columns: ReadonlyArray<LvColumnPref>;
+  /**
+   * What the gutter (leftmost) column shows for each row. Default is
+   * the physical line number in the file (`line`); the user can
+   * switch to the per-file entry ordinal or show both side by side.
+   */
+  gutterMode: LvGutterMode;
 }
 
 const DEFAULTS: LvTweaks = {
   theme: 'dark',
   density: 'compact',
   wrap: false,
-  showDate: false,
+  showDate: true,
   accent: '#7aa2f7',
   timelineOn: false,
   sidebarWidth: 260,
   sidebarCollapsed: false,
   columns: [],
+  gutterMode: 'line',
 };
 
 interface UiPrefsState extends LvTweaks {
@@ -74,6 +88,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         sidebarWidth: s.sidebarWidth,
         sidebarCollapsed: s.sidebarCollapsed,
         columns: s.columns,
+        gutterMode: s.gutterMode,
       }),
     },
   ),

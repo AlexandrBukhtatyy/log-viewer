@@ -105,3 +105,4 @@ flowchart LR
 - [0021. Window-only refresh + entry cache в `log-client`](0021-window-only-refresh-and-entry-cache.md) — proposed
 - [0022. Полная очистка ресурсов при `removeSource` (включая live-ingest)](0022-source-removal-cleanup.md) — proposed
 - [0023. File → Clear application data — три скоупа очистки](0023-clear-application-data.md) — proposed
+- [0024. Physical line number и per-file entry ordinal в LogEntry](0024-physical-line-number-and-per-file-entry-ordinal.md) — proposed

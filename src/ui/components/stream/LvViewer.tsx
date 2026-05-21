@@ -313,9 +313,14 @@ export const LvViewer = ({
   ) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const file = filesById[entry.sourceId];
+    // Prefer the physical line number — that's what an external editor
+    // understands. Old entries (pre-v5) have lineNumber=0 and we fall
+    // back to the global ingest sequence to keep the menu usable for
+    // not-yet-reingested sources.
+    const line = entry.lineNumber > 0 ? entry.lineNumber : entry.seq;
     setMenu({
       path: file?.path ?? entry.sourceId,
-      line: entry.seq,
+      line,
       sourceId: entry.sourceId,
       x: Math.min(window.innerWidth - 340, rect.right - 280),
       y: rect.bottom + 6,
@@ -571,7 +576,22 @@ export const LvViewer = ({
             )}
 
             <div className="lv-stream-hd" style={{ gridTemplateColumns: gridTemplate }}>
-              <span className="lv-sh lv-sh-ln" title="@seq">@seq</span>
+              <span
+                className="lv-sh lv-sh-ln"
+                title={
+                  tweaks.gutterMode === 'entry'
+                    ? 'Per-file entry ordinal'
+                    : tweaks.gutterMode === 'both'
+                      ? 'Line · entry'
+                      : 'Physical line number in the source file'
+                }
+              >
+                {tweaks.gutterMode === 'entry'
+                  ? 'entry'
+                  : tweaks.gutterMode === 'both'
+                    ? 'line·entry'
+                    : 'line'}
+              </span>
               <span className="lv-sh lv-sh-caret"></span>
               <span className="lv-sh lv-sh-ts">timestamp</span>
               <span className="lv-sh lv-sh-lvl">level</span>
@@ -686,6 +706,7 @@ export const LvViewer = ({
                                 parserIdOf={parserIdOf}
                                 indentPx={12 + (depth + 1) * 16}
                                 renderDetailEditor={renderDetailEditor}
+                                gutterMode={tweaks.gutterMode}
                               />
                             ))}
                         </Fragment>
@@ -789,6 +810,7 @@ export const LvViewer = ({
                             cellValueOf={cellValueOf}
                             parserIdOf={parserIdOf}
                             renderDetailEditor={renderDetailEditor}
+                            gutterMode={tweaks.gutterMode}
                           />
                         )}
                       </div>

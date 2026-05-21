@@ -326,13 +326,6 @@ export const LvApp = ({
     document.documentElement.style.setProperty('--lv-accent', tweaks.accent);
   }, [tweaks.theme, tweaks.accent]);
 
-  // One source visible → preserve file order (seq). Several or none →
-  // merge by timestamp. See ORDER_BY_PHYSICAL / ORDER_BY_DEFAULT.
-  useEffect(() => {
-    const target: 'time' | 'physical' = selectedIds.size === 1 ? 'physical' : 'time';
-    setFilter((f) => (f.orderBy === target ? f : { ...f, orderBy: target }));
-  }, [selectedIds, setFilter]);
-
   const lineCount = totalCount;
 
   const runCommand = (id: string) => {

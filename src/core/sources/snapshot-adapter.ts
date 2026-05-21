@@ -171,15 +171,18 @@ export const createSnapshotAdapter: LogSourceAdapterFactory = (source) => {
               }
               const bytes = f.bytes;
               let lineStart = 0;
+              let lineNo = 0;
               for (let i = 0; i < bytes.byteLength; i++) {
                 if (bytes[i] !== 0x0a) continue;
                 let lineEnd = i;
                 if (lineEnd > lineStart && bytes[lineEnd - 1] === 0x0d) lineEnd -= 1;
+                lineNo += 1;
                 controller.enqueue({
                   path: f.name,
                   line: decoder.decode(bytes.subarray(lineStart, lineEnd)),
                   byteStart: lineStart,
                   byteEnd: lineEnd,
+                  lineNumber: lineNo,
                 });
                 lineStart = i + 1;
               }
@@ -187,11 +190,13 @@ export const createSnapshotAdapter: LogSourceAdapterFactory = (source) => {
                 let lineEnd = bytes.byteLength;
                 if (bytes[lineEnd - 1] === 0x0d) lineEnd -= 1;
                 if (lineEnd > lineStart) {
+                  lineNo += 1;
                   controller.enqueue({
                     path: f.name,
                     line: decoder.decode(bytes.subarray(lineStart, lineEnd)),
                     byteStart: lineStart,
                     byteEnd: lineEnd,
+                    lineNumber: lineNo,
                   });
                 }
               }

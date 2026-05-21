@@ -64,11 +64,11 @@ export interface LogFilter {
   readonly filePaths: ReadonlyArray<string> | null;
   readonly fieldFilters?: ReadonlyArray<FieldFilter>;
   /**
-   * Row ordering. `'time'` (default) merges by `ts ASC, source_id, seq` —
-   * sensible when several sources are visible together. `'physical'`
-   * orders by `source_id, seq ASC` — the order rows were written to the
-   * file(s), used when a single source is open so the gutter line
-   * numbers stay monotonic even with non-monotonic timestamps.
+   * Row ordering. `'physical'` (default) — show rows in the order they
+   * were written to the source file(s): `source_id ASC, seq ASC`. The
+   * gutter line numbers stay monotonic and out-of-order timestamps
+   * don't shuffle the view. `'time'` merges by `ts ASC, source_id, seq`
+   * — useful for cross-source correlation; the user opts in.
    */
   readonly orderBy?: 'time' | 'physical';
 }
@@ -85,7 +85,7 @@ export const EMPTY_FILTER: LogFilter = {
   sources: null,
   services: null,
   filePaths: null,
-  orderBy: 'time',
+  orderBy: 'physical',
 };
 
 const sameArr = <T>(
@@ -116,7 +116,7 @@ export const filtersEqual = (a: LogFilter, b: LogFilter): boolean => {
     a.queryMode !== b.queryMode ||
     a.caseSensitive !== b.caseSensitive ||
     a.wholeWord !== b.wholeWord ||
-    (a.orderBy ?? 'time') !== (b.orderBy ?? 'time')
+    (a.orderBy ?? 'physical') !== (b.orderBy ?? 'physical')
   ) {
     return false;
   }

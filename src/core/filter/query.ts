@@ -144,17 +144,18 @@ const buildFieldFilterClause = (ff: FieldFilter): FieldClause => {
   }
 };
 
-export const ORDER_BY_DEFAULT =
+export const ORDER_BY_TIME =
   'ORDER BY entry.ts IS NULL, entry.ts ASC, entry.source_id ASC, entry.seq ASC';
 
-const ORDER_BY_PHYSICAL =
+export const ORDER_BY_PHYSICAL =
   'ORDER BY entry.source_id ASC, entry.seq ASC';
 
 /**
  * Choose the `ORDER BY` clause for entry listings based on the filter's
- * `orderBy` knob. `'physical'` (single source open) preserves the file's
- * write order; `'time'` (default) merges multiple sources by timestamp
- * with `(source_id, seq)` as a tie-breaker.
+ * `orderBy` knob. `'physical'` (default) preserves the file's write
+ * order — rows show up exactly as they sit on disk, gutter numbers
+ * stay monotonic, out-of-order timestamps don't shuffle the view.
+ * `'time'` merges by timestamp and is opt-in via UI / saved searches.
  */
 export const orderByForFilter = (filter: LogFilter): string =>
-  filter.orderBy === 'physical' ? ORDER_BY_PHYSICAL : ORDER_BY_DEFAULT;
+  filter.orderBy === 'time' ? ORDER_BY_TIME : ORDER_BY_PHYSICAL;

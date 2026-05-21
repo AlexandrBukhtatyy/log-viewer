@@ -3,6 +3,7 @@ import schemaV1Sql from './schema.sql?raw';
 import schemaV2Sql from './schema-v2-fts.sql?raw';
 import schemaV3Sql from './schema-v3-offsets.sql?raw';
 import schemaV4Sql from './schema-v4-field-meta.sql?raw';
+import schemaV5Sql from './schema-v5-line-numbers.sql?raw';
 
 interface Migration {
   readonly version: number;
@@ -40,6 +41,15 @@ const MIGRATIONS: ReadonlyArray<Migration> = [
     version: 4,
     up: (db) => {
       db.exec(schemaV4Sql);
+    },
+  },
+  {
+    // v5: add `line_number` and `file_seq` to `entry`. Non-destructive
+    // ALTER TABLE — pre-existing rows keep 0 and the UI renders that as
+    // "—" in the gutter / falls back to `seq` for "Open at line".
+    version: 5,
+    up: (db) => {
+      db.exec(schemaV5Sql);
     },
   },
 ];

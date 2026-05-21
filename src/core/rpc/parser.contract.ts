@@ -24,6 +24,14 @@ export interface ParseLineFrame {
   readonly line: string;
   readonly byteStart: number;
   readonly byteEnd: number;
+  /**
+   * 1-based physical line number of this frame within its source file.
+   * Carried straight through from `LogLineFrame.lineNumber`; for
+   * multi-line records folded by the orchestrator's continuation
+   * machinery, the combined frame keeps the lineNumber of the first
+   * physical line of the block.
+   */
+  readonly lineNumber: number;
 }
 
 /**

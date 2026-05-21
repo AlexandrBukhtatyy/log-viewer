@@ -1,4 +1,4 @@
-import type { LogEntry, LogLevel } from '../types/log-entry.ts';
+import type { LogLevel, ParsedRecord } from '../types/log-entry.ts';
 import { normalizeLevel } from './lib/level.ts';
 import { parseTimestamp } from './lib/time.ts';
 import { defineMultilineParser } from './lib/multiline.ts';
@@ -73,7 +73,7 @@ export const appTextParser = defineMultilineParser({
       }
     }
 
-    const entry: Omit<LogEntry, 'filePath' | 'byteStart' | 'byteEnd'> = {
+    const entry: ParsedRecord = {
       id: ctx.nextId(),
       sourceId: ctx.sourceId,
       seq: ctx.nextSeq(),

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { LogFilter } from '../types/log-filter.ts';
 import { EMPTY_FILTER } from '../types/log-filter.ts';
 import type { SourceId } from '../types/log-entry.ts';
-import { buildClause, ORDER_BY_DEFAULT, orderByForFilter } from './query.ts';
+import {
+  buildClause,
+  ORDER_BY_PHYSICAL,
+  ORDER_BY_TIME,
+  orderByForFilter,
+} from './query.ts';
 
 const f = (overrides: Partial<LogFilter> = {}): LogFilter => ({
   ...EMPTY_FILTER,
@@ -192,22 +197,22 @@ describe('buildClause', () => {
   });
 });
 
-describe('ORDER_BY_DEFAULT', () => {
+describe('ORDER_BY_TIME', () => {
   it('orders rows by qualified entry.* columns and puts NULL ts last', () => {
-    expect(ORDER_BY_DEFAULT).toContain('entry.ts');
-    expect(ORDER_BY_DEFAULT).toContain('entry.source_id');
-    expect(ORDER_BY_DEFAULT).toContain('entry.seq');
-    expect(ORDER_BY_DEFAULT).toContain('IS NULL');
+    expect(ORDER_BY_TIME).toContain('entry.ts');
+    expect(ORDER_BY_TIME).toContain('entry.source_id');
+    expect(ORDER_BY_TIME).toContain('entry.seq');
+    expect(ORDER_BY_TIME).toContain('IS NULL');
   });
 });
 
 describe('orderByForFilter', () => {
-  it("'time' (default) returns ORDER_BY_DEFAULT", () => {
-    expect(orderByForFilter(f({ orderBy: 'time' }))).toBe(ORDER_BY_DEFAULT);
+  it("'time' returns ORDER_BY_TIME", () => {
+    expect(orderByForFilter(f({ orderBy: 'time' }))).toBe(ORDER_BY_TIME);
   });
 
-  it('undefined orderBy falls back to ORDER_BY_DEFAULT', () => {
-    expect(orderByForFilter(f())).toBe(ORDER_BY_DEFAULT);
+  it('undefined orderBy falls back to ORDER_BY_PHYSICAL (write order)', () => {
+    expect(orderByForFilter(f())).toBe(ORDER_BY_PHYSICAL);
   });
 
   it("'physical' orders by (source_id, seq) without ts", () => {

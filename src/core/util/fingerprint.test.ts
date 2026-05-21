@@ -14,6 +14,8 @@ const mkEntry = (overrides: Partial<LogEntry> = {}): LogEntry => ({
   filePath: '',
   byteStart: 0,
   byteEnd: 5,
+  lineNumber: 1,
+  fileSeq: 1,
   ...overrides,
 });
 

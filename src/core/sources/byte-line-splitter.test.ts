@@ -35,9 +35,9 @@ describe('createByteLineSplitter', () => {
     // 'a\nb\nc' → bytes [97,10,98,10,99]
     const frames = await collect([utf8.encode('a\nb\nc')]);
     expect(frames).toEqual([
-      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1 },
-      { path: 'a.log', line: 'b', byteStart: 2, byteEnd: 3 },
-      { path: 'a.log', line: 'c', byteStart: 4, byteEnd: 5 },
+      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1, lineNumber: 1 },
+      { path: 'a.log', line: 'b', byteStart: 2, byteEnd: 3, lineNumber: 2 },
+      { path: 'a.log', line: 'c', byteStart: 4, byteEnd: 5, lineNumber: 3 },
     ]);
   });
 
@@ -52,9 +52,9 @@ describe('createByteLineSplitter', () => {
       utf8.encode('e'),
     ]);
     expect(frames).toEqual([
-      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1 },
-      { path: 'a.log', line: 'bc', byteStart: 2, byteEnd: 4 },
-      { path: 'a.log', line: 'de', byteStart: 5, byteEnd: 7 },
+      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1, lineNumber: 1 },
+      { path: 'a.log', line: 'bc', byteStart: 2, byteEnd: 4, lineNumber: 2 },
+      { path: 'a.log', line: 'de', byteStart: 5, byteEnd: 7, lineNumber: 3 },
     ]);
   });
 
@@ -62,8 +62,8 @@ describe('createByteLineSplitter', () => {
     // 'a\r\nb' → bytes [97,13,10,98]; byteEnd of 'a' is 1 (excludes \r)
     const frames = await collect([utf8.encode('a\r\nb')]);
     expect(frames).toEqual([
-      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1 },
-      { path: 'a.log', line: 'b', byteStart: 3, byteEnd: 4 },
+      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1, lineNumber: 1 },
+      { path: 'a.log', line: 'b', byteStart: 3, byteEnd: 4, lineNumber: 2 },
     ]);
   });
 
@@ -71,31 +71,31 @@ describe('createByteLineSplitter', () => {
     // 'a\n\nb' → frames 'a' [0,1), '' [2,2), 'b' [3,4)
     const frames = await collect([utf8.encode('a\n\nb')]);
     expect(frames).toEqual([
-      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1 },
-      { path: 'a.log', line: '', byteStart: 2, byteEnd: 2 },
-      { path: 'a.log', line: 'b', byteStart: 3, byteEnd: 4 },
+      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1, lineNumber: 1 },
+      { path: 'a.log', line: '', byteStart: 2, byteEnd: 2, lineNumber: 2 },
+      { path: 'a.log', line: 'b', byteStart: 3, byteEnd: 4, lineNumber: 3 },
     ]);
   });
 
   it('emits the trailing line when stream closes without final \\n', async () => {
     const frames = await collect([utf8.encode('hello')]);
     expect(frames).toEqual([
-      { path: 'a.log', line: 'hello', byteStart: 0, byteEnd: 5 },
+      { path: 'a.log', line: 'hello', byteStart: 0, byteEnd: 5, lineNumber: 1 },
     ]);
   });
 
   it('drops a solo trailing \\r at EOF (no zero-length frame)', async () => {
     const frames = await collect([utf8.encode('a\r')]);
     expect(frames).toEqual([
-      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1 },
+      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1, lineNumber: 1 },
     ]);
   });
 
   it('drops the empty trailing line after a final \\n', async () => {
     const frames = await collect([utf8.encode('a\nb\n')]);
     expect(frames).toEqual([
-      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1 },
-      { path: 'a.log', line: 'b', byteStart: 2, byteEnd: 3 },
+      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1, lineNumber: 1 },
+      { path: 'a.log', line: 'b', byteStart: 2, byteEnd: 3, lineNumber: 2 },
     ]);
   });
 
@@ -108,8 +108,8 @@ describe('createByteLineSplitter', () => {
     // '😀' is 4 bytes (U+1F600 → F0 9F 98 80). Frame should have byteEnd=4.
     const frames = await collect([utf8.encode('😀\nb')]);
     expect(frames).toEqual([
-      { path: 'a.log', line: '😀', byteStart: 0, byteEnd: 4 },
-      { path: 'a.log', line: 'b', byteStart: 5, byteEnd: 6 },
+      { path: 'a.log', line: '😀', byteStart: 0, byteEnd: 4, lineNumber: 1 },
+      { path: 'a.log', line: 'b', byteStart: 5, byteEnd: 6, lineNumber: 2 },
     ]);
   });
 
@@ -122,8 +122,8 @@ describe('createByteLineSplitter', () => {
     const c2 = all.slice(2);
     const frames = await collect([c1, c2]);
     expect(frames).toEqual([
-      { path: 'a.log', line: '😀', byteStart: 0, byteEnd: 4 },
-      { path: 'a.log', line: 'x', byteStart: 5, byteEnd: 6 },
+      { path: 'a.log', line: '😀', byteStart: 0, byteEnd: 4, lineNumber: 1 },
+      { path: 'a.log', line: 'x', byteStart: 5, byteEnd: 6, lineNumber: 2 },
     ]);
   });
 
@@ -132,8 +132,8 @@ describe('createByteLineSplitter', () => {
     // file. Emitted offsets are absolute (1000 + local).
     const frames = await collect([utf8.encode('a\nb')], 'chunk-3.bin', 1000);
     expect(frames).toEqual([
-      { path: 'chunk-3.bin', line: 'a', byteStart: 1000, byteEnd: 1001 },
-      { path: 'chunk-3.bin', line: 'b', byteStart: 1002, byteEnd: 1003 },
+      { path: 'chunk-3.bin', line: 'a', byteStart: 1000, byteEnd: 1001, lineNumber: 1 },
+      { path: 'chunk-3.bin', line: 'b', byteStart: 1002, byteEnd: 1003, lineNumber: 2 },
     ]);
   });
 
@@ -142,8 +142,8 @@ describe('createByteLineSplitter', () => {
     // \r as the CRLF prefix and emit 'a' [0,1), then 'b' [3,4).
     const frames = await collect([utf8.encode('a\r'), utf8.encode('\nb')]);
     expect(frames).toEqual([
-      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1 },
-      { path: 'a.log', line: 'b', byteStart: 3, byteEnd: 4 },
+      { path: 'a.log', line: 'a', byteStart: 0, byteEnd: 1, lineNumber: 1 },
+      { path: 'a.log', line: 'b', byteStart: 3, byteEnd: 4, lineNumber: 2 },
     ]);
   });
 });

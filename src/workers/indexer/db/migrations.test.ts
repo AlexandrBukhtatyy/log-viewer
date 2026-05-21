@@ -1,7 +1,7 @@
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { Database } from '@sqlite.org/sqlite-wasm';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { buildClause, ORDER_BY_DEFAULT } from '../../../core/filter/query.ts';
+import { buildClause, ORDER_BY_TIME } from '../../../core/filter/query.ts';
 import { EMPTY_FILTER } from '../../../core/types/log-filter.ts';
 import { applyMigrations, TARGET_SCHEMA_VERSION } from './migrations.ts';
 
@@ -246,7 +246,7 @@ describe('indexer/db', () => {
         timeRange: { from: 1500, to: 2500 },
       });
       const rows = db.exec({
-        sql: `SELECT entry.id AS id FROM entry ${whereSql} ${ORDER_BY_DEFAULT}`,
+        sql: `SELECT entry.id AS id FROM entry ${whereSql} ${ORDER_BY_TIME}`,
         bind: [...params],
         rowMode: 'object',
         returnValue: 'resultRows',
@@ -261,7 +261,7 @@ describe('indexer/db', () => {
       insertEntry(db, 'e2', 's1', 1, 1000, 'info');
 
       const rows = db.exec({
-        sql: `SELECT entry.id AS id FROM entry ${ORDER_BY_DEFAULT}`,
+        sql: `SELECT entry.id AS id FROM entry ${ORDER_BY_TIME}`,
         rowMode: 'object',
         returnValue: 'resultRows',
       }) as unknown as ReadonlyArray<Record<string, string>>;

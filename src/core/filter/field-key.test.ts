@@ -85,6 +85,8 @@ describe('getEntryFieldValue', () => {
     filePath: 'a.log',
     byteStart: 100,
     byteEnd: 150,
+    lineNumber: 5,
+    fileSeq: 3,
   };
   const sourceRecord: SourceRecord = {
     source: { id: 's1' as SourceId, kind: 'text', name: 'a.log', text: '' },

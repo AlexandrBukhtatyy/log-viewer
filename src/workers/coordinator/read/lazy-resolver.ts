@@ -135,10 +135,18 @@ export const resolvePointersToEntries = async (
     );
 
     // Build frames in `srows` order (matters for parser output alignment).
+    // `lineNumber` is carried for shape only — the resolver replays parse
+    // just to recover `message`/`raw`; the entry already carries the real
+    // lineNumber from the indexer row, so the parser's stamp is discarded.
     const frames: (ParseLineFrame | null)[] = srows.map((r) => {
       const line = lineByEntryId.get(r.id);
       if (line === undefined) return null;
-      return { line, byteStart: r.byteStart, byteEnd: r.byteEnd };
+      return {
+        line,
+        byteStart: r.byteStart,
+        byteEnd: r.byteEnd,
+        lineNumber: r.lineNumber,
+      };
     });
 
     // Batch-parse so message gets reconstructed in one parser-pool RPC.

@@ -13,6 +13,7 @@ export type {
   LvTweakTheme,
   LvTweakDensity,
   LvColumnPref,
+  LvGutterMode,
 } from '../../hooks/use-ui-prefs.ts';
 export type { LvSavedSearch } from '../../hooks/use-saved-searches.ts';
 
