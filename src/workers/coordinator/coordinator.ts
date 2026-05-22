@@ -292,16 +292,17 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         for (const rec of indexed) {
           if (sources.has(rec.id)) continue; // already live
           let logSource: LogSource | null = null;
+          let orphanStatus: SourceStatus | null = null;
           if (rec.kind === 'directory') {
             const persisted = handleByIdx.get(rec.id);
+            const meta = rec.metaJson
+              ? (JSON.parse(rec.metaJson) as {
+                  glob?: string;
+                  watch?: boolean;
+                  parserId?: string;
+                })
+              : {};
             if (persisted && persisted.kind === 'directory') {
-              const meta = rec.metaJson
-                ? (JSON.parse(rec.metaJson) as {
-                    glob?: string;
-                    watch?: boolean;
-                    parserId?: string;
-                  })
-                : {};
               logSource = {
                 kind: 'directory',
                 id: rec.id,
@@ -310,6 +311,38 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
                 glob: meta.glob,
                 watch: meta.watch,
                 parserId: meta.parserId,
+              };
+            } else {
+              // SQLite has the directory but its IndexedDB handle is gone
+              // (handleStore.put failed at add-time, IDB was cleared
+              // out-of-band, etc.). Without an explicit branch the row
+              // would silently vanish from the sidebar — user sees "all
+              // my logs disappeared" with no recovery path. Surface it
+              // as an error with a synthetic handle: row renders with
+              // the Remove button so the orphan can be cleaned up.
+              console.error(
+                `[coordinator] hydratePersisted: directory "${rec.name}" (${rec.id}) is in SQLite but has no matching IndexedDB handle (found: ${persisted ? persisted.kind : 'null'}, total handles known: ${handleByIdx.size}). Surfacing as orphan so the user can remove it.`,
+              );
+              const stubHandle = {
+                kind: 'directory',
+                name: rec.name,
+              } as unknown as FileSystemDirectoryHandle;
+              logSource = {
+                kind: 'directory',
+                id: rec.id,
+                name: rec.name,
+                handle: stubHandle,
+                glob: meta.glob,
+                watch: meta.watch,
+                parserId: meta.parserId,
+              };
+              orphanStatus = {
+                kind: 'error',
+                error: {
+                  name: 'HandleLost',
+                  message:
+                    'Folder handle is missing from local storage. Remove and re-add the folder.',
+                },
               };
             }
           } else {
@@ -324,7 +357,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
             'parserId' in logSource ? logSource.parserId : undefined;
           persistedRecords.set(rec.id, {
             source: logSource,
-            status: { kind: 'done', entryCount: rec.entryCount },
+            status: orphanStatus ?? { kind: 'done', entryCount: rec.entryCount },
             parserId: persistedParserId,
           });
         }
