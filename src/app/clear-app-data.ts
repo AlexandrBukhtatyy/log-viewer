@@ -22,6 +22,7 @@ const UI_STATE_LOCAL_STORAGE_KEYS: ReadonlyArray<string> = [
   'lv:saved-searches',
   'lv:recent-files',
   'lv:ui-prefs',
+  'lv:workspace',
   'lv:jsParsersEnabled',
 ];
 

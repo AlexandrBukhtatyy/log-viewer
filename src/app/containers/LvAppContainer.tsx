@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GroupBucket } from '../../core/rpc/coordinator.contract.ts';
 import {
-  EMPTY_FILTER,
   type FieldFilter,
   type LogEntry,
   type LogFilter,
@@ -23,6 +22,7 @@ import { useUiPrefs } from '../../hooks/use-ui-prefs.ts';
 import { useBookmarks } from '../../hooks/use-bookmarks.ts';
 import { useRecentFiles } from '../../hooks/use-recent-files.ts';
 import { useSavedSearches } from '../../hooks/use-saved-searches.ts';
+import { useWorkspace, useWorkspaceStore } from '../../hooks/use-workspace.ts';
 import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
 import { LvApp } from '../../ui/components/layout/LvApp.tsx';
 import type {
@@ -72,10 +72,6 @@ const pickFile = async (accept: string): Promise<File | null> =>
   });
 
 export const LvAppContainer = () => {
-  // Filter — single source of truth for UI controls. `sources` is derived from
-  // selection (see below), so we strip it from the locally-stored core filter
-  // and re-attach when computing the effective filter.
-  const [coreFilter, setCoreFilter] = useState<LogFilter>(EMPTY_FILTER);
   const { setFilter: pushFilter } = useLogFilter();
 
   // Source state.
@@ -85,27 +81,29 @@ export const LvAppContainer = () => {
   // Windowed entry stream.
   const { totalCount, filteredCount, getRow, setVisibleRange, isLoading, hasLoadedEntries } = useLogWindow();
 
-  // UI state — selection, tabs, group-by, live tail.
-  // `selectedIds` may contain plain `SourceId` strings *and* compound ids
-  // shaped as `<sourceId>::<relativePath>` (or `…::<path>/` for folders) when
-  // the user picks individual files inside a directory tree (see
-  // `useDirectoryTrees`). The `filter` useMemo below splits them apart.
-  const [selectedIds, setSelectedIdsState] = useState<Set<string>>(() => new Set());
-  const [activeTabId, setActiveTabId] = useState<string>('__all__');
-  // Per-file tabs the user has opened by clicking a filename. Decoupled
-  // from `selectedIds` (which drives the multi-source `__all__` aggregate
-  // tab) — every entry here is a pinned tab that stays around until
-  // explicitly closed.
-  const [openTabs, setOpenTabs] = useState<ReadonlyArray<LvTab>>([]);
-  const [groupBy, setGroupBy] = useState<LvGroupBy[]>([]);
-  const [liveTail, setLiveTail] = useState(false);
-
-  const setSelectedIds = useCallback(
-    (updater: (prev: Set<string>) => Set<string>) => {
-      setSelectedIdsState((prev) => updater(prev));
-    },
-    [],
-  );
+  // Workspace — tabs, selection, filter, group-by, live-tail (ADR-NNNN).
+  // Persisted to `localStorage['lv:workspace']` so the user's working
+  // session survives reload. Setters are stable refs from the store;
+  // `selectedIds` is a `Set` rebuilt on each mutation. Compound ids
+  // (`<sourceId>::<relativePath>`) live in the same `selectedIds` Set
+  // as plain source ids — the filter useMemo below splits them apart.
+  const {
+    coreFilter,
+    openTabs,
+    activeTabId,
+    selectedIds,
+    groupBy,
+    liveTail,
+    hydrated: workspaceHydrated,
+    setOpenTabs,
+    setActiveTabId,
+    setSelectedIds,
+    setCoreFilter,
+    setGroupBy,
+    setLiveTail,
+    removeSource: workspaceRemoveSource,
+    pruneMissingSources,
+  } = useWorkspace();
 
   /**
    * Project the user's selection (a flat `Set<string>` that mixes plain
@@ -196,7 +194,7 @@ export const LvAppContainer = () => {
         return { ...computed, sources: null, filePaths: null };
       });
     },
-    [tabSelection],
+    [tabSelection, setCoreFilter],
   );
 
   // Push effective filter to ViewStore (writes a Zustand store outside React's
@@ -385,23 +383,34 @@ export const LvAppContainer = () => {
       });
       setActiveTabId(rawId);
     },
-    [filesById, catalog],
+    [filesById, catalog, setOpenTabs, setActiveTabId],
   );
 
-  const pinTab = useCallback((tabId: string) => {
-    setOpenTabs((prev) => {
-      const idx = prev.findIndex((t) => t.id === tabId);
-      if (idx === -1 || prev[idx].isPinned) return prev;
-      const next = prev.slice();
-      next[idx] = { ...prev[idx], isPinned: true };
-      return next;
-    });
-  }, []);
+  const pinTab = useCallback(
+    (tabId: string) => {
+      setOpenTabs((prev) => {
+        const idx = prev.findIndex((t) => t.id === tabId);
+        if (idx === -1 || prev[idx].isPinned) return prev;
+        const next = prev.slice();
+        next[idx] = { ...prev[idx], isPinned: true };
+        return next;
+      });
+    },
+    [setOpenTabs],
+  );
 
-  const closeTab = useCallback((tabId: string) => {
-    setOpenTabs((prev) => prev.filter((t) => t.id !== tabId));
-    setActiveTabId((cur) => (cur === tabId ? '__all__' : cur));
-  }, []);
+  const closeTab = useCallback(
+    (tabId: string) => {
+      setOpenTabs((prev) => prev.filter((t) => t.id !== tabId));
+      // Read activeTabId from the store directly so we don't capture a
+      // stale render-time value — `setActiveTabId` is a value setter, not
+      // an updater.
+      if (useWorkspaceStore.getState().activeTabId === tabId) {
+        setActiveTabId('__all__');
+      }
+    },
+    [setOpenTabs, setActiveTabId],
+  );
 
   // Snapshot of currently-ingested source display names — feeds the
   // "Add source" modal's name-uniqueness validator.
@@ -465,6 +474,21 @@ export const LvAppContainer = () => {
   // The two are deliberately decoupled: the checkbox column drives the
   // multi-source aggregate view; clicking a filename opens that source
   // in its own tab without touching `selectedIds`.
+  // Cleanup of ghost tabs and activeTabId is gated by `canPrune`: source
+  // hydration AND workspace hydration must have landed, AND we must have
+  // at least one real source. The third condition matters because the
+  // coordinator's first status emit sets `sourcesHydrated=true` with an
+  // empty array (before `hydratePersisted` re-emits). Without the
+  // `sources.length > 0` gate, the tab filter and reset effect would
+  // wipe the just-rehydrated workspace in that brief window.
+  //
+  // The edge case (user genuinely has zero sources after an external
+  // wipe + non-empty workspace) lingers in localStorage but doesn't
+  // visually appear — the canPrune-gated tabs filter shows persisted
+  // entries unfiltered, and the next user action re-saves cleaned
+  // state.
+  const canPrune = sourcesHydrated && workspaceHydrated && sources.length > 0;
+
   const tabs = useMemo<LvTab[]>(() => {
     const t: LvTab[] = [
       {
@@ -481,22 +505,44 @@ export const LvAppContainer = () => {
       // for nested files inside a walked directory are compound
       // (`<sourceId>::<relPath>`); split before the lookup so they
       // survive while their parent source is still around.
+      if (!canPrune) {
+        // Keep all persisted tabs verbatim until hydration completes.
+        t.push(tab);
+        continue;
+      }
       const sep = tab.id.indexOf('::');
       const baseSrc = sep === -1 ? tab.id : tab.id.slice(0, sep);
       if (filesById[baseSrc]) t.push(tab);
     }
     return t;
-  }, [selectedIds, openTabs, filesById]);
+  }, [selectedIds, openTabs, filesById, canPrune]);
 
   // Drop activeTabId back to a sensible default when its tab disappears.
-  const [prevTabSig, setPrevTabSig] = useState('');
-  const tabSig = `${activeTabId}|${tabs.map((x) => x.id).join(',')}`;
-  if (tabSig !== prevTabSig) {
-    setPrevTabSig(tabSig);
+  // `setActiveTabId` is an external-store mutation (zustand workspace) —
+  // React 19 forbids those during render, so defer to an effect.
+  useEffect(() => {
+    if (!canPrune) return;
     if (!tabs.some((t) => t.id === activeTabId)) {
       setActiveTabId(tabs[0]?.id ?? '__all__');
     }
-  }
+  }, [canPrune, tabs, activeTabId, setActiveTabId]);
+
+  // One-shot prune of selectedIds / openTabs against the live source set.
+  // `sourcesHydrated` flips on the coordinator's first status emit, which
+  // is the *empty* snapshot before persistedRecords land. Pruning then
+  // would wipe the just-rehydrated workspace, so gate on
+  // `sources.length > 0` too — once we see at least one real source we
+  // know hydratePersisted has completed and the snapshot is settled.
+  // Down-side: if a user genuinely has zero sources after some external
+  // wipe, stale ids stay in localStorage; harmless visually (the
+  // canPrune-gated tabs useMemo filters ghost rows out) and self-heals
+  // on the next user action.
+  const prunedRef = useRef(false);
+  useEffect(() => {
+    if (prunedRef.current || !canPrune) return;
+    prunedRef.current = true;
+    pruneMissingSources(new Set(sources.map((r) => r.source.id)));
+  }, [canPrune, sources, pruneMissingSources]);
 
   // Touch recent-files when selection grows.
   useEffect(() => {
@@ -557,7 +603,7 @@ export const LvAppContainer = () => {
       setFilter((f) => ({ ...f, fieldFilters: [...(f.fieldFilters ?? []), ff] }));
       setGroupBy([]);
     },
-    [setFilter],
+    [setFilter, setGroupBy],
   );
 
   // Level counts for the filter bar — derived from histogram (sum across
@@ -719,22 +765,14 @@ export const LvAppContainer = () => {
   const onRemoveRoot = useCallback(
     (rootId: string) => {
       // Each catalog root is a single ingested source — rootId === source.id.
-      // Drop the source plus any selection entries that referenced it
-      // (plain source-id and compound `<sourceId>::<path>` ids).
-      const sid = rootId as SourceId;
-      void sourceCtrl.removeSource(sid);
-      setSelectedIds((s) => {
-        const n = new Set<string>();
-        const prefix = `${rootId}::`;
-        for (const id of s) {
-          if (id === rootId) continue;
-          if (id.startsWith(prefix)) continue;
-          n.add(id);
-        }
-        return n;
-      });
+      // Workspace store handles all the bookkeeping: drops the source-id
+      // (and any `<sourceId>::path` compound ids) from selection and open
+      // tabs, and collapses activeTabId to `'__all__'` if it pointed at
+      // the removed source.
+      void sourceCtrl.removeSource(rootId as SourceId);
+      workspaceRemoveSource(rootId);
     },
-    [sourceCtrl, setSelectedIds],
+    [sourceCtrl, workspaceRemoveSource],
   );
 
   return (
@@ -791,7 +829,7 @@ export const LvAppContainer = () => {
       onSaveSearch={onSaveSearch}
       recentFiles={recentFiles}
       liveTail={liveTail}
-      onToggleLiveTail={() => setLiveTail((v) => !v)}
+      onToggleLiveTail={() => setLiveTail(!liveTail)}
       groupBy={groupBy}
       setGroupBy={setGroupBy}
       groupBuckets={groupField !== null ? groupBuckets : null}

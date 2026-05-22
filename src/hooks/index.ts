@@ -27,3 +27,6 @@ export type { UseExport } from './use-export.ts';
 
 export { useDirectoryTrees } from './use-directory-trees.ts';
 export type { UseDirectoryTrees } from './use-directory-trees.ts';
+
+export { useWorkspace } from './use-workspace.ts';
+export type { UseWorkspace } from './use-workspace.ts';
