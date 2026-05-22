@@ -1310,7 +1310,7 @@ button{font-family:inherit}
 .lv-row-caret{display:flex; align-items:center; justify-content:center; color:var(--lv-fg-3); padding-right:2px}
 .lv-row:hover .lv-row-caret{color:var(--lv-fg-2)}
 
-.lv-row-ts{color:var(--lv-fg-2); padding:0 6px; font-variant-numeric:tabular-nums; font-size:11.5px}
+.lv-row-ts{color:var(--lv-fg-2); padding:0 6px; font-variant-numeric:tabular-nums; font-size:11.5px; white-space:nowrap}
 .lv-row-lvl{
   padding:0 6px; font-size:10px; letter-spacing:.06em; text-transform:uppercase; font-weight:600;
 }
