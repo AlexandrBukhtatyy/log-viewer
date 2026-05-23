@@ -35,7 +35,7 @@ const ROW_HEIGHT = 28;
  * columns in the middle.
  */
 const gridTemplateForColumns = (columns: ReadonlyArray<LvColumnPref>): string => {
-  const left = '52px 16px 120px 58px 120px 150px';
+  const left = '52px 16px 178px 58px 120px 150px';
   const right = '1fr 52px';
   if (columns.length === 0) return `${left} ${right}`;
   const userCols = columns.map((c) => `${c.widthPx}px`).join(' ');
