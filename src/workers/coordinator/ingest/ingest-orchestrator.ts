@@ -7,7 +7,7 @@ import type {
 } from '../../../core/sources/source-adapter.ts';
 import type { LogEntry } from '../../../core/types/log-entry.ts';
 import type { LogSource, SourceStatus } from '../../../core/types/log-source.ts';
-import type { ParserPool } from '../pool/parser-pool.ts';
+import type { ParserPool, ParserPriority } from '../pool/parser-pool.ts';
 
 export interface IngestParams {
   readonly source: LogSource;
@@ -27,6 +27,12 @@ export interface IngestParams {
   readonly onParserDetected?: (
     info: { readonly parserId: string; readonly defaultColumns: ReadonlyArray<string> },
   ) => void;
+  /**
+   * Priority hint for the parser-pool slot that handles each batch.
+   * Called per-batch with the relative `filePath` (empty string for
+   * single-file sources). Defaults to `'normal'` when omitted.
+   */
+  readonly getPriority?: (filePath: string) => ParserPriority;
 }
 
 const CHUNKER_OPTS = { maxLines: 1000, maxMs: 100 } as const;
@@ -54,7 +60,11 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
     onStatus,
     onChange,
     onParserDetected,
+    getPriority,
   } = params;
+
+  const priorityFor = (path: string): ParserPriority =>
+    getPriority ? getPriority(path) : 'normal';
 
   // Lazy-import chunker to keep this file dep-free of TransformStream when reused in node tests.
   const { createChunker } = await import('./chunker.ts');
@@ -190,17 +200,22 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
         // persisted handle) names a parser explicitly, skip detection
         // and just trust the choice. Auto-detect remains the default
         // when no override is set.
+        const detectionPriority = priorityFor(path);
         if ('parserId' in source && source.parserId) {
           parserId = source.parserId;
         } else {
           const sample = lines
             .slice(0, SAMPLE_LINES_FOR_DETECT)
             .map((f) => f.line);
-          parserId = await parserPool.withWorker((p) => p.detectParser(sample));
+          parserId = await parserPool.withWorker(
+            (p) => p.detectParser(sample),
+            detectionPriority,
+          );
         }
         const detected = parserId;
-        const meta = await parserPool.withWorker((p) =>
-          p.getParserMeta(detected),
+        const meta = await parserPool.withWorker(
+          (p) => p.getParserMeta(detected),
+          detectionPriority,
         );
         if (meta?.continuationRegex) {
           try {
@@ -226,13 +241,15 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
       seq += folded.length;
 
       const detectedParserId = parserId;
-      const entries = await parserPool.withWorker((p) =>
-        p.parse(folded, {
-          sourceId: source.id,
-          startSeq,
-          parserId: detectedParserId,
-          filePath: path === '' ? undefined : path,
-        }),
+      const entries = await parserPool.withWorker(
+        (p) =>
+          p.parse(folded, {
+            sourceId: source.id,
+            startSeq,
+            parserId: detectedParserId,
+            filePath: path === '' ? undefined : path,
+          }),
+        priorityFor(path),
       );
 
       if (entries.length === 0) continue;
@@ -253,13 +270,15 @@ export const ingestSource = async (params: IngestParams): Promise<void> => {
         seq += tail.length;
         const detectedParserId = parserId;
         const path = openPath ?? '';
-        const entries = await parserPool.withWorker((p) =>
-          p.parse(tail, {
-            sourceId: source.id,
-            startSeq,
-            parserId: detectedParserId,
-            filePath: path === '' ? undefined : path,
-          }),
+        const entries = await parserPool.withWorker(
+          (p) =>
+            p.parse(tail, {
+              sourceId: source.id,
+              startSeq,
+              parserId: detectedParserId,
+              filePath: path === '' ? undefined : path,
+            }),
+          priorityFor(path),
         );
         if (entries.length > 0) {
           const stamped = entries.map(stampFileSeq);

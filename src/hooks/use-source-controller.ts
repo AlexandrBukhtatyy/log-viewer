@@ -77,6 +77,14 @@ export interface UseSourceController {
    * status transitions to `done` with the partial entryCount.
    */
   cancelSource: (id: SourceId) => Promise<void>;
+  /**
+   * Push the user's focus (sources + files) to the coordinator so it can
+   * prioritise parser batches and reorder directory reads. Idempotent.
+   */
+  setFocus: (input: {
+    sources: ReadonlyArray<SourceId>;
+    filePaths: ReadonlyArray<string>;
+  }) => Promise<void>;
 }
 
 export const useSourceController = (): UseSourceController => {
@@ -159,6 +167,11 @@ export const useSourceController = (): UseSourceController => {
     [store],
   );
 
+  const setFocus = useCallback<UseSourceController['setFocus']>(
+    (input) => store.getState().setFocus(input),
+    [store],
+  );
+
   return {
     addFile,
     addDirectory,
@@ -176,5 +189,6 @@ export const useSourceController = (): UseSourceController => {
     resumePersistedSources,
     grantPermission,
     cancelSource,
+    setFocus,
   };
 };

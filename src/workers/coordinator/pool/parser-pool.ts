@@ -2,6 +2,8 @@ import * as Comlink from 'comlink';
 import type { CustomParserDef } from '../../../core/parsers/custom-parser-def.ts';
 import type { ParserApi } from '../../../core/rpc/parser.contract.ts';
 
+export type ParserPriority = 'hot' | 'normal';
+
 export interface ParserPoolOptions {
   /** Hard cap on simultaneously-spawned workers. */
   readonly maxSize: number;
@@ -17,6 +19,8 @@ interface PoolSlot {
   readonly worker: Worker;
   readonly proxy: Comlink.Remote<ParserApi>;
   busy: boolean;
+  /** Priority of the task currently holding the slot. Meaningful only while busy. */
+  priority: ParserPriority;
   lastUsedAt: number;
   /** Timer that terminates this slot if it stays idle past `idleTtlMs`. */
   reapTimer: ReturnType<typeof setTimeout> | null;
@@ -27,14 +31,17 @@ interface PendingRequest {
 }
 
 /**
- * Worker pool with lazy spawn + idle despawn.
+ * Worker pool with lazy spawn + idle despawn and a two-level priority queue.
  *
  * - Workers are created only when `withWorker` (or `acquire`) is called and no
  *   idle slot is available; never on construction.
  * - When a slot is released, an idle timer is armed; if no further call comes
  *   in for `idleTtlMs`, the worker is terminated and removed from the pool.
- * - When all slots are busy and `slots.length >= maxSize`, callers queue and
- *   are woken up FIFO as soon as a slot becomes free.
+ * - Two FIFO queues: `hotWaiters` (focus-driven, user is staring at it) and
+ *   `normalWaiters` (background ingest). On release, hot is preferred — but
+ *   one slot is reserved for normal whenever a normal-waiter is present so
+ *   background ingest never starves under sustained hot load. The reservation
+ *   degenerates to plain priority FIFO when `maxSize <= 1`.
  *
  * No minimum pool size: a system that hasn't ingested anything yet pays
  * nothing for the parser pool. First ingest after idle pays one cold start
@@ -42,7 +49,9 @@ interface PendingRequest {
  */
 export class ParserPool {
   private readonly slots: PoolSlot[] = [];
-  private readonly waiters: PendingRequest[] = [];
+  private readonly hotWaiters: PendingRequest[] = [];
+  private readonly normalWaiters: PendingRequest[] = [];
+  private busyHotCount = 0;
   private readonly options: ParserPoolOptions;
   /**
    * Pool-level mirror of the custom-parser definitions registered in
@@ -85,11 +94,15 @@ export class ParserPool {
    * Run `fn` against a parser worker proxy. The worker is acquired exclusively
    * for the duration of the call, then returned to the pool with an idle timer
    * armed. Always release; even on throw.
+   *
+   * `priority` defaults to `'normal'`. Pass `'hot'` for batches that belong to
+   * a source/file the user is actively looking at.
    */
   async withWorker<T>(
     fn: (proxy: Comlink.Remote<ParserApi>) => Promise<T>,
+    priority: ParserPriority = 'normal',
   ): Promise<T> {
-    const slot = await this.acquire();
+    const slot = await this.acquire(priority);
     try {
       return await fn(slot.proxy);
     } finally {
@@ -112,14 +125,16 @@ export class ParserPool {
     this.slots.length = 0;
     // Wake waiters with rejections by resolving with a poisoned slot would be
     // wrong; instead we leave them hanging — caller decides shutdown semantics.
-    this.waiters.length = 0;
+    this.hotWaiters.length = 0;
+    this.normalWaiters.length = 0;
+    this.busyHotCount = 0;
   }
 
-  private async acquire(): Promise<PoolSlot> {
+  private async acquire(priority: ParserPriority): Promise<PoolSlot> {
     // Reuse an idle slot if available.
     for (const s of this.slots) {
       if (!s.busy) {
-        this.markBusy(s);
+        this.markBusy(s, priority);
         return s;
       }
     }
@@ -130,11 +145,13 @@ export class ParserPool {
       const slot: PoolSlot = {
         worker,
         proxy,
-        busy: true,
+        busy: false,
+        priority: 'normal',
         lastUsedAt: Date.now(),
         reapTimer: null,
       };
       this.slots.push(slot);
+      this.markBusy(slot, priority);
       // Replay custom-parser registrations so the freshly-spawned
       // worker knows about them before its first `parse` / `detect`
       // call. Errors here are non-fatal — the worker simply won't
@@ -152,26 +169,46 @@ export class ParserPool {
       return slot;
     }
     // Cap reached — wait for someone to release.
+    const queue = priority === 'hot' ? this.hotWaiters : this.normalWaiters;
     return new Promise<PoolSlot>((resolve) => {
-      this.waiters.push({ resolve });
+      queue.push({ resolve });
     });
   }
 
   private release(slot: PoolSlot): void {
     slot.busy = false;
+    if (slot.priority === 'hot') this.busyHotCount--;
     slot.lastUsedAt = Date.now();
-    // Hand the slot to a waiter if any, before scheduling a reap.
-    const waiter = this.waiters.shift();
-    if (waiter) {
-      this.markBusy(slot);
+
+    // Reserved-slot rule: prefer hot, but leave one slot for normal whenever
+    // a normal-waiter is present. Bypass the reservation when normal queue is
+    // empty (nothing to reserve for) or when maxSize <= 1 (can't reserve at
+    // all — degenerate to priority FIFO).
+    const canGiveToHot =
+      this.hotWaiters.length > 0 &&
+      (this.busyHotCount < this.options.maxSize - 1 ||
+        this.normalWaiters.length === 0 ||
+        this.options.maxSize <= 1);
+
+    if (canGiveToHot) {
+      const waiter = this.hotWaiters.shift()!;
+      this.markBusy(slot, 'hot');
+      waiter.resolve(slot);
+      return;
+    }
+    if (this.normalWaiters.length > 0) {
+      const waiter = this.normalWaiters.shift()!;
+      this.markBusy(slot, 'normal');
       waiter.resolve(slot);
       return;
     }
     this.armReap(slot);
   }
 
-  private markBusy(slot: PoolSlot): void {
+  private markBusy(slot: PoolSlot, priority: ParserPriority): void {
     slot.busy = true;
+    slot.priority = priority;
+    if (priority === 'hot') this.busyHotCount++;
     if (slot.reapTimer !== null) {
       clearTimeout(slot.reapTimer);
       slot.reapTimer = null;

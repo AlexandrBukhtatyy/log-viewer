@@ -111,6 +111,15 @@ export interface ViewActions {
   grantPermission: (id: SourceId) => Promise<boolean>;
   exportFiltered: (format: ExportFormat) => Promise<Blob>;
   cancelSource: (id: SourceId) => Promise<void>;
+  /**
+   * Tell the coordinator which sources/files are in focus so it can route
+   * their parser-pool batches with priority and reorder per-file reads
+   * inside directory adapters.
+   */
+  setFocus: (input: {
+    sources: ReadonlyArray<SourceId>;
+    filePaths: ReadonlyArray<string>;
+  }) => Promise<void>;
   getEntry: (id: EntryId) => Promise<LogEntry | null>;
   getGroupCounts: (
     filter: LogFilter,
@@ -470,6 +479,8 @@ export const createLogClient = (): ViewStore => {
       grantPermission: async (id) => api().grantPermission(id),
       exportFiltered: async (format) => api().exportFiltered(get().filter, format),
       cancelSource: async (id) => api().cancel(id as string),
+      setFocus: async ({ sources, filePaths }) =>
+        api().setFocus({ sources, filePaths }),
       getEntry: async (id) => api().getEntry(id),
       getGroupCounts: async (filter, field, limit) =>
         api().getGroupCounts(filter, field, limit),

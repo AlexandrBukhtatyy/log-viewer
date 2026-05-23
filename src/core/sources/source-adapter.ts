@@ -47,6 +47,15 @@ export interface LogSourceAdapter {
   open: (signal: AbortSignal) => Promise<ReadableStream<LogLineFrame>>;
   /** Stop and release resources. Idempotent. */
   close: () => Promise<void>;
+  /**
+   * Update the set of "hot" relative paths the user is currently looking at.
+   * Adapters that support per-file reordering (the directory adapter) will
+   * pull these paths to the front of the read plan and preempt the in-flight
+   * file when it's not in the hot set. Adapters that have nothing to reorder
+   * (file/text/url/stream — single logical stream) can omit this method; the
+   * orchestrator falls back to plain priority on the parser-pool queue.
+   */
+  setHotPaths?: (paths: ReadonlySet<string>) => void;
 }
 
 export type LogSourceAdapterFactory = (source: LogSource) => LogSourceAdapter;

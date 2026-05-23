@@ -8,7 +8,10 @@ import type {
   IndexerApi,
   OpenReport,
 } from '../../core/rpc/indexer.contract.ts';
-import type { LogSourceAdapterFactory } from '../../core/sources/source-adapter.ts';
+import type {
+  LogSourceAdapter,
+  LogSourceAdapterFactory,
+} from '../../core/sources/source-adapter.ts';
 import type {
   EntryId,
   LogEntry,
@@ -57,6 +60,12 @@ interface SourceEntry {
   parserId?: string;
   /** Parser's `defaultColumns` snapshot — propagated to `SourceRecord` so UI can auto-apply once. */
   parserDefaultColumns?: ReadonlyArray<string>;
+  /**
+   * Live adapter instance — kept so `setFocus` can reach `adapter.setHotPaths`
+   * for adapters that support per-file reordering (directory). Cleared when
+   * the ingest exits.
+   */
+  adapter?: LogSourceAdapter;
 }
 
 const buildLogSource = (input: LogSourceInput, id: SourceId): LogSource => {
@@ -282,6 +291,36 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   let persistedHydrationPromise: Promise<void> | null = null;
   const statusListeners = new Set<(records: ReadonlyArray<SourceRecord>) => void>();
   const changeListeners = new Set<(notice: ChangesNotice) => void>();
+
+  /**
+   * Focus hint from the UI — the set of sources/files the user is currently
+   * looking at. Drives priority on the parser-pool queue and per-file reorder
+   * inside directory adapters. Updated by `setFocus`; consumed by the
+   * `getPriority` callback wired into every ingest task.
+   */
+  const currentFocus: { sources: Set<SourceId>; filePaths: Set<string> } = {
+    sources: new Set(),
+    filePaths: new Set(),
+  };
+
+  /** Batch is hot when its source is in focus AND (no file pin is set OR its filePath is pinned). */
+  const isHot = (sourceId: SourceId, filePath: string): boolean => {
+    if (!currentFocus.sources.has(sourceId)) return false;
+    if (currentFocus.filePaths.size === 0) return true;
+    if (filePath === '') return true;
+    return currentFocus.filePaths.has(filePath);
+  };
+
+  /** Tell a live adapter which of its files are hot. No-op for adapters without `setHotPaths`. */
+  const pushFocusToAdapter = (entry: SourceEntry): void => {
+    const adapter = entry.adapter;
+    if (!adapter?.setHotPaths) return;
+    if (!currentFocus.sources.has(entry.source.id)) {
+      adapter.setHotPaths(new Set());
+      return;
+    }
+    adapter.setHotPaths(new Set(currentFocus.filePaths));
+  };
 
   const hydratePersisted = async (): Promise<void> => {
     if (persistedHydrationPromise !== null) return persistedHydrationPromise;
@@ -571,17 +610,27 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       return;
     }
     const aborter = new AbortController();
-    sources.set(source.id, { source, status: { kind: 'idle' }, aborter });
+    const adapter = factory(source);
+    sources.set(source.id, {
+      source,
+      status: { kind: 'idle' },
+      aborter,
+      adapter,
+    });
     persistedRecords.delete(source.id);
+    // Push the current focus snapshot now so directory adapters reorder
+    // their plan before the read loop kicks in.
+    const seeded = sources.get(source.id);
+    if (seeded) pushFocusToAdapter(seeded);
     emitStatus();
 
-    const adapter = factory(source);
     const ingestPromise = ingestSource({
       source,
       adapter,
       parserPool: deps.parserPool,
       indexer: deps.getIndexer().proxy,
       signal: aborter.signal,
+      getPriority: (filePath) => (isHot(source.id, filePath) ? 'hot' : 'normal'),
       onStatus: (status) => {
         const entry = sources.get(source.id);
         if (!entry) return; // source already removed — drop stale status
@@ -615,6 +664,11 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       if (name !== 'AbortError') {
         console.warn(`[coordinator] ingest task for ${source.id} crashed`, err);
       }
+    }).finally(() => {
+      // Drop the adapter reference so setFocus doesn't push hot-paths to a
+      // closed adapter. The SourceEntry itself may still exist (status='done').
+      const entry = sources.get(source.id);
+      if (entry) entry.adapter = undefined;
     });
     const entry = sources.get(source.id);
     if (entry) entry.ingest = ingestPromise;
@@ -1414,6 +1468,14 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       const entry = sources.get(taskId as SourceId);
       if (!entry) return;
       entry.aborter?.abort();
+    },
+
+    setFocus: async (input) => {
+      currentFocus.sources = new Set(input.sources);
+      currentFocus.filePaths = new Set(input.filePaths);
+      for (const entry of sources.values()) {
+        pushFocusToAdapter(entry);
+      }
     },
 
     shutdownIndexer: async () => {

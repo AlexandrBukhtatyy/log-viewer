@@ -24,6 +24,23 @@ export interface ResumeReport {
   readonly needsPermission: ReadonlyArray<SourceId>;
 }
 
+/**
+ * Focus hint pushed from the UI to the coordinator. Tells the parser-pool
+ * which batches deserve priority and tells directory adapters which files
+ * to pull to the front of their read plan. Idempotent — call as often as
+ * the user clicks around.
+ */
+export interface FocusInput {
+  /** Sources the user is actively looking at (active tab + multi-select). */
+  readonly sources: ReadonlyArray<SourceId>;
+  /**
+   * Specific relative file paths within directory sources. Empty means
+   * "every file in the focused sources is hot"; non-empty narrows the
+   * hot-set to just these files.
+   */
+  readonly filePaths: ReadonlyArray<string>;
+}
+
 export type ExportFormat = 'jsonl' | 'csv';
 
 /**
@@ -184,6 +201,14 @@ export interface CoordinatorApi {
   ) => Promise<Blob>;
 
   cancel: (taskId: string) => Promise<void>;
+
+  /**
+   * Push the user's current focus (active tab + multi-selected files) so the
+   * coordinator can prioritise parser-pool batches and reorder directory
+   * adapters' read plans. Idempotent; safe to call on every UI selection
+   * change.
+   */
+  setFocus: (input: FocusInput) => Promise<void>;
 
   /**
    * Terminate the child indexer worker so its OPFS SAH-pool lock is

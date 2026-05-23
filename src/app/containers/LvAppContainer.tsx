@@ -203,6 +203,25 @@ export const LvAppContainer = () => {
     pushFilter(filter);
   }, [filter, pushFilter]);
 
+  // Push focus (sources/files the user is staring at) to the coordinator so
+  // it can prioritise parser-pool batches and reorder directory adapters'
+  // read plans. Union of "active tab's source(s)/file" and everything in the
+  // sidebar's multi-select Set, so the all-tab view treats every checked
+  // file as hot.
+  useEffect(() => {
+    const fromTab = tabSelection();
+    const fromSelection = splitSelection(selectedIds, null);
+    const sources = Array.from(
+      new Set<SourceId>([...fromTab.sourcesArr, ...fromSelection.sources]),
+    );
+    const filePaths = Array.from(
+      new Set<string>([...fromTab.filePaths, ...fromSelection.filePaths]),
+    );
+    void sourceCtrl.setFocus({ sources, filePaths }).catch((err: unknown) => {
+      console.warn('[LvAppContainer] setFocus failed', err);
+    });
+  }, [activeTabId, selectedIds, tabSelection, splitSelection, sourceCtrl]);
+
   // UI persistence hooks.
   const tweaks = useUiPrefs();
   const setTweak = useCallback(
