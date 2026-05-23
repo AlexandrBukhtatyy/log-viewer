@@ -22,6 +22,14 @@ export interface LogEntry {
   readonly raw: string;
   readonly fields: Readonly<Record<string, unknown>>;
   /**
+   * Pre-serialized `JSON.stringify(fields)` produced by the parser-worker so
+   * the indexer doesn't have to re-stringify on the hot serial insert path.
+   * Optional: only the ingest-path populates it; entries reconstructed in
+   * the read-path (rowToEntry) and entries built in tests/fixtures omit it
+   * — `insertBatch` falls back to `JSON.stringify(fields)` when missing.
+   */
+  readonly fieldsJson?: string;
+  /**
    * Pointer back to the source's byte storage so the read-path can resolve
    * `raw`/`message` lazily without keeping the body in SQLite (ADR-0016).
    * `filePath` semantics:

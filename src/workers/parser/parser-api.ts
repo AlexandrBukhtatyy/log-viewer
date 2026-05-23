@@ -84,21 +84,28 @@ export const parserApi: ParserApi = {
       byteStart: number,
       byteEnd: number,
       lineNumber: number,
-    ): LogEntry => ({
-      ...record,
-      fields:
+    ): LogEntry => {
+      const fields =
         filePath === undefined
           ? record.fields
-          : { ...record.fields, file_path: filePath },
-      filePath: filePath ?? '',
-      byteStart,
-      byteEnd,
-      lineNumber,
-      // `fileSeq` is assigned by the orchestrator once it sees the
-      // returned entries in file order — the parser doesn't know about
-      // pre-existing records in the file, so it can't number them.
-      fileSeq: 0,
-    });
+          : { ...record.fields, file_path: filePath };
+      return {
+        ...record,
+        fields,
+        // Pre-serialize here so the indexer's serial insertBatch loop
+        // doesn't pay JSON.stringify on every row — this work runs in
+        // the parallel parser-pool instead.
+        fieldsJson: JSON.stringify(fields),
+        filePath: filePath ?? '',
+        byteStart,
+        byteEnd,
+        lineNumber,
+        // `fileSeq` is assigned by the orchestrator once it sees the
+        // returned entries in file order — the parser doesn't know about
+        // pre-existing records in the file, so it can't number them.
+        fileSeq: 0,
+      };
+    };
 
     const result: LogEntry[] = [];
     for (const frame of frames) {

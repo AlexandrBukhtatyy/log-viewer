@@ -388,7 +388,9 @@ export const indexerApi: IndexerApi = {
         e.byteEnd,
         e.lineNumber,
         e.fileSeq,
-        JSON.stringify(e.fields),
+        // Ingest path: parser-worker pre-serialized fieldsJson in parallel.
+        // Fallback covers entries built outside the parser (tests / fixtures).
+        e.fieldsJson ?? JSON.stringify(e.fields),
       );
     };
 
