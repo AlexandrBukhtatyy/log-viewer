@@ -133,7 +133,7 @@ export interface ViewActions {
   removeCustomParser: (id: string) => Promise<void>;
   setSourceParser: (id: SourceId, parserId: string | null) => Promise<void>;
   refresh: () => Promise<void>;
-  destroy: () => void;
+  destroy: () => Promise<void>;
 }
 
 export type ViewStore = StoreApi<ViewState & ViewActions>;
@@ -163,8 +163,10 @@ export const getOrCreateViewStore = (): ViewStore => {
 // empty sidebar after a code edit (or a full reload that races the prior
 // page's worker shutdown).
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    singletonStore?.getState().destroy();
+  import.meta.hot.dispose(async () => {
+    // Awaited so the indexer shutdown RPC has a chance to release the
+    // OPFS SAH-pool lock before the new module instance tries to grab it.
+    await singletonStore?.getState().destroy();
     singletonStore = null;
   });
 }
@@ -482,7 +484,7 @@ export const createLogClient = (): ViewStore => {
       removeCustomParser: async (id) => api().removeCustomParser(id),
       setSourceParser: async (id, parserId) => api().setSourceParser(id, parserId),
       refresh,
-      destroy: () => {
+      destroy: async () => {
         statusUnsubPromise
           ?.then((u) => u())
           .catch(() => {
@@ -493,7 +495,21 @@ export const createLogClient = (): ViewStore => {
           .catch(() => {
             /* ignore */
           });
+        // Tear down the child indexer worker BEFORE killing the coordinator.
+        // Web Workers don't auto-terminate their children — without this an
+        // HMR cycle leaks the indexer, which keeps holding the OPFS SAH-pool
+        // lock and forces the next page-load into a multi-second retry storm
+        // until the browser GCs the orphan.
+        if (coordinatorApi !== null) {
+          try {
+            await coordinatorApi.shutdownIndexer();
+          } catch (err) {
+            console.warn('[log-client] shutdownIndexer failed during destroy', err);
+          }
+        }
         coordinatorWorker?.terminate();
+        coordinatorWorker = null;
+        coordinatorApi = null;
       },
     };
   });

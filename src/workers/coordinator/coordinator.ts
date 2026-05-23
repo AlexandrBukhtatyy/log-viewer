@@ -262,6 +262,12 @@ export interface CoordinatorDeps {
     proxy: Comlink.Remote<IndexerApi>;
     opening: Promise<OpenReport>;
   };
+  /**
+   * Terminate the indexer worker and release its OPFS SAH-pool lock.
+   * Called from `shutdownIndexer` (HMR/destroy path). After this resolves,
+   * the next `getIndexer()` call respawns from scratch.
+   */
+  readonly shutdownIndexer: () => Promise<void>;
   readonly adapterFactories: Partial<Record<LogSourceKind, LogSourceAdapterFactory>>;
   /** Awaited inside methods that touch handles; keeps Comlink.expose synchronous. */
   readonly handleStoreOpening: Promise<HandleStore>;
@@ -289,10 +295,17 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
           handleStore.list(),
         ]);
         const handleByIdx = new Map(handles.map((h) => [h.sourceId, h]));
+        // Directory rows in SQLite without a matching IDB handle are
+        // unrecoverable — the FS handle is gone, so the source can never be
+        // re-ingested. Auto-purge them instead of surfacing 11 ghost chips
+        // in the sidebar. Typical trigger: `clearAll` wiped IDB but
+        // `proxy.clearAll()` couldn't run because the indexer hadn't opened
+        // (OPFS SAH lock from a sibling tab). After auto-cleanup, the user
+        // sees a clean sidebar and just re-adds the folder.
+        const orphanIds: SourceId[] = [];
         for (const rec of indexed) {
           if (sources.has(rec.id)) continue; // already live
           let logSource: LogSource | null = null;
-          let orphanStatus: SourceStatus | null = null;
           if (rec.kind === 'directory') {
             const persisted = handleByIdx.get(rec.id);
             const meta = rec.metaJson
@@ -313,37 +326,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
                 parserId: meta.parserId,
               };
             } else {
-              // SQLite has the directory but its IndexedDB handle is gone
-              // (handleStore.put failed at add-time, IDB was cleared
-              // out-of-band, etc.). Without an explicit branch the row
-              // would silently vanish from the sidebar — user sees "all
-              // my logs disappeared" with no recovery path. Surface it
-              // as an error with a synthetic handle: row renders with
-              // the Remove button so the orphan can be cleaned up.
-              console.error(
-                `[coordinator] hydratePersisted: directory "${rec.name}" (${rec.id}) is in SQLite but has no matching IndexedDB handle (found: ${persisted ? persisted.kind : 'null'}, total handles known: ${handleByIdx.size}). Surfacing as orphan so the user can remove it.`,
-              );
-              const stubHandle = {
-                kind: 'directory',
-                name: rec.name,
-              } as unknown as FileSystemDirectoryHandle;
-              logSource = {
-                kind: 'directory',
-                id: rec.id,
-                name: rec.name,
-                handle: stubHandle,
-                glob: meta.glob,
-                watch: meta.watch,
-                parserId: meta.parserId,
-              };
-              orphanStatus = {
-                kind: 'error',
-                error: {
-                  name: 'HandleLost',
-                  message:
-                    'Folder handle is missing from local storage. Remove and re-add the folder.',
-                },
-              };
+              orphanIds.push(rec.id);
+              continue;
             }
           } else {
             logSource = placeholderFromIndexed(rec);
@@ -357,9 +341,39 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
             'parserId' in logSource ? logSource.parserId : undefined;
           persistedRecords.set(rec.id, {
             source: logSource,
-            status: orphanStatus ?? { kind: 'done', entryCount: rec.entryCount },
+            status: { kind: 'done', entryCount: rec.entryCount },
             parserId: persistedParserId,
           });
+        }
+        if (orphanIds.length > 0) {
+          console.warn(
+            `[coordinator] hydratePersisted: auto-purging ${orphanIds.length} orphan directory source(s) (SQLite row without IDB handle)`,
+            orphanIds,
+          );
+          // Best-effort cleanup; failures here just leave the row in
+          // SQLite for the next hydration to clean up. We don't surface
+          // them as live sources either — they're unrecoverable anyway.
+          await Promise.allSettled(
+            orphanIds.map(async (id) => {
+              try {
+                await deps.getIndexer().proxy.removeSource(id);
+              } catch (err) {
+                console.warn(
+                  `[coordinator] hydratePersisted: removeSource(${id}) failed`,
+                  err,
+                );
+                throw err;
+              }
+              try {
+                await removeSpool(id);
+              } catch (err) {
+                console.warn(
+                  `[coordinator] hydratePersisted: removeSpool(${id}) failed`,
+                  err,
+                );
+              }
+            }),
+          );
         }
         succeeded = true;
       } catch (err) {
@@ -490,6 +504,38 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     for (const cb of statusListeners) {
       void cb(snap);
     }
+  };
+
+  /**
+   * Surface an already-indexed source as live without re-ingesting. Used by
+   * resume / grantPermission / addSource-promote paths when SQLite already
+   * holds entry rows for this source from a previous session. Skipping
+   * ingest here is critical: otherwise every page reload would append
+   * another full copy of the directory's contents (each ingest adds new
+   * entry UUIDs over the existing rows, multiplying the entry count by
+   * roughly the number of reloads). If users want fresh data they can
+   * Remove and Add the source again, which assigns a new source id.
+   *
+   * Returns true if the source was surfaced as `{ kind: 'done' }`; false if
+   * the caller should fall through to a fresh `startIngest`.
+   */
+  const tryResumeAsDone = (
+    source: LogSource,
+    rec: SourceRecord | undefined,
+  ): boolean => {
+    const entryCount =
+      rec?.status.kind === 'done' ? rec.status.entryCount : 0;
+    if (entryCount <= 0) return false;
+    sources.set(source.id, {
+      source,
+      status: { kind: 'done', entryCount },
+      aborter: null,
+      parserId: rec?.parserId,
+      parserDefaultColumns: rec?.parserDefaultColumns,
+    });
+    persistedRecords.delete(source.id);
+    emitStatus();
+    return true;
   };
 
   /**
@@ -811,9 +857,16 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
                   err instanceof Error ? err.message : err,
                 );
               }
-              // startIngest emits status with the promoted row; no manual
-              // emit needed for the optimistic delete above.
-              startIngest(promoted);
+              // If the persisted record already has entries from a prior
+              // session, surface it as live without re-ingesting; otherwise
+              // a user who re-picks the same folder via Add source would
+              // double up its entries in SQLite. Fresh data path: Remove +
+              // Add (new source id, no merge).
+              if (!tryResumeAsDone(promoted, rec)) {
+                // startIngest emits status with the promoted row; no manual
+                // emit needed for the optimistic delete above.
+                startIngest(promoted);
+              }
               return existingId;
             }
           } catch {
@@ -827,11 +880,15 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         await deps.getIndexer().proxy.upsertSource(source);
 
         // Persist handle for sources that can be revived after reload.
-        // Errors here are non-fatal — persistence is just a "resume after
-        // reload" affordance; if it fails (e.g. structured-clone of a
-        // native FileSystemDirectoryHandle hits a browser quirk), we still
-        // want the source to show up in the sidebar and start ingesting in
-        // this session.
+        //
+        // Directory rows in SQLite without a matching IDB handle become
+        // permanent orphans on the next page load (hydratePersisted surfaces
+        // them with "Folder handle is missing from local storage"). If IDB
+        // write fails, roll back the SQLite row so the two stores stay
+        // consistent and the user can simply try again.
+        //
+        // Non-directory kinds don't persist handles, so this branch is a
+        // no-op for them.
         if (source.kind === 'directory') {
           try {
             const handleStore = await deps.handleStoreOpening;
@@ -844,9 +901,20 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
             });
           } catch (err) {
             console.warn(
-              `[coordinator] handleStore.put failed for source ${id} (will not survive reload):`,
+              `[coordinator] handleStore.put failed for source ${id}; rolling back SQLite row to avoid orphan:`,
               err instanceof Error ? err.message : err,
             );
+            try {
+              await deps.getIndexer().proxy.removeSource(id);
+            } catch (rollbackErr) {
+              console.warn(
+                `[coordinator] addSource: rollback removeSource(${id}) failed; SQLite row will appear as an orphan after reload:`,
+                rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+              );
+            }
+            throw err instanceof Error
+              ? err
+              : new Error(String(err));
           }
         }
       } catch (err) {
@@ -1116,7 +1184,10 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
           console.warn('[coordinator] queryPermission failed', err);
         }
         if (perm === 'granted') {
-          startIngest({ ...rec.source, handle });
+          const sourceFull: LogSource = { ...rec.source, handle };
+          if (!tryResumeAsDone(sourceFull, rec)) {
+            startIngest(sourceFull);
+          }
           resumed.push(id);
         } else {
           markPermissionRequired({ ...rec.source, handle });
@@ -1152,7 +1223,9 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         rec && rec.source.kind === 'directory'
           ? { ...rec.source, handle }
           : { kind: 'directory', id, name: persisted.name, handle };
-      startIngest(source);
+      if (!tryResumeAsDone(source, rec)) {
+        startIngest(source);
+      }
       return true;
     },
 
@@ -1174,7 +1247,6 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     },
 
     clearAll: async () => {
-      await deps.getIndexer().opening;
       // Same order as removeSource (ADR-0022): abort + drop from `sources`
       // first so stale onStatus/onChange callbacks early-return, then await
       // every ingest task before deleting indexer rows.
@@ -1198,10 +1270,46 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
           /* ingestPromises are .catch-wrapped in startIngest */
         }
       }
+
+      // SQLite wipe needs the indexer to be open. If it's stuck (OPFS SAH
+      // lock from a sibling tab), we used to throw and skip the IDB / OPFS
+      // wipe too — leaving the user with a stale SQLite full of soon-to-be
+      // orphans on next load. Now: try to open with a budget, and if it
+      // doesn't open in time, skip the SQLite call but STILL wipe IDB and
+      // OPFS-spool. `hydratePersisted`'s auto-purge will collect the
+      // surviving SQLite rows on the next page load.
+      const OPENING_BUDGET_MS = 5000;
+      let canWipeIndexer = false;
+      try {
+        await Promise.race([
+          deps.getIndexer().opening,
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('indexer-opening-timeout')),
+              OPENING_BUDGET_MS,
+            ),
+          ),
+        ]);
+        canWipeIndexer = true;
+      } catch (err) {
+        console.warn(
+          '[coordinator] clearAll: indexer not open within budget; skipping SQLite wipe (will be cleaned on next load)',
+          err instanceof Error ? err.message : err,
+        );
+      }
+
       const handleStore = await deps.handleStoreOpening;
       const customParserStore = await deps.customParserStoreOpening;
-      await Promise.all([
-        deps.getIndexer().proxy.clearAll(),
+      // `allSettled` rather than `all`: if one backend goes south
+      // (e.g. the indexer worker dies mid-DELETE), the others must
+      // still finish — otherwise we leave SQLite and IDB in
+      // inconsistent states and the next page-load surfaces every
+      // un-wiped row as an orphan. The caller gets a single aggregated
+      // error describing which backends actually failed.
+      const settled = await Promise.allSettled([
+        canWipeIndexer
+          ? deps.getIndexer().proxy.clearAll()
+          : Promise.reject(new Error('indexer not open')),
         handleStore.clearAll(),
         // Custom parser definitions live in their own IDB (separate from
         // handles, see ADR-0018). User explicitly asked for "clear all",
@@ -1210,13 +1318,23 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         // OPFS bodies for text/url/snapshot/stream sources — same gap
         // that ADR-0022 fixed for `removeSource`, now extended to the
         // bulk path.
-        removeAllSpool().catch((err: unknown) => {
-          console.warn(
-            '[coordinator] removeAllSpool failed:',
-            err instanceof Error ? err.message : err,
-          );
-        }),
+        removeAllSpool(),
       ]);
+      const backends = ['indexer', 'handleStore', 'customParserStore', 'opfs-spool'] as const;
+      const failures: string[] = [];
+      settled.forEach((result, i) => {
+        if (result.status === 'rejected') {
+          const reason = result.reason;
+          const message = reason instanceof Error ? reason.message : String(reason);
+          console.warn(`[coordinator] clearAll: ${backends[i]} failed:`, reason);
+          failures.push(`${backends[i]}: ${message}`);
+        }
+      });
+      if (failures.length > 0) {
+        throw new Error(
+          `clearAll: partial wipe — ${failures.length} backend(s) failed: ${failures.join('; ')}`,
+        );
+      }
     },
 
     clearSource: async (id) => {
@@ -1282,6 +1400,15 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       const entry = sources.get(taskId as SourceId);
       if (!entry) return;
       entry.aborter?.abort();
+    },
+
+    shutdownIndexer: async () => {
+      // Abort any in-flight ingests first so they don't try to write to a
+      // worker we're about to terminate (would hang on Comlink RPC).
+      for (const entry of sources.values()) {
+        entry.aborter?.abort();
+      }
+      await deps.shutdownIndexer();
     },
   };
 };

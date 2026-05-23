@@ -184,6 +184,18 @@ export interface CoordinatorApi {
   ) => Promise<Blob>;
 
   cancel: (taskId: string) => Promise<void>;
+
+  /**
+   * Terminate the child indexer worker so its OPFS SAH-pool lock is
+   * released *before* this coordinator itself is terminated. Used by the
+   * main-thread HMR/destroy path — without this the indexer is orphaned
+   * across HMR cycles and the next page-load fights for the SAH lock for
+   * tens of seconds.
+   *
+   * After this resolves, any subsequent RPC that touches the indexer
+   * (e.g. `addSource`) will re-spawn it from scratch.
+   */
+  shutdownIndexer: () => Promise<void>;
 }
 
 export interface RpcError {

@@ -23,6 +23,11 @@ const parserPool = new ParserPool({
 // coordinator method actually needs them. Memoize after the first access so
 // every later call shares one worker (the OPFS SAH-pool VFS would otherwise
 // fight with itself).
+//
+// On open() rejection (typically: SAH-pool lock conflict during the page-load
+// race with a soon-to-be-GC'd previous worker) the cached state is reset so
+// the next coordinator call can spawn a fresh worker and retry. Without this
+// one transient failure wedges the indexer for the rest of the session.
 let indexerWorker: Worker | null = null;
 let indexerProxy: Comlink.Remote<IndexerApi> | null = null;
 let indexerOpeningPromise: Promise<OpenReport> | null = null;
@@ -31,14 +36,49 @@ const getIndexer = (): {
   opening: Promise<OpenReport>;
 } => {
   if (indexerProxy === null) {
-    indexerWorker = new Worker(
+    const worker = new Worker(
       new URL('../indexer/index.ts', import.meta.url),
       { type: 'module' },
     );
-    indexerProxy = Comlink.wrap<IndexerApi>(indexerWorker);
-    indexerOpeningPromise = indexerProxy.open();
+    const proxy = Comlink.wrap<IndexerApi>(worker);
+    const opening = proxy.open();
+    opening.catch(() => {
+      // Only clear if we're still pointing at this same proxy — guard against
+      // a later getIndexer() having already swapped state out from under us.
+      if (indexerProxy === proxy) {
+        worker.terminate();
+        indexerWorker = null;
+        indexerProxy = null;
+        indexerOpeningPromise = null;
+      }
+    });
+    indexerWorker = worker;
+    indexerProxy = proxy;
+    indexerOpeningPromise = opening;
   }
   return { proxy: indexerProxy, opening: indexerOpeningPromise! };
+};
+
+/**
+ * Terminate the indexer worker and release the OPFS SAH-pool lock it
+ * holds. Used by the main-thread HMR/destroy path so HMR module
+ * replacement doesn't orphan a child worker that keeps the SAH-pool
+ * locked for the next reload's tens of seconds.
+ */
+const shutdownIndexer = async (): Promise<void> => {
+  if (indexerProxy !== null) {
+    try {
+      await indexerProxy.close();
+    } catch {
+      /* worker already dying — ignore */
+    }
+  }
+  if (indexerWorker !== null) {
+    indexerWorker.terminate();
+  }
+  indexerWorker = null;
+  indexerProxy = null;
+  indexerOpeningPromise = null;
 };
 
 // Handle store opens its own IndexedDB lazily; coordinator awaits the promise
@@ -54,6 +94,7 @@ const customParserStoreOpening = CustomParserStore.open();
 const coordinatorApi = createCoordinatorApi({
   parserPool,
   getIndexer,
+  shutdownIndexer,
   adapterFactories: defaultAdapterFactories,
   handleStoreOpening,
   customParserStoreOpening,

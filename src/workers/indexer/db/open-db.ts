@@ -174,12 +174,31 @@ export const openDb = async (
   const installPool = async (): Promise<PoolUtil> => {
     for (let attempt = 0; ; attempt++) {
       try {
-        return (await sqlite3.installOpfsSAHPoolVfs({
+        // `forceReinitIfPreviouslyFailed` (undocumented in the .d.ts, lives in
+        // runtime `optionDefaults`) is mandatory on retries. Without it
+        // sqlite-wasm returns the cached rejected `initPromises[vfsName]` from
+        // the first failed attempt and our backoff loop becomes a no-op —
+        // every retry just re-throws the original SAH-lock conflict.
+        const opts = {
           name: DEFAULT_VFS_NAME,
           initialCapacity: 16,
-        })) as unknown as PoolUtil;
+          forceReinitIfPreviouslyFailed: attempt > 0,
+        } as Parameters<typeof sqlite3.installOpfsSAHPoolVfs>[0];
+        return (await sqlite3.installOpfsSAHPoolVfs(opts)) as unknown as PoolUtil;
       } catch (err) {
-        if (!isLockConflict(err) || attempt >= RETRY_DELAYS_MS.length) throw err;
+        if (!isLockConflict(err)) throw err;
+        if (attempt >= RETRY_DELAYS_MS.length) {
+          // Translate the raw browser exception ("Failed to execute
+          // 'createSyncAccessHandle' on 'FileSystemFileHandle'…") into
+          // something a user can act on. The most common cause after this
+          // many retries is another tab of the same origin still holding the
+          // SAH pool open.
+          throw new Error(
+            'OPFS lock conflict: SQLite index is still held by another worker. ' +
+              'Close other tabs of this app and reload, then try again.',
+            { cause: err },
+          );
+        }
         await sleep(RETRY_DELAYS_MS[attempt]);
       }
     }
