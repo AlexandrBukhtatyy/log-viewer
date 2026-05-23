@@ -77,15 +77,20 @@ export const createDirectoryAdapter: LogSourceAdapterFactory = (source) => {
     try {
       const file = await task.handle.getFile();
       let resumeFrom = task.byteOffset;
-      // Orphan-LF skip: when the previous read ended on a CRLF, the recorded
-      // `byteEnd` points at `\r`, so `byteOffset = byteEnd + 1` lands on the
-      // lone `\n`. Slicing from there would make the splitter emit a phantom
-      // empty line. Peek one byte and step past it.
+      // Orphan-LF skip. After a CRLF terminator the splitter records
+      // `byteEnd` as the position of `\r`, so `byteOffset = byteEnd + 1`
+      // lands on the `\n` half — slicing from there would feed the next
+      // splitter a phantom empty line. We DO NOT want to skip when the
+      // previous terminator was a plain LF AND the next line happens to
+      // start with another `\n` (a genuine empty line) — those two cases
+      // look identical if we peek `byteOffset` itself. So peek the byte
+      // BEFORE `byteOffset`: `\r` means we're on the LF half of CRLF (skip),
+      // anything else means `byteOffset` is already at a real line start.
       if (resumeFrom > 0 && resumeFrom < file.size) {
-        const peek = await file.slice(resumeFrom, resumeFrom + 1).arrayBuffer();
+        const peek = await file.slice(resumeFrom - 1, resumeFrom).arrayBuffer();
         if (peek.byteLength > 0) {
-          const b = new Uint8Array(peek)[0];
-          if (b === 0x0a) resumeFrom += 1;
+          const prev = new Uint8Array(peek)[0];
+          if (prev === 0x0d) resumeFrom += 1;
         }
       }
       if (resumeFrom >= file.size) {
