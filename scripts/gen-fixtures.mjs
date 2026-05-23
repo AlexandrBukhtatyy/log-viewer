@@ -293,7 +293,115 @@ const genStackTraces = (events, seed) => {
   return out.join('\n') + '\n';
 };
 
-// 7. Большой JSON Lines файл (для нагрузочных проверок: virtual scroll, индексация).
+// 7. Каталог `mixed/` — три файла с **общим** timeline'ом, записи раскиданы
+//    round-robin между ними. Используется для проверки, что при выборе
+//    нескольких файлов в сайдбаре combined-выдача показывает записи строго
+//    в хронологическом порядке (timestamp-interleaving) — не блоками по
+//    файлам и не вперемешку seq'ами.
+//
+// Форматы выбраны так, чтобы все три парсились с извлекаемым timestamp'ом:
+//   - events.jsonl  — pino-стиль JSONL (числовой `time` в ms, числовые `level`)
+//   - system.log    — `[ISO] LEVEL  service: message k=v` (app-text парсер)
+//   - audit.txt     — тот же [ISO]-формат, но audit-доменные сообщения
+//
+// XML/MXL не делаем: парсера под XML нет, а `.xml` не входит в
+// DEFAULT_FILE_EXT_RE (см. core/sources/walk-directory.ts), поэтому такой
+// файл всё равно не проиндексировался бы как лог.
+const genMixedDir = (totalLines, seed) => {
+  const rng = makeRng(seed);
+  const start = Date.UTC(2026, 4, 15, 9, 0, 0); // 2026-05-15 09:00 UTC
+  // Растягиваем общую длительность так, чтобы соседние записи в одном файле
+  // отстояли друг от друга на ~единицы секунд — это делает интерливинг
+  // визуально очевидным в выдаче, без накладок секунда-в-секунду.
+  const stepMs = () => 800 + Math.floor(rng() * 2200);
+
+  const jsonl = [];
+  const app = [];
+  const audit = [];
+
+  const AUDIT_MSGS = [
+    'user logged in',
+    'user logged out',
+    'permission granted',
+    'permission revoked',
+    'api key rotated',
+    'password changed',
+    'mfa enabled',
+    'mfa disabled',
+    'role assigned',
+    'role removed',
+  ];
+
+  let ts = start;
+  for (let i = 0; i < totalLines; i++) {
+    ts += stepMs();
+    // Round-robin между тремя файлами + лёгкий jitter, чтобы не превращалось
+    // в строгое чередование «1-2-3-1-2-3». Видеть переплетение интереснее,
+    // когда подряд иногда идут две записи в один файл.
+    const bucket = weighted(rng, [
+      [0, 1], // jsonl
+      [1, 1], // log
+      [2, 1], // txt
+    ]);
+
+    if (bucket === 0) {
+      const level = weighted(rng, [
+        [20, 5],
+        [30, 65],
+        [40, 22],
+        [50, 8],
+      ]);
+      const msg =
+        level >= 50 ? pick(rng, MESSAGES_ERROR) : level >= 40 ? pick(rng, MESSAGES_WARN) : pick(rng, MESSAGES_INFO);
+      jsonl.push(
+        JSON.stringify({
+          level,
+          time: ts,
+          service: pick(rng, SERVICES),
+          host: pick(rng, HOSTS),
+          reqId: `req_${padStart(i, 6)}`,
+          msg,
+          latencyMs: Math.floor(rng() * 600),
+        }),
+      );
+    } else if (bucket === 1) {
+      const lvl = weighted(rng, [
+        ['DEBUG', 8],
+        ['INFO', 65],
+        ['WARN', 20],
+        ['ERROR', 7],
+      ]);
+      const svc = pick(rng, SERVICES);
+      const msg = lvl === 'ERROR'
+        ? pick(rng, MESSAGES_ERROR)
+        : lvl === 'WARN'
+          ? pick(rng, MESSAGES_WARN)
+          : pick(rng, MESSAGES_INFO);
+      app.push(
+        `[${fmtIso(ts)}] ${lvl.padEnd(5)} [${svc}] ${msg} reqId=req_${padStart(i, 6)} latency=${Math.floor(rng() * 800)}ms`,
+      );
+    } else {
+      const lvl = weighted(rng, [
+        ['INFO', 80],
+        ['WARN', 15],
+        ['ERROR', 5],
+      ]);
+      const actor = pick(rng, USERS);
+      const msg = pick(rng, AUDIT_MSGS);
+      audit.push(
+        `[${fmtIso(ts)}] ${lvl.padEnd(5)} [audit] ${msg} actor=${actor} ip=${randomIp(rng)}`,
+      );
+    }
+  }
+
+  return {
+    'events.jsonl': jsonl.join('\n') + '\n',
+    'system.log': app.join('\n') + '\n',
+    'audit.txt': audit.join('\n') + '\n',
+  };
+};
+
+// 8. Большой JSON Lines файл (для нагрузочных проверок: virtual scroll, индексация).
 const genLargeJsonl = (lines, seed) => {
   const rng = makeRng(seed);
   const start = Date.UTC(2026, 3, 1, 0, 0, 0); // месяц данных
@@ -339,6 +447,20 @@ const results = [];
 for (const { file, gen } of fixtures) {
   const body = gen();
   results.push(writeFile(file, body));
+}
+
+// `demo_logs/mixed/` — общая папка с тремя разными форматами и **сквозным**
+// timeline'ом, чтобы тестировать выбор нескольких файлов в сайдбаре и
+// убеждаться, что combined-выдача переплетает записи по timestamp'у, а не
+// показывает блоками по файлам. Каждый файл получает свою долю записей в
+// своём же хронологическом порядке.
+const mixedDir = resolve(OUT_DIR, 'demo_logs', 'mixed');
+mkdirSync(mixedDir, { recursive: true });
+const mixedFiles = genMixedDir(900, 0x5EEDED5);
+for (const [name, body] of Object.entries(mixedFiles)) {
+  const p = resolve(mixedDir, name);
+  writeFileSync(p, body);
+  results.push({ name: `demo_logs/mixed/${name}`, path: p, size: statSync(p).size });
 }
 
 const namePad = Math.max(...results.map((r) => r.name.length));

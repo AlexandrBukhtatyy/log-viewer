@@ -64,11 +64,12 @@ export interface LogFilter {
   readonly filePaths: ReadonlyArray<string> | null;
   readonly fieldFilters?: ReadonlyArray<FieldFilter>;
   /**
-   * Row ordering. `'physical'` (default) — show rows in the order they
-   * were written to the source file(s): `source_id ASC, seq ASC`. The
-   * gutter line numbers stay monotonic and out-of-order timestamps
-   * don't shuffle the view. `'time'` merges by `ts ASC, source_id, seq`
-   * — useful for cross-source correlation; the user opts in.
+   * Row ordering. Optional override; when unset (the typical case),
+   * `orderByForFilter` infers from filter shape: single-source-single-file
+   * → `'physical'` (`source_id ASC, seq ASC`, keeps gutter line numbers
+   * monotonic), multi-file or multi-source → `'time'` (interleave by
+   * `ts ASC`). Set explicitly to force one or the other regardless of
+   * shape — used by saved searches and future UI toggles.
    */
   readonly orderBy?: 'time' | 'physical';
 }
@@ -85,7 +86,8 @@ export const EMPTY_FILTER: LogFilter = {
   sources: null,
   services: null,
   filePaths: null,
-  orderBy: 'physical',
+  // No explicit orderBy — let `orderByForFilter` pick based on filter
+  // shape (physical for single-source single-file, time for multi).
 };
 
 const sameArr = <T>(
@@ -116,7 +118,7 @@ export const filtersEqual = (a: LogFilter, b: LogFilter): boolean => {
     a.queryMode !== b.queryMode ||
     a.caseSensitive !== b.caseSensitive ||
     a.wholeWord !== b.wholeWord ||
-    (a.orderBy ?? 'physical') !== (b.orderBy ?? 'physical')
+    a.orderBy !== b.orderBy
   ) {
     return false;
   }

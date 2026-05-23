@@ -151,11 +151,27 @@ export const ORDER_BY_PHYSICAL =
   'ORDER BY entry.source_id ASC, entry.seq ASC';
 
 /**
- * Choose the `ORDER BY` clause for entry listings based on the filter's
- * `orderBy` knob. `'physical'` (default) preserves the file's write
- * order — rows show up exactly as they sit on disk, gutter numbers
- * stay monotonic, out-of-order timestamps don't shuffle the view.
- * `'time'` merges by timestamp and is opt-in via UI / saved searches.
+ * Choose the `ORDER BY` clause for entry listings.
+ *
+ * - Explicit `filter.orderBy` always wins — user has consciously picked an
+ *   ordering, honour it.
+ * - Otherwise infer from filter shape:
+ *     * Single source AND at most one file path selected → `'physical'`.
+ *       The user is looking at one specific file (or one source's natural
+ *       walk order); `source_id ASC, seq ASC` keeps the gutter line
+ *       numbers monotonic and out-of-order timestamps don't shuffle the
+ *       view.
+ *     * Multiple files within one source, multiple sources, or no
+ *       source/path constraint at all → `'time'`. Cross-file correlation
+ *       is the whole point of selecting multiple things together;
+ *       grouping by `source_id` would render the view file-by-file
+ *       instead of interleaved.
  */
-export const orderByForFilter = (filter: LogFilter): string =>
-  filter.orderBy === 'time' ? ORDER_BY_TIME : ORDER_BY_PHYSICAL;
+export const orderByForFilter = (filter: LogFilter): string => {
+  if (filter.orderBy === 'time') return ORDER_BY_TIME;
+  if (filter.orderBy === 'physical') return ORDER_BY_PHYSICAL;
+  const filePathCount = filter.filePaths?.length ?? 0;
+  const sourceCount = filter.sources?.length ?? 0;
+  const isSingleScope = sourceCount === 1 && filePathCount <= 1;
+  return isSingleScope ? ORDER_BY_PHYSICAL : ORDER_BY_TIME;
+};

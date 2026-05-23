@@ -207,17 +207,47 @@ describe('ORDER_BY_TIME', () => {
 });
 
 describe('orderByForFilter', () => {
-  it("'time' returns ORDER_BY_TIME", () => {
+  it("explicit 'time' returns ORDER_BY_TIME", () => {
     expect(orderByForFilter(f({ orderBy: 'time' }))).toBe(ORDER_BY_TIME);
   });
 
-  it('undefined orderBy falls back to ORDER_BY_PHYSICAL (write order)', () => {
-    expect(orderByForFilter(f())).toBe(ORDER_BY_PHYSICAL);
-  });
-
-  it("'physical' orders by (source_id, seq) without ts", () => {
+  it("explicit 'physical' orders by (source_id, seq) without ts", () => {
     const order = orderByForFilter(f({ orderBy: 'physical' }));
     expect(order).toBe('ORDER BY entry.source_id ASC, entry.seq ASC');
     expect(order).not.toContain('entry.ts');
+  });
+
+  it('single source, no file filter → physical (one source\'s walk order)', () => {
+    expect(
+      orderByForFilter(f({ sources: ['s-1' as SourceId] })),
+    ).toBe(ORDER_BY_PHYSICAL);
+  });
+
+  it('single source narrowed to one file → physical (line-by-line)', () => {
+    expect(
+      orderByForFilter(
+        f({ sources: ['s-1' as SourceId], filePaths: ['a.log'] }),
+      ),
+    ).toBe(ORDER_BY_PHYSICAL);
+  });
+
+  it('multiple files within one source → time (interleave by ts)', () => {
+    expect(
+      orderByForFilter(
+        f({ sources: ['s-1' as SourceId], filePaths: ['a.log', 'b.log'] }),
+      ),
+    ).toBe(ORDER_BY_TIME);
+  });
+
+  it('multiple sources → time', () => {
+    expect(
+      orderByForFilter(
+        f({ sources: ['s-1' as SourceId, 's-2' as SourceId] }),
+      ),
+    ).toBe(ORDER_BY_TIME);
+  });
+
+  it('no source / file constraint → time (potentially multi-source)', () => {
+    expect(orderByForFilter(f())).toBe(ORDER_BY_TIME);
   });
 });
