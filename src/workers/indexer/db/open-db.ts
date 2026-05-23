@@ -105,7 +105,8 @@ const openAndMigrate = (poolUtil: PoolUtil, filename: string): OpenedDb => {
        PRAGMA journal_mode = MEMORY;
        PRAGMA synchronous = NORMAL;
        PRAGMA temp_store = MEMORY;
-       PRAGMA cache_size = -8000;`,
+       PRAGMA cache_size = -65000;
+       PRAGMA mmap_size = 268435456;`,
     );
     // Quick smoke test BEFORE running migrations — catches a malformed
     // image early so the caller can wipe-and-retry without dragging

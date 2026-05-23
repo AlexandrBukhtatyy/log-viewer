@@ -37,7 +37,7 @@ const WORKER_ID = crypto.randomUUID();
 
 interface State {
   db: Database;
-  insertEntryStmt: PreparedStatement;
+  insertEntryBulkStmt: PreparedStatement;
   bumpSourceCountStmt: PreparedStatement;
   upsertMinuteStmt: PreparedStatement;
   upsertFieldMetaStmt: PreparedStatement;
@@ -250,10 +250,15 @@ const ENTRY_COLS_SELECT =
   'entry.byte_end AS byte_end, entry.line_number AS line_number, ' +
   'entry.file_seq AS file_seq, entry.fields_json AS fields_json';
 
-const INSERT_ENTRY_SQL = `
-  INSERT OR IGNORE INTO entry (${ENTRY_COLS_UNQUALIFIED})
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`;
+// Multi-row INSERT cuts JS↔WASM round-trips on hot ingest. Bind cap = rows ×
+// 11 cols; SQLITE_MAX_VARIABLE_NUMBER is 32766, so 256 × 11 = 2816 is safe.
+const ROWS_PER_BULK_INSERT = 256;
+const buildBulkInsertEntrySql = (rows: number): string => {
+  const tuple = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+  const placeholders = new Array<string>(rows).fill(tuple).join(', ');
+  return `INSERT OR IGNORE INTO entry (${ENTRY_COLS_UNQUALIFIED}) VALUES ${placeholders}`;
+};
+const INSERT_ENTRY_BULK_SQL = buildBulkInsertEntrySql(ROWS_PER_BULK_INSERT);
 
 /**
  * UPSERT into `entry_minute` — one row per (source, file, minute_bucket).
@@ -307,7 +312,7 @@ export const indexerApi: IndexerApi = {
     const opened = await openDb();
     state = {
       db: opened.db,
-      insertEntryStmt: opened.db.prepare(INSERT_ENTRY_SQL),
+      insertEntryBulkStmt: opened.db.prepare(INSERT_ENTRY_BULK_SQL),
       bumpSourceCountStmt: opened.db.prepare(BUMP_SOURCE_COUNT_SQL),
       upsertMinuteStmt: opened.db.prepare(UPSERT_MINUTE_SQL),
       upsertFieldMetaStmt: opened.db.prepare(UPSERT_FIELD_META_SQL),
@@ -321,7 +326,7 @@ export const indexerApi: IndexerApi = {
 
   close: async () => {
     if (state === null) return;
-    state.insertEntryStmt.finalize();
+    state.insertEntryBulkStmt.finalize();
     state.bumpSourceCountStmt.finalize();
     state.upsertMinuteStmt.finalize();
     state.upsertFieldMetaStmt.finalize();
@@ -365,31 +370,51 @@ export const indexerApi: IndexerApi = {
     if (entries.length === 0) return;
     const {
       db,
-      insertEntryStmt,
+      insertEntryBulkStmt,
       bumpSourceCountStmt,
       upsertMinuteStmt,
       upsertFieldMetaStmt,
     } = requireState();
 
+    const pushEntryParams = (e: LogEntry, sink: SqlValue[]): void => {
+      sink.push(
+        e.id,
+        e.sourceId,
+        e.seq,
+        e.timestamp,
+        e.level,
+        e.filePath,
+        e.byteStart,
+        e.byteEnd,
+        e.lineNumber,
+        e.fileSeq,
+        JSON.stringify(e.fields),
+      );
+    };
+
     db.exec('BEGIN');
     try {
-      for (const e of entries) {
-        insertEntryStmt
-          .bind([
-            e.id,
-            e.sourceId,
-            e.seq,
-            e.timestamp,
-            e.level,
-            e.filePath,
-            e.byteStart,
-            e.byteEnd,
-            e.lineNumber,
-            e.fileSeq,
-            JSON.stringify(e.fields),
-          ])
-          .step();
-        insertEntryStmt.reset();
+      // Bulk INSERT in chunks of ROWS_PER_BULK_INSERT using the prepared
+      // statement; the trailing remainder (< ROWS_PER_BULK_INSERT) goes
+      // through a one-shot exec with a SQL string sized to fit it.
+      const fullChunks = Math.floor(entries.length / ROWS_PER_BULK_INSERT);
+      for (let c = 0; c < fullChunks; c++) {
+        const off = c * ROWS_PER_BULK_INSERT;
+        const params: SqlValue[] = [];
+        for (let i = 0; i < ROWS_PER_BULK_INSERT; i++) {
+          pushEntryParams(entries[off + i], params);
+        }
+        insertEntryBulkStmt.bind(params).step();
+        insertEntryBulkStmt.reset();
+      }
+      const remainder = entries.length - fullChunks * ROWS_PER_BULK_INSERT;
+      if (remainder > 0) {
+        const off = fullChunks * ROWS_PER_BULK_INSERT;
+        const params: SqlValue[] = [];
+        for (let i = 0; i < remainder; i++) {
+          pushEntryParams(entries[off + i], params);
+        }
+        db.exec({ sql: buildBulkInsertEntrySql(remainder), bind: params });
       }
 
       // Per-source row counters.
@@ -424,36 +449,52 @@ export const indexerApi: IndexerApi = {
 
       // Update per-(source, key) field schema cache so the column /
       // group-by / filter pickers can serve their lists without scanning
-      // `entry.fields_json`. Existing rows are read first, then merged
-      // (type, top values) in JS; UPSERT below carries the merged result.
+      // `entry.fields_json`. One bulk SELECT loads existing rows for
+      // every (source, key) pair touched by this batch; merging
+      // (type, top values) is done in JS; UPSERT below carries the merged
+      // result.
       const fieldsBySource = aggregateFieldMeta(entries);
+      const allPairs: Array<{ sourceId: SourceId; key: string }> = [];
       for (const [sid, perKey] of fieldsBySource) {
-        if (perKey.size === 0) continue;
-        const totalSeenIncr = counts.get(sid) ?? 0;
-        // Bulk-load existing rows for the keys we're about to touch.
-        const keys = [...perKey.keys()];
-        const placeholders = keys.map(() => '?').join(', ');
-        const existingRows = runRows(
+        for (const key of perKey.keys()) allPairs.push({ sourceId: sid, key });
+      }
+      const existingBySidKey = new Map<
+        string,
+        { type: FieldType; occurrences: number; totalSeen: number; topValuesJson: string | null }
+      >();
+      // Chunk pair lookups to stay under SQLITE_MAX_VARIABLE_NUMBER
+      // (1000 pairs × 2 params = 2000, comfortably below the 32k cap).
+      const PAIRS_PER_LOOKUP = 1000;
+      for (let i = 0; i < allPairs.length; i += PAIRS_PER_LOOKUP) {
+        const slice = allPairs.slice(i, i + PAIRS_PER_LOOKUP);
+        const conds = slice.map(() => '(source_id = ? AND key = ?)').join(' OR ');
+        const params: SqlValue[] = [];
+        for (const p of slice) {
+          params.push(p.sourceId);
+          params.push(p.key);
+        }
+        const rows = runRows(
           db,
-          `SELECT key, type, occurrences, total_seen, top_values_json
+          `SELECT source_id, key, type, occurrences, total_seen, top_values_json
              FROM field_meta
-            WHERE source_id = ? AND key IN (${placeholders})`,
-          [sid, ...keys],
+            WHERE ${conds}`,
+          params,
         );
-        const existing = new Map<
-          string,
-          { type: FieldType; occurrences: number; totalSeen: number; topValuesJson: string | null }
-        >();
-        for (const r of existingRows) {
-          existing.set(r.key as string, {
+        for (const r of rows) {
+          const k = `${r.source_id as string}\x00${r.key as string}`;
+          existingBySidKey.set(k, {
             type: r.type as FieldType,
             occurrences: Number(r.occurrences ?? 0),
             totalSeen: Number(r.total_seen ?? 0),
             topValuesJson: (r.top_values_json as string | null) ?? null,
           });
         }
+      }
+      for (const [sid, perKey] of fieldsBySource) {
+        if (perKey.size === 0) continue;
+        const totalSeenIncr = counts.get(sid) ?? 0;
         for (const [key, accum] of perKey) {
-          const prev = existing.get(key);
+          const prev = existingBySidKey.get(`${sid}\x00${key}`);
           const mergedType = mergeFieldType(prev?.type ?? null, accum.types);
           const mergedTopVals = mergeTopValues(
             prev?.topValuesJson ?? null,

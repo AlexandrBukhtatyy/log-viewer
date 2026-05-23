@@ -195,7 +195,7 @@ export class ParserPool {
 
 export const recommendedPoolSize = (): number => {
   const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
-  return Math.min(Math.max(cores - 1, 1), 4);
+  return Math.min(Math.max(cores - 1, 1), 8);
 };
 
 export const DEFAULT_POOL_IDLE_TTL_MS = 30_000;

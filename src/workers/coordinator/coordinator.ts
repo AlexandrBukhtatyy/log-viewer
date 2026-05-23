@@ -423,7 +423,20 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   // one user-visible update: the **first** event of a burst fires
   // immediately (start of ingest is responsive), subsequent events inside
   // the window get collapsed and re-fired once when the window closes.
-  const CHANGE_THROTTLE_MS = 200;
+  // During active ingest the throttle widens — the count RPC stays on the
+  // indexer's serial queue and competes with insertBatch, so backing off
+  // here keeps the queue moving.
+  const CHANGE_THROTTLE_MS_IDLE = 500;
+  const CHANGE_THROTTLE_MS_INGEST = 1500;
+  const hasActiveIngest = (): boolean => {
+    for (const entry of sources.values()) {
+      const kind = entry.status.kind;
+      if (kind === 'indexing' || kind === 'streaming' || kind === 'loading') return true;
+    }
+    return false;
+  };
+  const currentChangeThrottleMs = (): number =>
+    hasActiveIngest() ? CHANGE_THROTTLE_MS_INGEST : CHANGE_THROTTLE_MS_IDLE;
   let lastChangeEmittedAt = 0;
   let throttledChangeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -734,7 +747,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     invalidateFreeTextCache();
     const now = Date.now();
     const elapsed = now - lastChangeEmittedAt;
-    if (elapsed >= CHANGE_THROTTLE_MS && throttledChangeTimer === null) {
+    const throttleMs = currentChangeThrottleMs();
+    if (elapsed >= throttleMs && throttledChangeTimer === null) {
       // Leading edge of a quiet period — fire immediately so the user
       // sees the first ingest delta with no delay.
       dispatchChangeNotice();
@@ -743,7 +757,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     // Inside the window — coalesce. The trailing dispatch picks up the
     // latest `version` because `version` is module-scoped, not captured.
     if (throttledChangeTimer !== null) return;
-    const wait = Math.max(0, CHANGE_THROTTLE_MS - elapsed);
+    const wait = Math.max(0, throttleMs - elapsed);
     throttledChangeTimer = setTimeout(() => {
       throttledChangeTimer = null;
       dispatchChangeNotice();
