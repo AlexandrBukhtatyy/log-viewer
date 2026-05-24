@@ -1859,6 +1859,44 @@ button{font-family:inherit}
 .lv-tset-toggle input{margin:0}
 .lv-tset-sep{height:1px; margin:6px 0; background:var(--lv-border)}
 
+/* ──────────────────────── PWA update banner ──────────────────────── */
+.lv-update-banner{
+  position:fixed;
+  right:16px;
+  bottom:36px;
+  z-index:1000;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px 8px 12px;
+  background:var(--lv-bg-1);
+  color:var(--lv-fg-1);
+  border:1px solid var(--accent-hi, var(--lv-border));
+  border-radius:6px;
+  box-shadow:0 6px 18px rgba(0,0,0,.32);
+  font-size:12px;
+  max-width:360px;
+}
+.lv-update-banner-text{color:var(--lv-fg-1)}
+.lv-update-banner-btn{
+  background:transparent;
+  border:1px solid var(--lv-border);
+  color:var(--lv-fg-2);
+  border-radius:4px;
+  padding:3px 8px;
+  font:inherit;
+  cursor:pointer;
+}
+.lv-update-banner-btn:hover{color:var(--lv-fg-1); border-color:var(--lv-fg-3)}
+.lv-update-banner-primary{
+  border-color:var(--accent-hi, var(--lv-fg-2));
+  color:var(--accent-hi, var(--lv-fg-1));
+}
+.lv-update-banner-primary:hover{
+  background:var(--accent-hi, transparent);
+  color:var(--lv-bg-1);
+}
+
 /* ──────────────────────── Responsive safety ──────────────────────── */
 @media (max-width: 980px){
   .lv-main{grid-template-columns: 44px var(--lv-sidebar-width, 220px) 4px 1fr}
