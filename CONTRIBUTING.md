@@ -4,7 +4,7 @@
 
 ## Связаться
 
-- **Баги, идеи, вопросы** — [GitHub Issues](https://github.com/aleksandrbuhtatyj/log-viewer/issues).
+- **Баги, идеи, вопросы** — [GitHub Issues](https://github.com/AlexandrBukhtatyy/log-viewer/issues).
 - **Roadmap** — [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Запуск локально

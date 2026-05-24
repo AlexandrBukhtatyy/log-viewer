@@ -1,6 +1,6 @@
 # Roadmap
 
-Живой список того, что планируется добавить в [Log Viewer](https://github.com/aleksandrbuhtatyj/log-viewer). Каждый пункт — ссылка на план в [docs/plans/](plans/), где описан scope, файлы для правок и шаги проверки. Уже принятые архитектурные решения — в [docs/adr/](adr/).
+Живой список того, что планируется добавить в [Log Viewer](https://github.com/AlexandrBukhtatyy/log-viewer). Каждый пункт — ссылка на план в [docs/plans/](plans/), где описан scope, файлы для правок и шаги проверки. Уже принятые архитектурные решения — в [docs/adr/](adr/).
 
 ## Ближайшие планы
 

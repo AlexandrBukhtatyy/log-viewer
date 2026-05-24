@@ -126,25 +126,25 @@ export const LvSettingsPopover = ({
             <code>{__APP_BUILD_HASH__}</code>
           </div>
           <div className="lv-settings-row" style={{ flexWrap: 'wrap', gap: 10 }}>
-            <a href="https://github.com/aleksandrbuhtatyj/log-viewer" target="_blank" rel="noopener">
+            <a href="https://github.com/AlexandrBukhtatyy/log-viewer" target="_blank" rel="noopener">
               GitHub
             </a>
             <a
-              href="https://github.com/aleksandrbuhtatyj/log-viewer/blob/main/CHANGELOG.md"
+              href="https://github.com/AlexandrBukhtatyy/log-viewer/blob/main/CHANGELOG.md"
               target="_blank"
               rel="noopener"
             >
               Changelog
             </a>
             <a
-              href="https://github.com/aleksandrbuhtatyj/log-viewer/blob/main/docs/ROADMAP.md"
+              href="https://github.com/AlexandrBukhtatyy/log-viewer/blob/main/docs/ROADMAP.md"
               target="_blank"
               rel="noopener"
             >
               Roadmap
             </a>
             <a
-              href="https://github.com/aleksandrbuhtatyj/log-viewer/issues"
+              href="https://github.com/AlexandrBukhtatyy/log-viewer/issues"
               target="_blank"
               rel="noopener"
             >
