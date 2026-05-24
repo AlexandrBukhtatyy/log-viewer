@@ -1,0 +1,19 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          # Manifest-driven config: release-please-config.json
+          # + .release-please-manifest.json в корне репозитория.
+          token: ${{ secrets.GITHUB_TOKEN }}
