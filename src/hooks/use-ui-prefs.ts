@@ -78,6 +78,13 @@ export const useUiPrefs = create<UiPrefsState>()(
     }),
     {
       name: 'lv:ui-prefs',
+      version: 1,
+      migrate: (persisted, version) => {
+        if (version < 1 && persisted && typeof persisted === 'object') {
+          return { ...(persisted as Partial<LvTweaks>), timelineOn: false };
+        }
+        return persisted as LvTweaks;
+      },
       partialize: (s): LvTweaks => ({
         theme: s.theme,
         density: s.density,
