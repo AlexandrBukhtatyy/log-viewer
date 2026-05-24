@@ -115,6 +115,44 @@ export const LvSettingsPopover = ({
           </label>
         </div>
 
+        <div className="lv-settings-sec">
+          <div className="lv-settings-sec-hd">About</div>
+          <div className="lv-settings-row">
+            <span className="lv-settings-label">Version</span>
+            <span>v{__APP_VERSION__}</span>
+          </div>
+          <div className="lv-settings-row">
+            <span className="lv-settings-label">Build</span>
+            <code>{__APP_BUILD_HASH__}</code>
+          </div>
+          <div className="lv-settings-row" style={{ flexWrap: 'wrap', gap: 10 }}>
+            <a href="https://github.com/aleksandrbuhtatyj/log-viewer" target="_blank" rel="noopener">
+              GitHub
+            </a>
+            <a
+              href="https://github.com/aleksandrbuhtatyj/log-viewer/blob/main/CHANGELOG.md"
+              target="_blank"
+              rel="noopener"
+            >
+              Changelog
+            </a>
+            <a
+              href="https://github.com/aleksandrbuhtatyj/log-viewer/blob/main/docs/ROADMAP.md"
+              target="_blank"
+              rel="noopener"
+            >
+              Roadmap
+            </a>
+            <a
+              href="https://github.com/aleksandrbuhtatyj/log-viewer/issues"
+              target="_blank"
+              rel="noopener"
+            >
+              Issues
+            </a>
+          </div>
+        </div>
+
         <div className="lv-settings-ft">
           <span className="lv-settings-muted">
             More options available in the developer Tweaks panel.

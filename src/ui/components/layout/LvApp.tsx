@@ -633,7 +633,12 @@ export const LvApp = ({
           renderDetailEditor={renderDetailEditor}
         />
       </div>
-      <LvStatusBar stats={stats} liveTail={liveTail} theme={tweaks.theme} />
+      <LvStatusBar
+        stats={stats}
+        liveTail={liveTail}
+        theme={tweaks.theme}
+        onOpenAbout={() => setSettingsOpen(true)}
+      />
 
       {cmdOpen && <LvCommandPalette onClose={() => setCmdOpen(false)} onRun={runCommand} />}
 

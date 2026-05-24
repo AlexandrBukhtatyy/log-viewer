@@ -142,6 +142,9 @@ button{font-family:inherit}
 .lv-status-app{display:flex; align-items:baseline; gap:6px}
 .lv-status-app-name{font-weight:600; color:var(--lv-fg-1)}
 .lv-status-app-ver{color:var(--lv-fg-3)}
+.lv-status-app-btn{background:transparent; border:0; padding:0; cursor:pointer; font:inherit; color:inherit}
+.lv-status-app-btn:hover .lv-status-app-name{color:var(--accent-hi, var(--lv-fg-1))}
+.lv-status-app-btn:hover .lv-status-app-ver{color:var(--lv-fg-1)}
 .lv-tb-omni{
   -webkit-app-region: no-drag;
   width:100%;

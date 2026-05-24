@@ -14,17 +14,30 @@ export interface LvStatusBarProps {
   readonly stats: LvStatusBarStats;
   readonly liveTail: boolean;
   readonly theme: LvTweakTheme;
+  readonly onOpenAbout?: () => void;
 }
 
-export const LvStatusBar = ({ stats, liveTail, theme }: LvStatusBarProps) => {
+export const LvStatusBar = ({ stats, liveTail, theme, onOpenAbout }: LvStatusBarProps) => {
   const ingesting = stats.ingestingSources ?? 0;
   const ingested = stats.ingestingEntries ?? 0;
   return (
   <div className="lv-status">
-    <span className="lv-status-item lv-status-app">
-      <span className="lv-status-app-name">Log Viewer</span>
-      <span className="lv-status-app-ver">v{__APP_VERSION__} · PWA</span>
-    </span>
+    {onOpenAbout ? (
+      <button
+        type="button"
+        className="lv-status-item lv-status-app lv-status-app-btn"
+        onClick={onOpenAbout}
+        title="About Log Viewer"
+      >
+        <span className="lv-status-app-name">Log Viewer</span>
+        <span className="lv-status-app-ver">v{__APP_VERSION__} · PWA</span>
+      </button>
+    ) : (
+      <span className="lv-status-item lv-status-app">
+        <span className="lv-status-app-name">Log Viewer</span>
+        <span className="lv-status-app-ver">v{__APP_VERSION__} · PWA</span>
+      </span>
+    )}
 
     <div style={{ flex: 1 }} />
 
