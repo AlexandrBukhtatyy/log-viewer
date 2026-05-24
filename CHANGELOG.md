@@ -9,6 +9,27 @@ Releases after 0.1.0 are generated automatically by
 [release-please](https://github.com/googleapis/release-please) from
 Conventional Commits — do not edit entries below this line by hand.
 
+## [0.1.1](https://github.com/AlexandrBukhtatyy/log-viewer/compare/v0.1.0...v0.1.1) (2026-05-24)
+
+
+### Features
+
+* expose package version and build hash to bundle ([f741cc0](https://github.com/AlexandrBukhtatyy/log-viewer/commit/f741cc09a7c42f7375a9b716d60e84ddbd137ec1))
+* **pwa:** show update banner when a new service worker is ready ([9896b46](https://github.com/AlexandrBukhtatyy/log-viewer/commit/9896b4630fc2eec35f7fd09e4bbf6fb5c704bd2e))
+* **ui:** add About section and clickable status-bar version ([9843705](https://github.com/AlexandrBukhtatyy/log-viewer/commit/98437052015f0d8fdf9de4c6c683e864e1d62269))
+
+
+### Bug Fixes
+
+* **ui-prefs:** migrate persisted store to v1, force timelineOn=false ([f8fabc3](https://github.com/AlexandrBukhtatyy/log-viewer/commit/f8fabc30025ca8a3d861d87a9a0b2cc311f90669))
+
+
+### Documentation
+
+* add ADR-0026 for versioning and release automation ([c5d0cb0](https://github.com/AlexandrBukhtatyy/log-viewer/commit/c5d0cb07b06efa725bc973874316591df1651f67))
+* add CHANGELOG and adopt Conventional Commits ([9293c3b](https://github.com/AlexandrBukhtatyy/log-viewer/commit/9293c3b197b4011ec24c5827f41ed5eb10a26860))
+* log pipeline sequence diagrams (ingest, read, filter) ([ae22498](https://github.com/AlexandrBukhtatyy/log-viewer/commit/ae22498177a24942726c185c9ff9080daedf7a1a))
+
 ## [Unreleased]
 
 ## [0.1.0] - 2026-05-24
