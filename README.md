@@ -1,10 +1,17 @@
 # log-viewer
 
+[![Release](https://img.shields.io/github/v/release/aleksandrbuhtatyj/log-viewer?include_prereleases&sort=semver)](https://github.com/aleksandrbuhtatyj/log-viewer/releases)
+[![Changelog](https://img.shields.io/badge/changelog-keep%20a%20changelog-orange)](CHANGELOG.md)
+
 - [Лендинг](https://alexandrbukhtatyy.github.io/log-viewer/)
 - [Приложение](https://alexandrbukhtatyy.github.io/log-viewer/app/)
 
 PWA для просмотра логов. React + TypeScript, собирается на Vite, service worker
 и manifest генерируются `vite-plugin-pwa`.
+
+## Релизы
+
+История изменений — [CHANGELOG.md](CHANGELOG.md), готовые сборки — на странице [Releases](https://github.com/aleksandrbuhtatyj/log-viewer/releases). Версионирование — [semver](https://semver.org/), коммиты — [Conventional Commits](https://www.conventionalcommits.org/), релизы автоматизированы через [release-please](https://github.com/googleapis/release-please) (правила в [CONTRIBUTING.md](CONTRIBUTING.md#релизы)).
 
 ## Требования
 

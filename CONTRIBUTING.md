@@ -52,10 +52,32 @@ pnpm gen:fixtures             # сгенерировать .tmp/demo_logs c samp
 
 ## Стиль коммитов
 
-- Заголовок ≤ 70 символов, в повелительном или сжатом нарративном тоне (пример: `addSource: dedupe directories by FileSystemDirectoryHandle.isSameEntry`).
-- Тело — почему, а не что. Объясняй мотивацию и неочевидные trade-off'ы.
-- Один логический change per commit. Большие пачки несвязанных правок — нет.
-- Если есть ADR — ссылайся на него (`(see ADR-0022)`).
+С релиза 0.1.0 (2026-05-24) проект использует [Conventional Commits 1.0](https://www.conventionalcommits.org/) — на их основе [release-please](https://github.com/googleapis/release-please) автоматически бампит версию и наполняет [CHANGELOG.md](CHANGELOG.md). Все новые коммиты в `main` должны соответствовать формату.
+
+Формат:
+
+```
+<type>(<scope>)?: <subject>
+
+<body>
+
+<footer>
+```
+
+- **Заголовок** — `≤ 70 символов`, императив, без точки в конце.
+- **Типы** — `feat`, `fix`, `perf`, `refactor`, `docs`, `deps`, `build`, `ci`, `chore`, `test`, `style`, `revert`.
+- **Scope** — опционально (модуль/подсистема: `sidebar`, `parsers/pino`, `worker`, `pwa`, ...).
+- **BREAKING CHANGE** — либо `!` после типа (`feat(api)!: drop legacy filter shape`), либо футер `BREAKING CHANGE: <описание>`.
+- **Тело** — почему, а не что. Объясняй мотивацию и неочевидные trade-off'ы.
+- **Один логический change per commit.** Большие пачки несвязанных правок — нет.
+- **Ссылки на ADR** — футером `Refs: ADR-0022` (или `Closes: #123` для issue).
+
+## Релизы
+
+- Версионирование — [semver](https://semver.org/).
+- На каждый push в `main` release-please открывает PR `chore(main): release X.Y.Z` с обновлённым `package.json:version` и записями в `CHANGELOG.md`. Merge PR → создаётся тег `vX.Y.Z` и GitHub Release, после чего деплой на Pages запускается автоматически (см. [.github/workflows/](.github/workflows/)).
+- На pre-1.0 (`0.x`) кадензa мягкая: `feat:` даёт patch (0.1.0 → 0.1.1), `feat!:`/`BREAKING CHANGE` — minor (0.1.0 → 0.2.0). После 1.0 заработает классический semver.
+- **Никаких ручных тегов и ручной правки `package.json:version` или `CHANGELOG.md`.** Единственное исключение — seed-запись `[0.1.0]`, уже зафиксированная в `CHANGELOG.md`.
 
 ## Тесты
 
