@@ -23,7 +23,7 @@ export const LvStatusBar = ({ stats, liveTail, theme }: LvStatusBarProps) => {
   <div className="lv-status">
     <span className="lv-status-item lv-status-app">
       <span className="lv-status-app-name">Log Viewer</span>
-      <span className="lv-status-app-ver">1.0 · PWA</span>
+      <span className="lv-status-app-ver">v{__APP_VERSION__} · PWA</span>
     </span>
 
     <div style={{ flex: 1 }} />
