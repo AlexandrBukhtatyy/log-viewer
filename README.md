@@ -1,5 +1,8 @@
 # log-viewer
 
+- [Лендинг](https://alexandrbukhtatyy.github.io/log-viewer/)
+- [Приложение](https://alexandrbukhtatyy.github.io/log-viewer/app/)
+
 PWA для просмотра логов. React + TypeScript, собирается на Vite, service worker
 и manifest генерируются `vite-plugin-pwa`.
 
