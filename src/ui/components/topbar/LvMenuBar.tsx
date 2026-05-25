@@ -98,18 +98,6 @@ export const LvMenuBar = ({
     { id: 'exit', label: 'Exit', hint: '⌘Q', onRun: () => onCommand?.('exit') },
   ];
 
-  const viewMenu: LvMenuItem[] = [
-    { id: 'toggle-timeline', label: 'Toggle Timeline', hint: '⌃⌥T', onRun: () => onCommand?.('toggle-timeline') },
-    { id: 'toggle-live', label: 'Toggle Live Tail', hint: '⌃⌥L', onRun: () => onCommand?.('toggle-live') },
-    { kind: 'sep' },
-    { id: 'group-trace', label: 'Group by Trace', onRun: () => onCommand?.('group-trace') },
-    { id: 'group-request', label: 'Group by Request', onRun: () => onCommand?.('group-request') },
-    { id: 'group-service', label: 'Group by Service', onRun: () => onCommand?.('group-service') },
-    { id: 'group-none', label: 'Clear Grouping', onRun: () => onCommand?.('group-none') },
-    { kind: 'sep' },
-    { id: 'cmd-palette', label: 'Command Palette…', hint: '⌘K', onRun: () => onCommand?.('open-cmd') },
-  ];
-
   const helpMenu: LvMenuItem[] = [
     { id: 'docs', label: 'Documentation', onRun: () => onCommand?.('help-docs') },
     { id: 'shortcuts', label: 'Keyboard Shortcuts', hint: '⌘K ⌘S', onRun: () => onCommand?.('open-keys') },
@@ -122,7 +110,6 @@ export const LvMenuBar = ({
 
   const menus = [
     { id: 'file', label: 'File', items: fileMenu },
-    { id: 'view', label: 'View', items: viewMenu },
     { id: 'help', label: 'Help', items: helpMenu },
   ];
 
