@@ -108,3 +108,4 @@ flowchart LR
 - [0024. Physical line number и per-file entry ordinal в LogEntry](0024-physical-line-number-and-per-file-entry-ordinal.md) — proposed
 - [0025. Persist UI workspace across reloads](0025-persist-ui-workspace.md) — proposed
 - [0026. Versioning, CHANGELOG, and release automation via Release Please + Conventional Commits](0026-release-please-and-conventional-commits.md) — proposed
+- [0027. bfcache lifecycle: shutdown воркеров на pagehide, re-mount на pageshow](0027-bfcache-worker-reset.md) — proposed

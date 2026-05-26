@@ -164,6 +164,34 @@ export const getOrCreateViewStore = (): ViewStore => {
   return singletonStore;
 };
 
+/**
+ * Tear down the worker pipeline and release the OPFS SAH-pool lock.
+ * Used by HMR cleanup and the bfcache pagehide handler — both are
+ * "this module's pipeline is invalidated, the next user must rebuild
+ * it from scratch" events.
+ */
+export const shutdownViewStore = async (): Promise<void> => {
+  // Awaited so the indexer shutdown RPC has a chance to release the
+  // OPFS SAH-pool lock before the next consumer tries to grab it.
+  await singletonStore?.getState().destroy();
+  singletonStore = null;
+};
+
+const resetListeners = new Set<() => void>();
+
+/**
+ * Notify when the singleton store has been reset and a fresh one is
+ * available via `getOrCreateViewStore()`. Used by WorkerClientProvider
+ * to re-mount its subtree after a bfcache restore — consumers still
+ * holding zustand subscriptions to the dead store need to swap out.
+ */
+export const subscribeStoreReset = (cb: () => void): (() => void) => {
+  resetListeners.add(cb);
+  return () => {
+    resetListeners.delete(cb);
+  };
+};
+
 // Vite HMR cleanup: when this module is hot-reloaded, terminate the existing
 // worker pipeline so the next module instance can re-acquire OPFS SAH locks.
 // Without this, an HMR-replaced module leaks a zombie worker that still holds
@@ -173,10 +201,27 @@ export const getOrCreateViewStore = (): ViewStore => {
 // page's worker shutdown).
 if (import.meta.hot) {
   import.meta.hot.dispose(async () => {
-    // Awaited so the indexer shutdown RPC has a chance to release the
-    // OPFS SAH-pool lock before the new module instance tries to grab it.
-    await singletonStore?.getState().destroy();
-    singletonStore = null;
+    await shutdownViewStore();
+  });
+}
+
+// bfcache lifecycle: when this page is moved into the back/forward cache, the
+// indexer worker stays alive and keeps the OPFS SAH-pool lock — a subsequent
+// fresh load (e.g. landing → app → back → app) then fails to install the VFS.
+// On pagehide(persisted=true) release the lock; on pageshow(persisted=true)
+// re-create the store and notify subscribers so React can re-mount its
+// subtree without `location.reload()`. See ADR-0027.
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', (event) => {
+    if (!event.persisted) return;
+    void shutdownViewStore();
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    void shutdownViewStore().then(() => {
+      getOrCreateViewStore();
+      for (const cb of resetListeners) cb();
+    });
   });
 }
 
