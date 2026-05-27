@@ -39,6 +39,17 @@ describe('fieldKeyToSql', () => {
     });
   });
 
+  it('positional $-key → bracket-quoted JSONPath (plain-text tokens)', () => {
+    expect(fieldKeyToSql('$0')).toEqual({
+      sql: `JSON_EXTRACT(entry.fields_json, '$["$0"]')`,
+      needsSourceJoin: false,
+    });
+    expect(fieldKeyToSql('$42')).toEqual({
+      sql: `JSON_EXTRACT(entry.fields_json, '$["$42"]')`,
+      needsSourceJoin: false,
+    });
+  });
+
   it('throws on unknown @-prefix to surface UI typos early', () => {
     expect(() => fieldKeyToSql('@nope')).toThrow(/unknown built-in/i);
   });
@@ -48,6 +59,9 @@ describe('fieldKeyToSql', () => {
     expect(() => fieldKeyToSql("inj'ect")).toThrow(/invalid dynamic/i);
     expect(() => fieldKeyToSql('1leading')).toThrow(/invalid dynamic/i);
     expect(() => fieldKeyToSql('with.dot')).toThrow(/invalid dynamic/i);
+    // $-keys must be `$\d+` exactly — not arbitrary `$foo`.
+    expect(() => fieldKeyToSql('$abc')).toThrow(/invalid dynamic/i);
+    expect(() => fieldKeyToSql('$')).toThrow(/invalid dynamic/i);
   });
 
   it('isBuiltInFieldKey reflects the table', () => {

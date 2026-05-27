@@ -1859,6 +1859,49 @@ button{font-family:inherit}
 .lv-tset-toggle input{margin:0}
 .lv-tset-sep{height:1px; margin:6px 0; background:var(--lv-border)}
 
+/* Regex-column builder (Phase 2 of columns-multi-format-impl.md). */
+.lv-tset-hint{padding:4px 6px; color:var(--lv-fg-2); font-size:11px}
+.lv-tset-hint code{background:var(--lv-bg-3); padding:0 3px; border-radius:2px; font-family:var(--lv-mono, monospace)}
+.lv-tset-vf-add{
+  margin:6px 0 0; padding:4px 8px; width:100%; text-align:left;
+  background:transparent; color:var(--lv-fg-2);
+  border:1px dashed var(--lv-border); border-radius:4px; cursor:pointer;
+}
+.lv-tset-vf-add:hover{background:var(--lv-bg-hover); color:var(--lv-fg)}
+.lv-tset-vf-form{
+  display:flex; flex-direction:column; gap:6px; margin-top:6px;
+  padding:8px; border:1px solid var(--lv-border); border-radius:4px;
+  background:var(--lv-bg-2);
+}
+.lv-tset-vf-field{display:flex; flex-direction:column; gap:3px}
+.lv-tset-vf-field input{
+  padding:4px 6px; background:var(--lv-bg-1); color:var(--lv-fg);
+  border:1px solid var(--lv-border); border-radius:3px;
+  font-family:var(--lv-mono, monospace); font-size:12px;
+}
+.lv-tset-vf-field input:focus{outline:none; border-color:var(--lv-accent)}
+.lv-tset-vf-error{color:var(--lv-level-error, #e57373); font-size:11px; padding:2px 0}
+.lv-tset-vf-actions{display:flex; justify-content:flex-end; gap:6px}
+.lv-tset-vf-actions button{
+  padding:4px 10px; background:transparent; color:var(--lv-fg);
+  border:1px solid var(--lv-border); border-radius:3px; cursor:pointer;
+}
+.lv-tset-vf-actions button:hover{background:var(--lv-bg-hover)}
+.lv-tset-vf-actions .lv-tset-vf-primary{
+  background:var(--lv-accent); border-color:var(--lv-accent); color:var(--lv-bg-1);
+}
+.lv-tset-vf-actions .lv-tset-vf-primary:hover{filter:brightness(1.1)}
+.lv-tset-vf-add[disabled]{opacity:0.5; cursor:not-allowed}
+
+/* Preset row apply button — fills the row like the checkbox/label does. */
+.lv-tset-preset-apply{
+  flex:1; text-align:left; padding:4px 6px;
+  background:transparent; color:var(--lv-fg);
+  border:none; border-radius:3px; cursor:pointer;
+  font-size:12px;
+}
+.lv-tset-preset-apply:hover{background:var(--lv-bg-hover)}
+
 /* ──────────────────────── PWA update banner ──────────────────────── */
 .lv-update-banner{
   position:fixed;

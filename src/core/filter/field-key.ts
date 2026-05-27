@@ -33,7 +33,14 @@ const BUILT_IN: Readonly<Record<string, FieldKeySql>> = {
 /** Built-in `@`-keys exposed by the translator. */
 export const BUILT_IN_FIELD_KEYS: ReadonlyArray<FieldKey> = Object.keys(BUILT_IN);
 
+// Dynamic JSON field keys. `[A-Za-z_][A-Za-z0-9_]*` is the standard
+// identifier shape that interpolates into `$.<key>` JSONPath safely.
+// `\$\d+` is the positional-token shape produced by `plain-text-parser`
+// — it lives in `fields_json` like any other dynamic key but cannot be
+// reached via dot-notation, so the SQL emitter switches to the bracket
+// form for those.
 const DYNAMIC_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const POSITIONAL_KEY_RE = /^\$\d+$/;
 
 export const isBuiltInFieldKey = (key: FieldKey): boolean => key in BUILT_IN;
 
@@ -42,6 +49,13 @@ export const fieldKeyToSql = (key: FieldKey): FieldKeySql => {
   if (builtIn !== undefined) return builtIn;
   if (key.startsWith('@')) {
     throw new Error(`unknown built-in field key: ${key}`);
+  }
+  if (POSITIONAL_KEY_RE.test(key)) {
+    // SQLite JSONPath accepts member access via bracket-and-quote.
+    return {
+      sql: `JSON_EXTRACT(entry.fields_json, '$["${key}"]')`,
+      needsSourceJoin: false,
+    };
   }
   if (!DYNAMIC_KEY_RE.test(key)) {
     throw new Error(`invalid dynamic field key: ${key}`);

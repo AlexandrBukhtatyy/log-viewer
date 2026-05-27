@@ -22,10 +22,38 @@ export interface LvColumnPref {
   readonly widthPx: number;
 }
 
+/** Prefix marker for virtual-field column keys (Phase 2). */
+export const VF_KEY_PREFIX = 'vf:';
+
+/**
+ * A user-defined regex-extracted column. Persistence-model lives next
+ * to the hook so it can also flow through `LvColumnPreset` without
+ * triggering ADR-0002 layer violations.
+ */
+export interface LvVirtualField {
+  readonly key: string;
+  readonly label?: string;
+  readonly pattern: string;
+  readonly group: string;
+  readonly target?: 'raw' | 'message';
+}
+
+/**
+ * A named bundle of `columns` and (optionally) `virtualFields` that
+ * the user can apply to any tab in one click. Built-in presets are
+ * hardcoded and read-only; user presets persist to `lv:ui-prefs`.
+ */
+export interface LvColumnPreset {
+  readonly id: string;
+  readonly name: string;
+  readonly columns: ReadonlyArray<LvColumnPref>;
+  readonly virtualFields?: ReadonlyArray<LvVirtualField>;
+  readonly origin: 'builtin' | 'user';
+}
+
 export interface LvTweaks {
   theme: LvTweakTheme;
   density: LvTweakDensity;
-  wrap: boolean;
   showDate: boolean;
   accent: string;
   timelineOn: boolean;
@@ -34,9 +62,11 @@ export interface LvTweaks {
   /** When true, the middle column is hidden (VSCode-style collapse). Toggle via Cmd/Ctrl+B or by clicking the active rail icon. */
   sidebarCollapsed: boolean;
   /**
-   * User-added table columns rendered between the fixed FILE column
-   * and MESSAGE. The fixed columns (LN/TIMESTAMP/LEVEL/SERVICE/FILE/
-   * MESSAGE/ACTIONS) are not in this list — they are always shown.
+   * All data columns in the table — built-in (`@ts`, `@level`,
+   * `@source.name`, `@file`), dynamic JSON keys, and virtual
+   * `vf:*` keys. Layout is a flat array; the chrome (LN gutter,
+   * caret, message and actions) is always rendered. Empty by
+   * default — a fresh table shows only the gutter and message.
    */
   columns: ReadonlyArray<LvColumnPref>;
   /**
@@ -45,12 +75,20 @@ export interface LvTweaks {
    * switch to the per-file entry ordinal or show both side by side.
    */
   gutterMode: LvGutterMode;
+  /**
+   * User-defined column presets. Each preset bundles a `columns`
+   * list and an optional `virtualFields` list and can be applied to
+   * any tab in one click (Phase 3 of
+   * docs/plans/columns-multi-format-impl.md). Built-in presets
+   * are not stored here — they live in code and are merged at read
+   * time by the consumer.
+   */
+  presets: ReadonlyArray<LvColumnPreset>;
 }
 
 const DEFAULTS: LvTweaks = {
   theme: 'dark',
   density: 'compact',
-  wrap: false,
   showDate: true,
   accent: '#7aa2f7',
   timelineOn: false,
@@ -58,12 +96,68 @@ const DEFAULTS: LvTweaks = {
   sidebarCollapsed: false,
   columns: [],
   gutterMode: 'line',
+  presets: [],
 };
 
 interface UiPrefsState extends LvTweaks {
   setTweak<K extends keyof LvTweaks>(key: K, value: LvTweaks[K]): void;
   reset(): void;
 }
+
+/**
+ * Pure migrate function for `lv:ui-prefs`. Exported for unit tests;
+ * the persist middleware also references it inline below. Side-effect
+ * free and idempotent.
+ */
+export const migrateUiPrefs = (
+  persisted: unknown,
+  version: number,
+): LvTweaks | unknown => {
+  if (!persisted || typeof persisted !== 'object') return persisted;
+  let p = persisted as Partial<LvTweaks> & Record<string, unknown>;
+  if (version < 1) {
+    p = { ...p, timelineOn: false };
+  }
+  if (version < 2) {
+    const cols = Array.isArray(p.columns) ? (p.columns as LvColumnPref[]) : [];
+    const seed: LvColumnPreset[] =
+      cols.length > 0
+        ? [
+            {
+              id: 'user:legacy',
+              name: 'My columns',
+              columns: cols,
+              origin: 'user',
+            },
+          ]
+        : [];
+    const existing = Array.isArray(p.presets) ? (p.presets as LvColumnPreset[]) : [];
+    p = {
+      ...p,
+      presets: existing.length > 0 ? existing : seed,
+    };
+  }
+  if (version < 3) {
+    // Phase 4 refactor: drop legacy boolean visibility flags (now
+    // expressed as presence in `columns`) and the `wrap` toggle
+    // (message column is now always single-line, no wrapping).
+    const {
+      showTimestamp: _showTimestamp,
+      showLevel: _showLevel,
+      showService: _showService,
+      showFile: _showFile,
+      wrap: _wrap,
+      ...rest
+    } = p;
+    void _showTimestamp;
+    void _showLevel;
+    void _showService;
+    void _showFile;
+    void _wrap;
+    p = rest;
+  }
+  return p;
+};
 
 /**
  * UI preferences (theme, density, accent, wrap, showDate, timelineOn) with
@@ -78,17 +172,11 @@ export const useUiPrefs = create<UiPrefsState>()(
     }),
     {
       name: 'lv:ui-prefs',
-      version: 1,
-      migrate: (persisted, version) => {
-        if (version < 1 && persisted && typeof persisted === 'object') {
-          return { ...(persisted as Partial<LvTweaks>), timelineOn: false };
-        }
-        return persisted as LvTweaks;
-      },
+      version: 3,
+      migrate: (persisted, version) => migrateUiPrefs(persisted, version) as LvTweaks,
       partialize: (s): LvTweaks => ({
         theme: s.theme,
         density: s.density,
-        wrap: s.wrap,
         showDate: s.showDate,
         accent: s.accent,
         timelineOn: s.timelineOn,
@@ -96,6 +184,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         sidebarCollapsed: s.sidebarCollapsed,
         columns: s.columns,
         gutterMode: s.gutterMode,
+        presets: s.presets,
       }),
     },
   ),

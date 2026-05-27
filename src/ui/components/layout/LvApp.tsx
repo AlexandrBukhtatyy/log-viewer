@@ -20,7 +20,9 @@ import type {
   LvSourceKind,
   LvTab,
   LvTweaks,
+  LvVirtualField,
 } from '../../contracts/lv-types.ts';
+import { collectAllFileIds } from '../../utils/build-catalog.ts';
 import { LvIconRail } from '../rail/LvIconRail.tsx';
 import { LvSidebar } from '../sidebar/LvSidebar.tsx';
 import { LvSidebarResizer } from './LvSidebarResizer.tsx';
@@ -161,6 +163,9 @@ export interface LvAppProps {
   readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
   readonly columns: ReadonlyArray<LvColumnPref>;
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
+  /** Active tab's user-defined regex-extracted columns (Phase 2). */
+  readonly virtualFields: ReadonlyArray<LvVirtualField>;
+  onVirtualFieldsChange: (next: ReadonlyArray<LvVirtualField>) => void;
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
   /** Returns resolved parser id for the entry's source — drives Meta-tab `@parser.id`. */
   parserIdOf?: (entry: LogEntry) => string | undefined;
@@ -247,6 +252,8 @@ export const LvApp = ({
   fieldDescriptors,
   columns,
   onColumnsChange,
+  virtualFields,
+  onVirtualFieldsChange,
   cellValueOf,
   parserIdOf,
   onExport,
@@ -372,7 +379,7 @@ export const LvApp = ({
         setTweak('density', tweaks.density === 'compact' ? 'comfortable' : 'compact');
         break;
       case 'select-all':
-        setSelectedIds(() => new Set(Object.keys(filesById)));
+        setSelectedIds(() => new Set(collectAllFileIds(catalog)));
         break;
       case 'export-json':
       case 'export-ndjson':
@@ -456,7 +463,6 @@ export const LvApp = ({
     rail === 'files' ? (
       <LvSidebar
         catalog={catalog}
-        filesById={filesById}
         sourcesHydrated={sourcesHydrated}
         selectedIds={selectedIds}
         setSelectedIds={(updater) => setSelectedIds((prev) => updater(prev))}
@@ -628,6 +634,8 @@ export const LvApp = ({
           fieldDescriptors={fieldDescriptors}
           columns={columns}
           onColumnsChange={onColumnsChange}
+          virtualFields={virtualFields}
+          onVirtualFieldsChange={onVirtualFieldsChange}
           cellValueOf={cellValueOf}
           parserIdOf={parserIdOf}
           renderDetailEditor={renderDetailEditor}
@@ -701,11 +709,6 @@ export const LvApp = ({
           label="Timeline chart"
           value={tweaks.timelineOn}
           onChange={(v) => setTweak('timelineOn', v)}
-        />
-        <LvTweakToggle
-          label="Line wrap"
-          value={tweaks.wrap}
-          onChange={(v) => setTweak('wrap', v)}
         />
         <LvTweakToggle
           label="Show date column"

@@ -28,7 +28,6 @@ describe('plainTextParser', () => {
     expect(entry!.timestamp).toBeNull();
     expect(entry!.message).toBe('hello world');
     expect(entry!.raw).toBe('hello world');
-    expect(entry!.fields).toEqual({});
   });
 
   it('drops empty lines', () => {
@@ -40,5 +39,33 @@ describe('plainTextParser', () => {
     const ctx = makeCtx();
     const r = plainTextParser.parseLine('foo', ctx);
     expect(r.confidence).toBeLessThan(0.5);
+  });
+
+  it('tokenizes the line into positional $-keys split by whitespace', () => {
+    const ctx = makeCtx();
+    const { entry } = plainTextParser.parseLine(
+      'ERROR 2024-01-15 user not found',
+      ctx,
+    );
+    expect(entry!.fields).toEqual({
+      $0: 'ERROR',
+      $1: '2024-01-15',
+      $2: 'user',
+      $3: 'not',
+      $4: 'found',
+    });
+  });
+
+  it('collapses runs of whitespace and ignores leading/trailing spaces', () => {
+    const ctx = makeCtx();
+    const { entry } = plainTextParser.parseLine('  a\t\tb   c  ', ctx);
+    expect(entry!.fields).toEqual({ $0: 'a', $1: 'b', $2: 'c' });
+  });
+
+  it('returns empty fields for a whitespace-only line', () => {
+    const ctx = makeCtx();
+    const { entry } = plainTextParser.parseLine('   \t  ', ctx);
+    // The line is non-empty (raw) but has no tokens.
+    expect(entry!.fields).toEqual({});
   });
 });

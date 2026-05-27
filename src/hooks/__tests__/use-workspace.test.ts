@@ -137,6 +137,26 @@ describe('mergeWorkspaceData', () => {
     );
     expect(data.openTabs.map((t) => t.id)).toEqual(['s1', 's2']);
   });
+
+  it('preserves per-tab columns through serialize → merge round-trip', () => {
+    // Phase 1.2 of docs/plans/columns-multi-format-impl.md: LvTab.columns
+    // is an optional per-tab column profile that must survive reload.
+    const tabWithColumns: LvTab = {
+      ...sampleTab('nginx', 'access.log'),
+      columns: [
+        { key: 'method', widthPx: 80 },
+        { key: 'status', widthPx: 60 },
+        { key: 'request_uri', widthPx: 300 },
+      ],
+    };
+    const partialized = partializeWorkspace(baseState({ openTabs: [tabWithColumns] }));
+    // Round-trip through JSON to mirror what `persist` does in localStorage.
+    const reparsed = JSON.parse(JSON.stringify(partialized));
+    const data = mergeWorkspaceData(reparsed, baseState());
+    expect(data.openTabs).toHaveLength(1);
+    expect(data.openTabs[0].id).toBe('nginx');
+    expect(data.openTabs[0].columns).toEqual(tabWithColumns.columns);
+  });
 });
 
 describe('useWorkspaceStore actions', () => {

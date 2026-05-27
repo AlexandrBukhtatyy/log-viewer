@@ -75,37 +75,33 @@ export const parserApi: ParserApi = {
 
     // For sources with inner file structure (directory / snapshot), the
     // adapter tags every frame with a relative `path`, and the orchestrator
-    // groups frames by path before calling parse(). We attach the path to
-    // entry.fields.file_path here so every parser implementation gets it
-    // for free without per-parser plumbing.
+    // groups frames by path before calling parse(). We stamp it onto
+    // `LogEntry.filePath` (and the `entry.file_path` SQL column) — the
+    // `@file` built-in field key reads from that column directly, so
+    // there's no need to also dupe the value into `entry.fields`
+    // (which is reserved for data extracted from the log line itself,
+    // per ADR-0028).
     const filePath = ctx.filePath;
     const enrich = (
       record: ParsedRecord,
       byteStart: number,
       byteEnd: number,
       lineNumber: number,
-    ): LogEntry => {
-      const fields =
-        filePath === undefined
-          ? record.fields
-          : { ...record.fields, file_path: filePath };
-      return {
-        ...record,
-        fields,
-        // Pre-serialize here so the indexer's serial insertBatch loop
-        // doesn't pay JSON.stringify on every row — this work runs in
-        // the parallel parser-pool instead.
-        fieldsJson: JSON.stringify(fields),
-        filePath: filePath ?? '',
-        byteStart,
-        byteEnd,
-        lineNumber,
-        // `fileSeq` is assigned by the orchestrator once it sees the
-        // returned entries in file order — the parser doesn't know about
-        // pre-existing records in the file, so it can't number them.
-        fileSeq: 0,
-      };
-    };
+    ): LogEntry => ({
+      ...record,
+      // Pre-serialize here so the indexer's serial insertBatch loop
+      // doesn't pay JSON.stringify on every row — this work runs in
+      // the parallel parser-pool instead.
+      fieldsJson: JSON.stringify(record.fields),
+      filePath: filePath ?? '',
+      byteStart,
+      byteEnd,
+      lineNumber,
+      // `fileSeq` is assigned by the orchestrator once it sees the
+      // returned entries in file order — the parser doesn't know about
+      // pre-existing records in the file, so it can't number them.
+      fileSeq: 0,
+    });
 
     const result: LogEntry[] = [];
     for (const frame of frames) {

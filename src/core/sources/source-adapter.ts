@@ -16,7 +16,8 @@ import type { LogSource } from '../types/log-source.ts';
  *   parsers can be migrated independently.
  *
  * Downstream the orchestrator groups frames by `path`, and `path` ends up in
- * `entry.fields.file_path` for sidebar filtering.
+ * `LogEntry.filePath` (the `entry.file_path` SQL column) which the sidebar
+ * filter targets via the `@file` field-key.
  */
 export interface LogLineFrame {
   readonly path: string;

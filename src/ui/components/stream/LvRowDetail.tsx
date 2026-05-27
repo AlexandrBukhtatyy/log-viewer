@@ -56,13 +56,30 @@ export const LvRowDetail = ({
   if (entry.filePath) metaFields.push(['@file.path', entry.filePath]);
   if (parserId) metaFields.push(['@parser.id', parserId]);
 
+  // Render a field value to a readable cell — primitives go through
+  // `String(v)`, objects/arrays through `JSON.stringify` so nested data
+  // (pino `err`, structured payloads) is visible instead of collapsing
+  // to `[object Object]`. `null`/`undefined` render as the empty string.
+  const formatFieldValue = (v: unknown): string => {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return String(v);
+    }
+  };
+
   const body =
     view === 'pretty'
       ? JSON.stringify(entry.fields, null, 2)
       : view === 'stack'
         ? stackLines.join('\n')
         : view === 'fields'
-          ? Object.entries(fields).map(([k, v]) => `${k}\t${String(v)}`).join('\n')
+          ? Object.entries(fields)
+              .map(([k, v]) => `${k}\t${formatFieldValue(v)}`)
+              .join('\n')
           : view === 'meta'
             ? metaFields.map(([k, v]) => `${k}\t${v}`).join('\n')
             : entry.raw;
@@ -152,20 +169,23 @@ export const LvRowDetail = ({
       <div className="lv-det-body">
         {view === 'fields' ? (
           <div className="lv-det-tbl">
-            {Object.entries(fields).map(([k, v]) => (
-              <div key={k} className="lv-det-row">
-                <span className="lv-det-k">{k}</span>
-                <span className="lv-det-v">{String(v)}</span>
-                <button
-                  type="button"
-                  className="lv-det-add"
-                  title={`Filter where ${k} = ${String(v)}`}
-                  onClick={() => onAddFieldFilter({ key: k, op: '=', value: String(v) })}
-                >
-                  ＋
-                </button>
-              </div>
-            ))}
+            {Object.entries(fields).map(([k, v]) => {
+              const text = formatFieldValue(v);
+              return (
+                <div key={k} className="lv-det-row">
+                  <span className="lv-det-k">{k}</span>
+                  <span className="lv-det-v">{text}</span>
+                  <button
+                    type="button"
+                    className="lv-det-add"
+                    title={`Filter where ${k} = ${text}`}
+                    onClick={() => onAddFieldFilter({ key: k, op: '=', value: text })}
+                  >
+                    ＋
+                  </button>
+                </div>
+              );
+            })}
           </div>
         ) : view === 'meta' ? (
           <div className="lv-det-tbl">

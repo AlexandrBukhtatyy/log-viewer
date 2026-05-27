@@ -16,8 +16,10 @@ import type {
   LvSavedSearch,
   LvTab,
   LvTweaks,
+  LvVirtualField,
 } from '../../contracts/lv-types.ts';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
+import { builtInColumn } from '../../contracts/lv-column-registry.tsx';
 import { LvFilterBar } from '../filter/LvFilterBar.tsx';
 import { LvTimeline } from '../timeline/LvTimeline.tsx';
 import { LvEmpty } from './LvEmpty.tsx';
@@ -29,17 +31,16 @@ import { LvTabs } from './LvTabs.tsx';
 const ROW_HEIGHT = 28;
 
 /**
- * Build the inline `grid-template-columns` for table header and rows.
- * Fixed columns (LN/CARET/TS/LEVEL/SERVICE/FILE on the left, MESSAGE/
- * ACTIONS on the right) frame an arbitrary number of user-added
- * columns in the middle.
+ * Build the inline `grid-template-columns`. Chrome columns (LN gutter,
+ * caret on the left; MESSAGE 1fr, actions on the right) always frame
+ * the data strip; every entry in `columns` becomes one data slot of
+ * its declared width.
  */
 const gridTemplateForColumns = (columns: ReadonlyArray<LvColumnPref>): string => {
-  const left = '52px 16px 178px 58px 120px 150px';
-  const right = '1fr 52px';
-  if (columns.length === 0) return `${left} ${right}`;
-  const userCols = columns.map((c) => `${c.widthPx}px`).join(' ');
-  return `${left} ${userCols} ${right}`;
+  const parts: string[] = ['52px', '16px'];
+  for (const c of columns) parts.push(`${c.widthPx}px`);
+  parts.push('1fr', '52px');
+  return parts.join(' ');
 };
 
 type RenderDetailEditor = (props: {
@@ -125,6 +126,9 @@ export interface LvViewerProps {
   /** User-picked extra columns; the picker mutates this list. */
   readonly columns: ReadonlyArray<LvColumnPref>;
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
+  /** Active tab's regex-extracted virtual columns (Phase 2). */
+  readonly virtualFields: ReadonlyArray<LvVirtualField>;
+  onVirtualFieldsChange: (next: ReadonlyArray<LvVirtualField>) => void;
   /** Extracts the cell value for a `(entry, columnKey)` pair. */
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
   /** Resolves the parser id for an entry's source. Shown in the Meta-vкладке of `LvRowDetail`. */
@@ -175,6 +179,8 @@ export const LvViewer = ({
   fieldDescriptors,
   columns,
   onColumnsChange,
+  virtualFields,
+  onVirtualFieldsChange,
   cellValueOf,
   parserIdOf,
   renderDetailEditor,
@@ -449,6 +455,8 @@ export const LvViewer = ({
             setTweak={setTweak}
             columns={columns}
             onColumnsChange={onColumnsChange}
+            virtualFields={virtualFields}
+            onVirtualFieldsChange={onVirtualFieldsChange}
             filesById={filesById}
           />
 
@@ -593,15 +601,16 @@ export const LvViewer = ({
                     : 'line'}
               </span>
               <span className="lv-sh lv-sh-caret"></span>
-              <span className="lv-sh lv-sh-ts">timestamp</span>
-              <span className="lv-sh lv-sh-lvl">level</span>
-              <span className="lv-sh lv-sh-svc">service</span>
-              <span className="lv-sh lv-sh-file" title="@file">@file</span>
-              {columns.map((c) => (
-                <span key={c.key} className="lv-sh" title={c.key}>
-                  {c.label || c.key}
-                </span>
-              ))}
+              {columns.map((c) => {
+                const d = builtInColumn(c.key);
+                const label = d?.label ?? c.label ?? c.key;
+                const extra = d?.headerClass ? ` ${d.headerClass}` : '';
+                return (
+                  <span key={c.key} className={`lv-sh${extra}`} title={label}>
+                    {label}
+                  </span>
+                );
+              })}
               <span className="lv-sh lv-sh-msg">message</span>
               <span className="lv-sh lv-sh-act" />
             </div>
@@ -688,7 +697,6 @@ export const LvViewer = ({
                                 index={-1}
                                 density={tweaks.density}
                                 showDate={tweaks.showDate}
-                                wrap={tweaks.wrap}
                                 highlight={null}
                                 selected={false}
                                 expanded={expanded.has(entry.id)}
@@ -765,10 +773,6 @@ export const LvViewer = ({
                               <span className="lv-skel lv-skel-num" />
                             </span>
                             <span className="lv-row-caret" />
-                            <span className="lv-skel lv-skel-cell" />
-                            <span className="lv-skel lv-skel-cell" />
-                            <span className="lv-skel lv-skel-cell" />
-                            <span className="lv-skel lv-skel-cell" />
                             {columns.map((c) => (
                               <span key={c.key} className="lv-skel lv-skel-cell" />
                             ))}
@@ -782,7 +786,6 @@ export const LvViewer = ({
                             index={vi.index}
                             density={tweaks.density}
                             showDate={tweaks.showDate}
-                            wrap={tweaks.wrap}
                             highlight={
                               findOpen && findQ.length > 0
                                 ? {

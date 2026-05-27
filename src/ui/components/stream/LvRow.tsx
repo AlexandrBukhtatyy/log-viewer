@@ -8,7 +8,7 @@ import type {
   LvTweakDensity,
   LvTweakTheme,
 } from '../../contracts/lv-types.ts';
-import { lvFmtTime } from '../../utils/lv-format.ts';
+import { builtInColumn } from '../../contracts/lv-column-registry.tsx';
 import { lvHighlight } from '../../utils/lv-highlight.tsx';
 import { LvRowDetail } from './LvRowDetail.tsx';
 
@@ -19,7 +19,6 @@ export interface LvRowProps {
   readonly index: number;
   readonly density: LvTweakDensity;
   readonly showDate: boolean;
-  readonly wrap: boolean;
   /**
    * Highlight settings for the message column. `null` disables
    * highlighting. The filter-bar query is intentionally NOT plumbed
@@ -72,12 +71,6 @@ export interface LvRowProps {
   }) => ReactNode;
 }
 
-const serviceFromEntry = (entry: LogEntry, fileMeta: LvFileNode | null): string => {
-  const fromFields = (entry.fields as Record<string, unknown>).service;
-  if (typeof fromFields === 'string' && fromFields.length > 0) return fromFields;
-  return fileMeta?.service ?? '—';
-};
-
 const formatCellValue = (v: unknown): string => {
   if (v === null || v === undefined) return '';
   if (typeof v === 'string') return v;
@@ -95,7 +88,6 @@ export const LvRow = ({
   index,
   density,
   showDate,
-  wrap,
   highlight,
   selected,
   expanded,
@@ -132,18 +124,7 @@ export const LvRow = ({
     (indentPx ? ' is-nested' : '') +
     (isFindMatch ? ' is-find-match' : '') +
     (isFindCurrent ? ' is-find-current' : '');
-  const tsTitle =
-    entry.timestamp === null ? '' : new Date(entry.timestamp).toISOString();
-  // For directory sources entries carry a relative path inside the
-  // walked tree (`sub/a.log`); show that, not the parent source name.
-  // Single-file/text/url/stream sources leave `entry.filePath` empty,
-  // so we fall back to the source's display name.
-  const fileName = entry.filePath || fileMeta?.name || '—';
-  const filePath = entry.filePath
-    ? `${fileMeta?.name ?? ''}${entry.filePath ? '/' + entry.filePath : ''}`
-    : (fileMeta?.path ?? '');
   const fileKind: LvLogKind | undefined = fileMeta?.kind;
-  const service = serviceFromEntry(entry, fileMeta);
   const renderCell = (text: string) =>
     highlight
       ? lvHighlight(
@@ -211,21 +192,28 @@ export const LvRow = ({
             />
           </svg>
         </span>
-        <span className="lv-row-ts" title={tsTitle}>
-          {renderCell(lvFmtTime(entry.timestamp, showDate))}
-        </span>
-        <span className={`lv-row-lvl lv-level-tag-${entry.level}`}>
-          {renderCell(entry.level)}
-        </span>
-        <span className="lv-row-svc" title={service}>
-          {renderCell(service)}
-        </span>
-        <span className="lv-row-file" title={filePath}>
-          {renderCell(fileName)}
-        </span>
         {columns?.map((c) => {
+          const d = builtInColumn(c.key);
           const v = cellValueOf ? cellValueOf(entry, c.key) : undefined;
           const text = formatCellValue(v);
+          if (d?.renderCell) {
+            return (
+              <span
+                key={c.key}
+                className={d.cellClass ?? 'lv-row-cell'}
+                title={text || d.label}
+              >
+                {d.renderCell({
+                  entry,
+                  fileMeta,
+                  showDate,
+                  renderText: renderCell,
+                  defaultText: text,
+                  defaultValue: v,
+                })}
+              </span>
+            );
+          }
           return (
             <span
               key={c.key}
@@ -237,9 +225,7 @@ export const LvRow = ({
             </span>
           );
         })}
-        <span className={`lv-row-msg${wrap ? ' wrap' : ''}`}>
-          {renderCell(entry.message)}
-        </span>
+        <span className="lv-row-msg">{renderCell(entry.message)}</span>
         <span className="lv-row-actions" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"

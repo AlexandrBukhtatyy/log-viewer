@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Settings } from 'lucide-react';
+import { Settings, X } from 'lucide-react';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type {
   LvColumnPref,
   LvGutterMode,
   LvTweakDensity,
   LvTweaks,
+  LvVirtualField,
 } from '../../contracts/lv-types.ts';
+import { VF_KEY_PREFIX } from '../../utils/virtual-fields.ts';
+import { builtInColumn } from '../../contracts/lv-column-registry.tsx';
 import { compatBadgeText, compatOf } from '../../utils/field-compatibility.ts';
 
 const DEFAULT_WIDTH_PX = 140;
@@ -17,9 +20,23 @@ export interface LvTableSettingsProps {
   readonly columns: ReadonlyArray<LvColumnPref>;
   readonly descriptors: ReadonlyArray<FieldDescriptor>;
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
+  /**
+   * Per-tab regex-extracted virtual columns (Phase 2 of
+   * docs/plans/columns-multi-format-impl.md). Empty array means
+   * "tab has no virtual columns" (or `__all__` tab — picker is still
+   * rendered but the entries are added to the active tab only).
+   */
+  readonly virtualFields: ReadonlyArray<LvVirtualField>;
+  onVirtualFieldsChange: (next: ReadonlyArray<LvVirtualField>) => void;
   /** Used to compute compatibility badges (Phase 3). */
   readonly activeSources?: ReadonlyArray<{ id: string; name: string }>;
 }
+
+/** Extract the first named group from a regex source string. */
+const firstNamedGroup = (pattern: string): string | null => {
+  const m = pattern.match(/\(\?<([A-Za-z_][A-Za-z0-9_]*)>/);
+  return m ? m[1]! : null;
+};
 
 /**
  * Single gear button in the filter bar that opens a popover with all
@@ -33,10 +50,23 @@ export const LvTableSettings = ({
   columns,
   descriptors,
   onColumnsChange,
+  virtualFields,
+  onVirtualFieldsChange,
   activeSources,
 }: LvTableSettingsProps) => {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Inline regex-column builder state (Phase 2.2). Hidden until the
+  // user clicks "+ Add regex column"; closes on add/cancel.
+  const [vfFormOpen, setVfFormOpen] = useState(false);
+  const [vfLabel, setVfLabel] = useState('');
+  const [vfPattern, setVfPattern] = useState('');
+  const [vfTarget, setVfTarget] = useState<'raw' | 'message'>('raw');
+  const [vfError, setVfError] = useState<string | null>(null);
+  // Phase 3 — preset form state.
+  const [presetFormOpen, setPresetFormOpen] = useState(false);
+  const [presetName, setPresetName] = useState('');
+  const [presetError, setPresetError] = useState<string | null>(null);
   const activeIds = useMemo(
     () => (activeSources ?? []).map((s) => s.id),
     [activeSources],
@@ -86,7 +116,8 @@ export const LvTableSettings = ({
     if (selectedKeys.has(key)) {
       onColumnsChange(columns.filter((c) => c.key !== key));
     } else {
-      onColumnsChange([...columns, { key, widthPx: DEFAULT_WIDTH_PX }]);
+      const widthPx = builtInColumn(key)?.defaultWidthPx ?? DEFAULT_WIDTH_PX;
+      onColumnsChange([...columns, { key, widthPx }]);
     }
   };
 
@@ -161,6 +192,102 @@ export const LvTableSettings = ({
   const setDensity = (d: LvTweakDensity): void => setTweak('density', d);
   const setGutter = (m: LvGutterMode): void => setTweak('gutterMode', m);
 
+  // Phase 2.2 — regex-column builder handlers. Validates the pattern,
+  // extracts the named group, appends both a virtual-field definition
+  // and its matching column pref in one user action.
+  const cancelVfForm = (): void => {
+    setVfFormOpen(false);
+    setVfLabel('');
+    setVfPattern('');
+    setVfTarget('raw');
+    setVfError(null);
+  };
+  const addVirtualField = (): void => {
+    setVfError(null);
+    const pattern = vfPattern.trim();
+    if (pattern === '') {
+      setVfError('Pattern is empty.');
+      return;
+    }
+    const group = firstNamedGroup(pattern);
+    if (group === null) {
+      setVfError('Pattern must contain a named group, e.g. (?<name>…).');
+      return;
+    }
+    try {
+      new RegExp(pattern);
+    } catch (e) {
+      setVfError(`Invalid regex: ${(e as Error).message}`);
+      return;
+    }
+    const key = `${VF_KEY_PREFIX}${group}`;
+    if (virtualFields.some((v) => v.key === key)) {
+      setVfError(`Virtual column "${group}" already exists.`);
+      return;
+    }
+    const label = vfLabel.trim() || group;
+    onVirtualFieldsChange([
+      ...virtualFields,
+      {
+        key,
+        label,
+        pattern,
+        group,
+        target: vfTarget,
+      },
+    ]);
+    onColumnsChange([...columns, { key, label, widthPx: DEFAULT_WIDTH_PX }]);
+    cancelVfForm();
+  };
+  const removeVirtualField = (key: string): void => {
+    onVirtualFieldsChange(virtualFields.filter((v) => v.key !== key));
+    onColumnsChange(columns.filter((c) => c.key !== key));
+  };
+
+  // Phase 3 — preset handlers. Apply pushes both columns and virtual
+  // fields into the active tab; the container decides what '__all__'
+  // does with virtual fields (currently: ignored).
+  const applyPreset = (id: string): void => {
+    const p = tweaks.presets.find((x) => x.id === id);
+    if (!p) return;
+    onColumnsChange(p.columns);
+    onVirtualFieldsChange(p.virtualFields ?? []);
+  };
+  const removePreset = (id: string): void => {
+    setTweak(
+      'presets',
+      tweaks.presets.filter((p) => p.id !== id),
+    );
+  };
+  const cancelPresetForm = (): void => {
+    setPresetFormOpen(false);
+    setPresetName('');
+    setPresetError(null);
+  };
+  const savePreset = (): void => {
+    setPresetError(null);
+    const name = presetName.trim();
+    if (name === '') {
+      setPresetError('Preset name is empty.');
+      return;
+    }
+    if (tweaks.presets.some((p) => p.name === name)) {
+      setPresetError(`Preset "${name}" already exists.`);
+      return;
+    }
+    setTweak('presets', [
+      ...tweaks.presets,
+      {
+        id: `user:${Date.now()}`,
+        name,
+        columns,
+        virtualFields: virtualFields.length > 0 ? virtualFields : undefined,
+        origin: 'user',
+      },
+    ]);
+    cancelPresetForm();
+  };
+
   return (
     <div className="lv-tset-wrap" ref={wrapRef}>
       <button
@@ -195,14 +322,6 @@ export const LvTableSettings = ({
                 </button>
               </div>
             </div>
-            <label className="lv-tset-toggle">
-              <input
-                type="checkbox"
-                checked={tweaks.wrap}
-                onChange={(e) => setTweak('wrap', e.target.checked)}
-              />
-              <span>Wrap message</span>
-            </label>
             <label className="lv-tset-toggle">
               <input
                 type="checkbox"
@@ -243,6 +362,88 @@ export const LvTableSettings = ({
           </div>
           <div className="lv-tset-sep" role="separator" />
           <div className="lv-tset-sec">
+            <div className="lv-tset-sec-title">Presets</div>
+            {tweaks.presets.length === 0 && !presetFormOpen && (
+              <div className="lv-tset-hint">
+                Save the current columns + virtual columns as a named preset to apply on other tabs.
+              </div>
+            )}
+            {tweaks.presets.map((p) => (
+              <div key={p.id} className="lv-colpick-row">
+                <button
+                  type="button"
+                  className="lv-tset-preset-apply"
+                  onClick={() => applyPreset(p.id)}
+                  title={`Apply preset: ${p.columns.length} columns${
+                    p.virtualFields && p.virtualFields.length > 0
+                      ? `, ${p.virtualFields.length} virtual`
+                      : ''
+                  }`}
+                >
+                  {p.name}
+                </button>
+                {p.origin === 'user' && (
+                  <span className="lv-colpick-move">
+                    <button
+                      type="button"
+                      onClick={() => removePreset(p.id)}
+                      title="Delete preset"
+                      aria-label={`Delete preset ${p.name}`}
+                    >
+                      <X size={12} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            ))}
+            {presetFormOpen ? (
+              <div className="lv-tset-vf-form">
+                <label className="lv-tset-vf-field">
+                  <span className="lv-tset-lbl">Preset name</span>
+                  <input
+                    type="text"
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    placeholder="My pino columns"
+                    autoFocus
+                  />
+                </label>
+                {presetError !== null && (
+                  <div className="lv-tset-vf-error" role="alert">
+                    {presetError}
+                  </div>
+                )}
+                <div className="lv-tset-vf-actions">
+                  <button type="button" onClick={cancelPresetForm}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="lv-tset-vf-primary"
+                    onClick={savePreset}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="lv-tset-vf-add"
+                onClick={() => setPresetFormOpen(true)}
+                disabled={columns.length === 0 && virtualFields.length === 0}
+                title={
+                  columns.length === 0 && virtualFields.length === 0
+                    ? 'Configure columns before saving as preset'
+                    : undefined
+                }
+              >
+                + Save current as preset
+              </button>
+            )}
+          </div>
+          <div className="lv-tset-sep" role="separator" />
+          <div className="lv-tset-sec">
             <div className="lv-tset-sec-title">Columns</div>
             {sortedDescriptors.dynamic.length > 0 && (
               <>
@@ -252,6 +453,104 @@ export const LvTableSettings = ({
             )}
             <div className="lv-tset-sub">Source / built-in</div>
             {sortedDescriptors.builtin.map(renderColRow)}
+          </div>
+          <div className="lv-tset-sep" role="separator" />
+          <div className="lv-tset-sec">
+            <div className="lv-tset-sec-title">Virtual columns (regex)</div>
+            {virtualFields.length === 0 && !vfFormOpen && (
+              <div className="lv-tset-hint">
+                Extract a column from <code>raw</code> using a named regex group.
+              </div>
+            )}
+            {virtualFields.map((v) => (
+              <div key={v.key} className="lv-colpick-row is-on">
+                <div className="lv-colpick-label">
+                  <span className="lv-colpick-key">{v.label || v.group}</span>
+                  <span className="lv-colpick-meta" title={v.pattern}>
+                    /{v.pattern.length > 24 ? `${v.pattern.slice(0, 24)}…` : v.pattern}/
+                  </span>
+                </div>
+                <span className="lv-colpick-move">
+                  <button
+                    type="button"
+                    onClick={() => removeVirtualField(v.key)}
+                    title="Remove virtual column"
+                    aria-label={`Remove virtual column ${v.group}`}
+                  >
+                    <X size={12} strokeWidth={1.5} aria-hidden="true" />
+                  </button>
+                </span>
+              </div>
+            ))}
+            {vfFormOpen ? (
+              <div className="lv-tset-vf-form">
+                <label className="lv-tset-vf-field">
+                  <span className="lv-tset-lbl">Label (optional)</span>
+                  <input
+                    type="text"
+                    value={vfLabel}
+                    onChange={(e) => setVfLabel(e.target.value)}
+                    placeholder="status code"
+                  />
+                </label>
+                <label className="lv-tset-vf-field">
+                  <span className="lv-tset-lbl">Regex with (?&lt;name&gt;…)</span>
+                  <input
+                    type="text"
+                    value={vfPattern}
+                    onChange={(e) => setVfPattern(e.target.value)}
+                    placeholder={String.raw`\bstatus=(?<status>\d+)`}
+                    spellCheck={false}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                </label>
+                <div className="lv-tset-row">
+                  <span className="lv-tset-lbl">Match against</span>
+                  <div className="lv-tset-segs">
+                    <button
+                      type="button"
+                      className={`lv-tset-seg${vfTarget === 'raw' ? ' is-on' : ''}`}
+                      onClick={() => setVfTarget('raw')}
+                    >
+                      Raw line
+                    </button>
+                    <button
+                      type="button"
+                      className={`lv-tset-seg${vfTarget === 'message' ? ' is-on' : ''}`}
+                      onClick={() => setVfTarget('message')}
+                    >
+                      Message
+                    </button>
+                  </div>
+                </div>
+                {vfError !== null && (
+                  <div className="lv-tset-vf-error" role="alert">
+                    {vfError}
+                  </div>
+                )}
+                <div className="lv-tset-vf-actions">
+                  <button type="button" onClick={cancelVfForm}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="lv-tset-vf-primary"
+                    onClick={addVirtualField}
+                  >
+                    Add column
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="lv-tset-vf-add"
+                onClick={() => setVfFormOpen(true)}
+              >
+                + Add regex column
+              </button>
+            )}
           </div>
         </div>
       )}

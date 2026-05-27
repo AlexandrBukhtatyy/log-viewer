@@ -25,6 +25,12 @@ import { useSavedSearches } from '../../hooks/use-saved-searches.ts';
 import { useWorkspace, useWorkspaceStore } from '../../hooks/use-workspace.ts';
 import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
 import { LvApp } from '../../ui/components/layout/LvApp.tsx';
+import { resolveActiveColumns } from '../../ui/utils/active-columns.ts';
+import {
+  compileVirtualFields,
+  isVirtualFieldKey,
+  resolveVirtualField,
+} from '../../ui/utils/virtual-fields.ts';
 import type {
   LvGroupBy,
   LvLogKind,
@@ -112,11 +118,12 @@ export const LvAppContainer = () => {
    * `filter.filePaths`; the source itself always lands in `filter.sources`.
    *
    * Folder-level compound ids (`…::sub/`) keep their trailing slash — those
-   * become an `IN` predicate on `JSON_EXTRACT($.file_path)` and would never
-   * match (file paths have no trailing slash). To select all files under a
-   * folder the UI explodes the folder into its file ids upstream
-   * (LvTreeNode toggle); this function only translates whatever is in
-   * `selectedIds` to SQL inputs.
+   * become an `IN` predicate on `entry.file_path` (via the `@file`
+   * field-key) and would never match (file paths have no trailing
+   * slash). To select all files under a folder the UI explodes the
+   * folder into its file ids upstream (LvTreeNode toggle); this
+   * function only translates whatever is in `selectedIds` to SQL
+   * inputs.
    */
   const splitSelection = useCallback(
     (
@@ -234,11 +241,58 @@ export const LvAppContainer = () => {
   // Field schema discovery (ADR-0017) — drives the column picker /
   // group-by picker / filter-on-field popovers.
   const { descriptors: fieldDescriptors } = useFieldSchema();
+  // Per-tab column profile (Phase 1, A+D in
+  // docs/plans/columns-multi-format-impl.md):
+  //  - `'__all__'` aggregate tab → reads/writes the global
+  //    `tweaks.columns` (legacy behavior).
+  //  - Per-file tab → reads from `tab.columns ?? tweaks.columns`,
+  //    writes to `tab.columns` so each file tab keeps its own
+  //    format-specific column set.
+  // `useWorkspaceStore.getState()` reads the live id so the callback
+  // doesn't re-create on every tab switch.
   const onColumnsChange = useCallback(
     (next: ReadonlyArray<{ key: string; label?: string; widthPx: number }>) => {
-      tweaks.setTweak('columns', next);
+      const id = useWorkspaceStore.getState().activeTabId;
+      if (id === '__all__') {
+        tweaks.setTweak('columns', next);
+        return;
+      }
+      setOpenTabs((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, columns: next } : t)),
+      );
     },
-    [tweaks],
+    [tweaks, setOpenTabs],
+  );
+  const activeColumns = useMemo(
+    () => resolveActiveColumns(activeTabId, openTabs, tweaks.columns),
+    [activeTabId, openTabs, tweaks.columns],
+  );
+  // Per-tab virtual fields (Phase 2 of
+  // docs/plans/columns-multi-format-impl.md). Only meaningful for
+  // file tabs — the `__all__` aggregate tab has no parser context and
+  // the column builder is hidden there. Writes go into the active
+  // tab's `virtualFields`, never into the global `tweaks`.
+  const onVirtualFieldsChange = useCallback(
+    (
+      next: ReadonlyArray<{
+        key: string;
+        label?: string;
+        pattern: string;
+        group: string;
+        target?: 'raw' | 'message';
+      }>,
+    ) => {
+      const id = useWorkspaceStore.getState().activeTabId;
+      if (id === '__all__') return;
+      setOpenTabs((prev) =>
+        prev.map((t) =>
+          t.id === id
+            ? { ...t, virtualFields: next.length > 0 ? next : undefined }
+            : t,
+        ),
+      );
+    },
+    [setOpenTabs],
   );
 
   // Phase 2.E: auto-apply parser's `defaultColumns` the first time a
@@ -272,10 +326,33 @@ export const LvAppContainer = () => {
     for (const r of sources) m.set(r.source.id, r);
     return m;
   }, [sources]);
+  // Stable read of the latest `sourceRecordsById` for callbacks (like
+  // `openFileTab`) that shouldn't recreate on every source update.
+  // The ref is synced in an effect — assigning during render violates
+  // the `react-hooks/refs` rule on React 19.
+  const sourceRecordsByIdRef = useRef(sourceRecordsById);
+  useEffect(() => {
+    sourceRecordsByIdRef.current = sourceRecordsById;
+  }, [sourceRecordsById]);
+  // Active tab's virtual fields, compiled once per tab change. Used by
+  // the cell resolver below to evaluate `vf:` keys against entry.raw.
+  const activeVirtualFields = useMemo(() => {
+    if (activeTabId === '__all__') return [];
+    const tab = openTabs.find((t) => t.id === activeTabId);
+    return tab?.virtualFields ?? [];
+  }, [activeTabId, openTabs]);
+  const compiledVirtualFields = useMemo(
+    () => compileVirtualFields(activeVirtualFields),
+    [activeVirtualFields],
+  );
   const cellValueOf = useCallback(
-    (entry: LogEntry, key: string) =>
-      getEntryFieldValue(entry, key, sourceRecordsById.get(entry.sourceId) ?? null),
-    [sourceRecordsById],
+    (entry: LogEntry, key: string) => {
+      if (isVirtualFieldKey(key)) {
+        return resolveVirtualField(entry, key, compiledVirtualFields);
+      }
+      return getEntryFieldValue(entry, key, sourceRecordsById.get(entry.sourceId) ?? null);
+    },
+    [sourceRecordsById, compiledVirtualFields],
   );
   const parserIdOf = useCallback(
     (entry: LogEntry): string | undefined =>
@@ -384,6 +461,20 @@ export const LvAppContainer = () => {
       }
       if (file === null) return;
       const resolved = file;
+      // Phase 1.5: seed `tab.columns` from the source's parser-default
+      // columns when they're already known. For compound ids
+      // (`<sourceId>::<relPath>`) the parser lives on the base source.
+      // If the parser hasn't been resolved yet (drag-n-drop just
+      // happened), the backfill effect below picks it up once the
+      // source reports `parserDefaultColumns`.
+      const sep = rawId.indexOf('::');
+      const baseSrcId = sep === -1 ? rawId : rawId.slice(0, sep);
+      const srcRec = sourceRecordsByIdRef.current.get(baseSrcId as SourceId);
+      const parserCols = srcRec?.parserDefaultColumns ?? [];
+      const initialColumns =
+        parserCols.length > 0
+          ? parserCols.map((k) => ({ key: k, widthPx: 140 }))
+          : undefined;
       setOpenTabs((prev) => {
         if (prev.some((t) => t.id === rawId)) return prev;
         const newTab: LvTab = {
@@ -392,6 +483,7 @@ export const LvAppContainer = () => {
           path: resolved.path,
           kind: resolved.kind,
           isPinned: false,
+          ...(initialColumns ? { columns: initialColumns } : {}),
         };
         // Preview: replace any existing preview slot, otherwise append.
         const previewIdx = prev.findIndex((t) => !t.isPinned);
@@ -404,6 +496,33 @@ export const LvAppContainer = () => {
     },
     [filesById, catalog, setOpenTabs, setActiveTabId],
   );
+
+  // Phase 1.5 backfill: tabs opened before their source's parser was
+  // resolved (or restored from localStorage on reload) end up with
+  // `columns === undefined`. Once `parserDefaultColumns` becomes
+  // available, populate `tab.columns` once. Subsequent user edits
+  // (`onColumnsChange`) override and aren't re-stamped because
+  // `t.columns` is then defined.
+  useEffect(() => {
+    setOpenTabs((prev) => {
+      let mutated = false;
+      const next = prev.map((t) => {
+        if (t.id === '__all__') return t;
+        if (t.columns !== undefined) return t;
+        const sep = t.id.indexOf('::');
+        const baseSrcId = sep === -1 ? t.id : t.id.slice(0, sep);
+        const srcRec = sourceRecordsById.get(baseSrcId as SourceId);
+        const parserCols = srcRec?.parserDefaultColumns ?? [];
+        if (parserCols.length === 0) return t;
+        mutated = true;
+        return {
+          ...t,
+          columns: parserCols.map((k) => ({ key: k, widthPx: 140 })),
+        };
+      });
+      return mutated ? next : prev;
+    });
+  }, [sourceRecordsById, setOpenTabs]);
 
   const pinTab = useCallback(
     (tabId: string) => {
@@ -830,7 +949,6 @@ export const LvAppContainer = () => {
       tweaks={{
         theme: tweaks.theme,
         density: tweaks.density,
-        wrap: tweaks.wrap,
         showDate: tweaks.showDate,
         accent: tweaks.accent,
         timelineOn: tweaks.timelineOn,
@@ -838,6 +956,7 @@ export const LvAppContainer = () => {
         sidebarCollapsed: tweaks.sidebarCollapsed,
         columns: tweaks.columns,
         gutterMode: tweaks.gutterMode,
+        presets: tweaks.presets,
       }}
       setTweak={setTweak}
       bookmarks={bookmarksHook.ids as ReadonlySet<string>}
@@ -858,8 +977,10 @@ export const LvAppContainer = () => {
       groupField={groupField}
       onGroupDrillDown={onGroupDrillDown}
       fieldDescriptors={fieldDescriptors}
-      columns={tweaks.columns}
+      columns={activeColumns}
       onColumnsChange={onColumnsChange}
+      virtualFields={activeVirtualFields}
+      onVirtualFieldsChange={onVirtualFieldsChange}
       cellValueOf={cellValueOf}
       parserIdOf={parserIdOf}
       onExport={onExport}

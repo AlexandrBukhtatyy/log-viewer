@@ -260,7 +260,7 @@ export class OpfsSingleSpoolReader implements SourceBlobReader {
  * Reader for snapshot-archive members. The adapter wrote each archive
  * member as its own file under `lv-spool/<sourceId>/`, with `/` collapsed
  * into `__` (see `flattenArchiveMemberName`). Frames carry the original
- * member name so the sidebar / `entry.fields.file_path` stay readable; the
+ * member name so the sidebar / `entry.filePath` stay readable; the
  * reader does the un-flatten transparently.
  */
 export class OpfsArchiveSpoolReader implements SourceBlobReader {

@@ -84,14 +84,6 @@ export const LvSettingsPopover = ({
           <label className="lv-settings-check">
             <input
               type="checkbox"
-              checked={tweaks.wrap}
-              onChange={(e) => setTweak('wrap', e.target.checked)}
-            />
-            <span>Wrap long lines</span>
-          </label>
-          <label className="lv-settings-check">
-            <input
-              type="checkbox"
               checked={tweaks.showDate}
               onChange={(e) => setTweak('showDate', e.target.checked)}
             />

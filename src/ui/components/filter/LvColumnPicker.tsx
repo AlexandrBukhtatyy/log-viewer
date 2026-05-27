@@ -3,6 +3,7 @@ import type {
   FieldDescriptor,
 } from '../../../core/filter/field-descriptor.ts';
 import type { LvColumnPref } from '../../contracts/lv-types.ts';
+import { builtInColumn } from '../../contracts/lv-column-registry.tsx';
 
 const DEFAULT_WIDTH_PX = 140;
 
@@ -57,7 +58,8 @@ export const LvColumnPicker = ({ columns, descriptors, onChange }: LvColumnPicke
     if (selectedKeys.has(key)) {
       onChange(columns.filter((c) => c.key !== key));
     } else {
-      onChange([...columns, { key, widthPx: DEFAULT_WIDTH_PX }]);
+      const widthPx = builtInColumn(key)?.defaultWidthPx ?? DEFAULT_WIDTH_PX;
+      onChange([...columns, { key, widthPx }]);
     }
   };
 
