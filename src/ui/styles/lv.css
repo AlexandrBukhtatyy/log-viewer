@@ -1562,6 +1562,13 @@ button{font-family:inherit}
 }
 .lv-group-search-item.is-sys{background:rgba(189,147,249,.05)}
 .lv-group-search-item.is-sys.is-active{background:rgba(189,147,249,.12)}
+.lv-group-search-section{
+  padding:4px 8px 2px;
+  font-family:var(--lv-font-ui); font-size:10px;
+  font-weight:600; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--lv-fg-3); background:var(--lv-bg-2);
+  position:sticky; top:0;
+}
 .lv-group-search-meta{
   color:var(--lv-fg-3); font-family:var(--lv-font-mono); font-size:10px;
   flex-shrink:0;

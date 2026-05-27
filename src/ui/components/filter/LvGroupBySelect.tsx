@@ -19,10 +19,10 @@ const labelFor = (
   return d?.label || key;
 };
 
-const sortDescriptors = (
-  descriptors: ReadonlyArray<FieldDescriptor>,
+const sortDynamic = (
+  list: ReadonlyArray<FieldDescriptor>,
 ): ReadonlyArray<FieldDescriptor> => {
-  const dyn = descriptors.filter((d) => d.origin === 'dynamic').slice();
+  const dyn = list.slice();
   dyn.sort((a, b) => {
     const aRate = a.presenceRate ?? 0;
     const bRate = b.presenceRate ?? 0;
@@ -32,8 +32,7 @@ const sortDescriptors = (
     if (aOcc !== bOcc) return bOcc - aOcc;
     return a.key.localeCompare(b.key);
   });
-  const builtin = descriptors.filter((d) => d.origin === 'builtin');
-  return [...dyn, ...builtin];
+  return dyn;
 };
 
 /**
@@ -93,18 +92,53 @@ export const LvGroupBySelect = ({
     setHighlightedIdx(0);
   };
 
-  const sorted = useMemo(() => sortDescriptors(descriptors), [descriptors]);
+  // Two sections in the group-by dropdown (per user request):
+  //   1. System variables — built-in `@`-keys. Universal, always visible.
+  //   2. Log fields — dynamic keys gathered from the actively opened
+  //      sources (the multi-select aggregate tab uses the union of
+  //      selected sources; a single file tab uses just that source).
+  // Built-ins live in `descriptors` regardless of source presence;
+  // dynamic keys are filtered down by whether they appear in at least
+  // one active source. When the user hasn't picked any source we don't
+  // restrict — same fallback as the column picker.
+  const builtinDescriptors = useMemo(
+    () => descriptors.filter((d) => d.origin === 'builtin'),
+    [descriptors],
+  );
+  const dynamicDescriptors = useMemo(() => {
+    const dyn = descriptors.filter((d) => d.origin === 'dynamic');
+    if (activeIds.length === 0) return sortDynamic(dyn);
+    const inActive = dyn.filter((d) => compatOf(d, activeIds).presentIn > 0);
+    return sortDynamic(inActive);
+  }, [descriptors, activeIds]);
 
-  const filtered = useMemo(() => {
+  const matchesQuery = (d: FieldDescriptor, q: string): boolean =>
+    d.key.toLowerCase().includes(q) ||
+    (d.label ?? '').toLowerCase().includes(q);
+
+  const filteredDynamic = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q === '') return sorted;
-    return sorted.filter((d) => {
-      return (
-        d.key.toLowerCase().includes(q) ||
-        (d.label ?? '').toLowerCase().includes(q)
-      );
-    });
-  }, [sorted, query]);
+    if (q === '') return dynamicDescriptors;
+    return dynamicDescriptors.filter((d) => matchesQuery(d, q));
+  }, [dynamicDescriptors, query]);
+  const filteredBuiltin = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q === '') return builtinDescriptors;
+    return builtinDescriptors.filter((d) => matchesQuery(d, q));
+  }, [builtinDescriptors, query]);
+
+  // Flat order for keyboard navigation — dynamic first, builtins
+  // after. Section headers are rendered between the two groups but
+  // they don't take an index slot.
+  const filtered = useMemo(
+    () => [...filteredDynamic, ...filteredBuiltin],
+    [filteredDynamic, filteredBuiltin],
+  );
+
+  const sorted = useMemo(
+    () => [...dynamicDescriptors, ...builtinDescriptors],
+    [dynamicDescriptors, builtinDescriptors],
+  );
 
   // Derived clamp — never trust raw `highlightedIdx` against the
   // currently filtered list (changes synchronously when query updates).
@@ -283,33 +317,52 @@ export const LvGroupBySelect = ({
                         const on = active.includes(d.key);
                         const isHi = idx === effectiveIdx;
                         const isSys = d.origin === 'builtin';
+                        const c = compatOf(d, activeIds);
+                        const compatTxt = compatBadgeText(c, sourceNameById);
+                        // Section headers: the first dynamic item and
+                        // the first builtin item each emit one. Built-
+                        // ins always live after dynamics in `filtered`
+                        // so the heading order is stable.
+                        const isFirstDynamic =
+                          !isSys && idx === 0;
+                        const isFirstBuiltin =
+                          isSys && idx === filteredDynamic.length;
                         return (
-                          <div
-                            key={d.key}
-                            role="option"
-                            aria-selected={on}
-                            className={
-                              'lv-group-search-item' +
-                              (isHi ? ' is-active' : '') +
-                              (on ? ' is-on' : '') +
-                              (isSys ? ' is-sys' : '')
-                            }
-                            onMouseEnter={() => setHighlightedIdx(idx)}
-                            // Use mousedown so the click lands before
-                            // the input's blur cancels the dropdown.
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              toggle(d.key);
-                            }}
-                          >
-                            <span className="lv-group-search-key">
-                              {isSys && <span className="lv-group-search-sys">{d.key}</span>}
-                              {d.label || d.key}
-                            </span>
-                            {(() => {
-                              const c = compatOf(d, activeIds);
-                              const txt = compatBadgeText(c, sourceNameById);
-                              return txt !== null ? (
+                          <div key={d.key} className="lv-group-search-row">
+                            {isFirstDynamic && (
+                              <div className="lv-group-search-section">
+                                Fields from open logs
+                              </div>
+                            )}
+                            {isFirstBuiltin && (
+                              <div className="lv-group-search-section">
+                                System variables
+                              </div>
+                            )}
+                            <div
+                              role="option"
+                              aria-selected={on}
+                              className={
+                                'lv-group-search-item' +
+                                (isHi ? ' is-active' : '') +
+                                (on ? ' is-on' : '') +
+                                (isSys ? ' is-sys' : '')
+                              }
+                              onMouseEnter={() => setHighlightedIdx(idx)}
+                              // Use mousedown so the click lands before
+                              // the input's blur cancels the dropdown.
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                toggle(d.key);
+                              }}
+                            >
+                              <span className="lv-group-search-key">
+                                {isSys && (
+                                  <span className="lv-group-search-sys">{d.key}</span>
+                                )}
+                                {d.label || d.key}
+                              </span>
+                              {compatTxt !== null && (
                                 <span
                                   className={`lv-fld-compat lv-fld-compat-${c.kind}`}
                                   title={
@@ -320,15 +373,15 @@ export const LvGroupBySelect = ({
                                       : `Field present in ${c.presentIn} of ${c.total} active sources`
                                   }
                                 >
-                                  {txt}
+                                  {compatTxt}
                                 </span>
-                              ) : null;
-                            })()}
-                            <span className="lv-group-search-meta">
-                              {d.origin === 'dynamic' && d.presenceRate !== undefined
-                                ? `${Math.round(d.presenceRate * 100)}%`
-                                : d.type}
-                            </span>
+                              )}
+                              <span className="lv-group-search-meta">
+                                {d.origin === 'dynamic' && d.presenceRate !== undefined
+                                  ? `${Math.round(d.presenceRate * 100)}%`
+                                  : d.type}
+                              </span>
+                            </div>
                           </div>
                         );
                       })}
