@@ -9,6 +9,7 @@ import type {
   LvFileNode,
   LvFolderNode,
   LvLogKind,
+  LvNode,
   LvSourceKind,
 } from '../contracts/lv-types.ts';
 
@@ -195,6 +196,27 @@ export const filesByIdFromSources = (
 ): Record<string, LvFileNode> => {
   const out: Record<string, LvFileNode> = {};
   for (const rec of sources) out[rec.source.id] = fileNodeFromSource(rec);
+  return out;
+};
+
+/**
+ * Walk the catalog tree depth-first and return every file-leaf id.
+ * Used by:
+ *   - sidebar "Select all" + total-count (replaces the broken
+ *     `Object.keys(filesById)` path that missed files inside
+ *     directory-source subtrees);
+ *   - folder-row tristate checkbox: which descendant files to flip
+ *     on click.
+ */
+export const collectAllFileIds = (
+  nodes: ReadonlyArray<LvNode>,
+): string[] => {
+  const out: string[] = [];
+  const walk = (n: LvNode): void => {
+    if (n.type === 'file') out.push(n.id);
+    else n.children.forEach(walk);
+  };
+  nodes.forEach(walk);
   return out;
 };
 

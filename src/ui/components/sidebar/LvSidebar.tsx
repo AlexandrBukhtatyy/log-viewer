@@ -1,16 +1,15 @@
 import { useMemo, useState } from 'react';
 import type {
   LvCatalogRoot,
-  LvFileNode,
   LvNode,
   LvSourceKind,
 } from '../../contracts/lv-types.ts';
+import { collectAllFileIds } from '../../utils/build-catalog.ts';
 import { LvSearchInput } from '../common/LvSearchInput.tsx';
 import { LvTreeNode } from './LvTreeNode.tsx';
 
 export interface LvSidebarProps {
   readonly catalog: ReadonlyArray<LvCatalogRoot>;
-  readonly filesById: Readonly<Record<string, LvFileNode>>;
   /**
    * False until the coordinator delivers its first sources snapshot.
    * Drives the "Loading sources…" skeleton so the user doesn't think
@@ -34,7 +33,6 @@ export interface LvSidebarProps {
 
 export const LvSidebar = ({
   catalog,
-  filesById,
   sourcesHydrated,
   selectedIds,
   setSelectedIds,
@@ -70,7 +68,24 @@ export const LvSidebar = ({
     });
   };
 
-  const selectAll = () => setSelectedIds(() => new Set(Object.keys(filesById)));
+  const toggleFolderSelect = (
+    fileIds: ReadonlyArray<string>,
+    shouldSelect: boolean,
+  ) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (shouldSelect) for (const id of fileIds) next.add(id);
+      else for (const id of fileIds) next.delete(id);
+      return next;
+    });
+  };
+
+  // Every selectable id in the catalog tree, including compound
+  // `<sourceId>::<relPath>` entries for files inside directory sources.
+  // Drives Select all + the toolbar counter.
+  const allFileIds = useMemo(() => collectAllFileIds(catalog), [catalog]);
+
+  const selectAll = () => setSelectedIds(() => new Set(allFileIds));
   const clearAll = () => setSelectedIds(() => new Set());
 
   const filteredRoots = useMemo<LvCatalogRoot[]>(() => {
@@ -138,7 +153,7 @@ export const LvSidebar = ({
         </button>
         <span className="lv-sb-tb-spacer" />
         <span className="lv-sb-count">
-          {selectedIds.size}/{Object.keys(filesById).length}
+          {selectedIds.size}/{allFileIds.length}
         </span>
       </div>
 
@@ -196,6 +211,7 @@ export const LvSidebar = ({
               selectedIds={selectedIds}
               openFolders={effectiveOpen}
               toggleSelect={toggleSelect}
+              toggleFolderSelect={toggleFolderSelect}
               onOpenFile={onOpenFile}
               onToggleFolder={toggleFolder}
               onRemoveRoot={onRemoveRoot}

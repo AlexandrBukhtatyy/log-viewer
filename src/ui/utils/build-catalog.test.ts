@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { SourceId, SourceRecord } from '../../core/types/index.ts';
-import { buildCatalogTree, filesByIdFromSources } from './build-catalog.ts';
+import {
+  buildCatalogTree,
+  collectAllFileIds,
+  filesByIdFromSources,
+} from './build-catalog.ts';
 
 const fileSource = (id: string, name: string): SourceRecord => ({
   source: {
@@ -150,5 +154,87 @@ describe('filesByIdFromSources', () => {
     expect(Object.keys(map).sort()).toEqual(['s-1', 's-2']);
     expect(map['s-1']?.name).toBe('a.log');
     expect(map['s-2']?.live).toBe(true);
+  });
+});
+
+describe('collectAllFileIds', () => {
+  it('empty catalog yields empty list', () => {
+    expect(collectAllFileIds([])).toEqual([]);
+  });
+
+  it('flat sources contribute their root id', () => {
+    const tree = buildCatalogTree([
+      fileSource('s-1', 'a.log'),
+      streamSource('s-2', 'kafka'),
+    ]);
+    expect(collectAllFileIds(tree)).toEqual(['s-1', 's-2']);
+  });
+
+  it('directory source without walked tree falls back to its flat root id', () => {
+    const tree = buildCatalogTree([directorySource('s-1', 'logs')]);
+    expect(collectAllFileIds(tree)).toEqual(['s-1']);
+  });
+
+  it('directory source with walked tree returns compound file ids only', () => {
+    const directoryTrees = {
+      's-1': {
+        id: 's-1',
+        type: 'folder' as const,
+        name: 'logs',
+        children: [
+          {
+            id: 's-1::a.log',
+            type: 'file' as const,
+            name: 'a.log',
+            kind: 'app' as const,
+          },
+          {
+            id: 's-1::sub',
+            type: 'folder' as const,
+            name: 'sub',
+            children: [
+              {
+                id: 's-1::sub/b.log',
+                type: 'file' as const,
+                name: 'b.log',
+                kind: 'app' as const,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const tree = buildCatalogTree(
+      [directorySource('s-1', 'logs')],
+      directoryTrees,
+    );
+    expect(collectAllFileIds(tree)).toEqual(['s-1::a.log', 's-1::sub/b.log']);
+  });
+
+  it('mixed catalog (flat + directory) preserves DFS order', () => {
+    const directoryTrees = {
+      'd-1': {
+        id: 'd-1',
+        type: 'folder' as const,
+        name: 'logs',
+        children: [
+          {
+            id: 'd-1::a.log',
+            type: 'file' as const,
+            name: 'a.log',
+            kind: 'app' as const,
+          },
+        ],
+      },
+    };
+    const tree = buildCatalogTree(
+      [
+        fileSource('f-1', 'top.log'),
+        directorySource('d-1', 'logs'),
+        streamSource('s-1', 'kafka'),
+      ],
+      directoryTrees,
+    );
+    expect(collectAllFileIds(tree)).toEqual(['f-1', 'd-1::a.log', 's-1']);
   });
 });

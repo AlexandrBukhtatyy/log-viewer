@@ -1,4 +1,5 @@
 import type { LvNode } from '../../contracts/lv-types.ts';
+import { collectAllFileIds } from '../../utils/build-catalog.ts';
 import { LvChevron } from './LvChevron.tsx';
 import { LvFileIcon } from './LvFileIcon.tsx';
 import { LvRootBadge } from './LvRootBadge.tsx';
@@ -10,6 +11,13 @@ export interface LvTreeNodeProps {
   readonly selectedIds: ReadonlySet<string>;
   readonly openFolders: Readonly<Record<string, boolean>>;
   toggleSelect: (id: string) => void;
+  /**
+   * Flip every descendant file id of a folder at once. `shouldSelect`
+   * is the desired post-click state (true → add all, false → remove all);
+   * tristate UX convention: indeterminate ('some') click selects everything,
+   * 'all' click clears everything.
+   */
+  toggleFolderSelect: (fileIds: ReadonlyArray<string>, shouldSelect: boolean) => void;
   /**
    * Open the file as a pinned tab. Fires on row click; the checkbox
    * column on the right edge handles selection independently. Folders
@@ -30,17 +38,13 @@ export interface LvTreeNodeProps {
   onCancelSource?: (id: string) => void;
 }
 
-const collectFileIds = (node: LvNode, out: string[]): void => {
-  if (node.type === 'file') out.push(node.id);
-  else node.children.forEach((c) => collectFileIds(c, out));
-};
-
 export const LvTreeNode = ({
   node,
   depth,
   selectedIds,
   openFolders,
   toggleSelect,
+  toggleFolderSelect,
   onOpenFile,
   onToggleFolder,
   onRemoveRoot,
@@ -58,12 +62,12 @@ export const LvTreeNode = ({
   const selected = !isFolder && selectedIds.has(node.id);
 
   let folderState: 'all' | 'some' | 'none' = 'none';
+  let folderFileIds: ReadonlyArray<string> = [];
   if (isFolder) {
-    const descendants: string[] = [];
-    collectFileIds(node, descendants);
-    const total = descendants.length;
-    const picked = descendants.filter((id) => selectedIds.has(id)).length;
-    folderState = picked === 0 ? 'none' : picked === total ? 'all' : 'some';
+    folderFileIds = collectAllFileIds([node]);
+    const total = folderFileIds.length;
+    const picked = folderFileIds.filter((id) => selectedIds.has(id)).length;
+    folderState = total === 0 ? 'none' : picked === 0 ? 'none' : picked === total ? 'all' : 'some';
   }
 
   return (
@@ -123,9 +127,51 @@ export const LvTreeNode = ({
               />
             )}
             {node.root && <LvRootBadge node={node} />}
-            {folderState !== 'none' && (
-              <span className={`lv-tree-pick lv-tree-pick-${folderState}`} aria-label="selected">
-                {folderState === 'all' ? '●' : '◐'}
+            {folderFileIds.length > 0 && (
+              <span
+                className={`lv-tree-check${folderState === 'all' ? ' is-on' : ''}${
+                  folderState === 'some' ? ' is-indeterminate' : ''
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFolderSelect(folderFileIds, folderState !== 'all');
+                }}
+                aria-label={
+                  folderState === 'all'
+                    ? 'Deselect all files in folder'
+                    : 'Select all files in folder'
+                }
+                role="checkbox"
+                aria-checked={
+                  folderState === 'all'
+                    ? true
+                    : folderState === 'some'
+                      ? 'mixed'
+                      : false
+                }
+              >
+                {folderState === 'all' ? (
+                  <svg viewBox="0 0 10 10" width="10" height="10">
+                    <path
+                      d="M2 5 L4.3 7.3 L8 3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : folderState === 'some' ? (
+                  <svg viewBox="0 0 10 10" width="10" height="10">
+                    <path
+                      d="M2.5 5 L7.5 5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                ) : null}
               </span>
             )}
             {node.root && onRemoveRoot && (
@@ -253,6 +299,7 @@ export const LvTreeNode = ({
             selectedIds={selectedIds}
             openFolders={openFolders}
             toggleSelect={toggleSelect}
+            toggleFolderSelect={toggleFolderSelect}
             onOpenFile={onOpenFile}
             onToggleFolder={onToggleFolder}
             onRemoveRoot={onRemoveRoot}
