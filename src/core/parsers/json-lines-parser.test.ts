@@ -97,13 +97,15 @@ describe('jsonLinesParser', () => {
       expect(ms.entry?.timestamp).toBe(1700000000_123);
     });
 
-    it('puts non-well-known JSON keys into fields', () => {
+    it('mirrors the full JSON object into fields (including well-known keys)', () => {
       const ctx = makeCtx();
       const r = jsonLinesParser.parseLine(
         '{"level":"info","msg":"x","userId":42,"req":{"path":"/a"}}',
         ctx,
       );
       expect(r.entry?.fields).toEqual({
+        level: 'info',
+        msg: 'x',
         userId: 42,
         req: { path: '/a' },
       });

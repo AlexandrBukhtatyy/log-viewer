@@ -21,13 +21,16 @@ export interface LogEntry {
   /** Reconstructed by the read-path on demand from the underlying byte range. */
   readonly raw: string;
   /**
-   * Structured data extracted **from the log line itself** — JSON keys
-   * (minus the well-known timestamp/level/message ones), regex named
-   * groups (`status`, `remote_addr`, …), or positional `$0/$1/…`
-   * tokens for plain-text lines. Never carries application-side
-   * metadata: timestamps, levels, source ids, file paths, parser
-   * names and other `@`-namespace attributes live on `LogEntry`
-   * itself and are surfaced through the Meta tab (see ADR-0028).
+   * Structured data extracted **from the log line itself** — for JSON
+   * logs this is the full object as it appeared on the wire
+   * (including well-known `time`/`level`/`msg` keys that are also
+   * lifted onto `timestamp`/`level`/`message` for indexing); for
+   * regex-based parsers it's the named groups (`status`,
+   * `remote_addr`, …); for plain-text lines it's positional
+   * `$0/$1/…` tokens. Never carries application-side metadata:
+   * source ids, file paths, parser names and other `@`-namespace
+   * attributes live on `LogEntry` itself and are surfaced through
+   * the Meta tab (see ADR-0028).
    */
   readonly fields: Readonly<Record<string, unknown>>;
   /**

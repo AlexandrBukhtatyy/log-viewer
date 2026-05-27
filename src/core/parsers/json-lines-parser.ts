@@ -18,16 +18,6 @@ const pickField = (
   return undefined;
 };
 
-const stripWellKnown = (
-  obj: Record<string, unknown>,
-): Record<string, unknown> => {
-  const out: Record<string, unknown> = { ...obj };
-  for (const k of TS_KEYS) delete out[k];
-  for (const k of LEVEL_KEYS) delete out[k];
-  for (const k of MSG_KEYS) delete out[k];
-  return out;
-};
-
 export const jsonLinesParser: LogParser = {
   id: 'json-lines',
 
@@ -62,6 +52,12 @@ export const jsonLinesParser: LogParser = {
           ? ''
           : JSON.stringify(messageRaw);
 
+    // `fields` mirrors the JSON object as it appeared on the wire —
+    // including well-known keys (`time`, `level`, `msg`, …). Users
+    // expect Fields to show everything the line carried; the lifted
+    // `timestamp`/`level`/`message` properties on `LogEntry` are a
+    // convenience for indexing and the fixed columns, not a reason
+    // to hide data from the detail view.
     return {
       entry: {
         id: ctx.nextId(),
@@ -71,7 +67,7 @@ export const jsonLinesParser: LogParser = {
         level,
         message,
         raw: line,
-        fields: stripWellKnown(obj),
+        fields: { ...obj },
       },
       confidence: 0.9,
     };
