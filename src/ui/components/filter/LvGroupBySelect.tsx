@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { LvGroupBy } from '../../contracts/lv-types.ts';
 import { compatBadgeText, compatOf } from '../../utils/field-compatibility.ts';
+import { isPresentInActiveSources } from '../../utils/field-presence.ts';
 
 export interface LvGroupBySelectProps {
   readonly value: ReadonlyArray<LvGroupBy>;
@@ -34,6 +35,7 @@ const sortDynamic = (
   });
   return dyn;
 };
+
 
 /**
  * Group-by picker — classic combobox: a closed field with a chevron,
@@ -108,7 +110,7 @@ export const LvGroupBySelect = ({
   const dynamicDescriptors = useMemo(() => {
     const dyn = descriptors.filter((d) => d.origin === 'dynamic');
     if (activeIds.length === 0) return sortDynamic(dyn);
-    const inActive = dyn.filter((d) => compatOf(d, activeIds).presentIn > 0);
+    const inActive = dyn.filter((d) => isPresentInActiveSources(d, activeIds));
     return sortDynamic(inActive);
   }, [descriptors, activeIds]);
 

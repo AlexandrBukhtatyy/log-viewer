@@ -11,6 +11,7 @@ import type {
 import { VF_KEY_PREFIX } from '../../utils/virtual-fields.ts';
 import { builtInColumn } from '../../contracts/lv-column-registry.tsx';
 import { compatBadgeText, compatOf } from '../../utils/field-compatibility.ts';
+import { isPresentInActiveSources } from '../../utils/field-presence.ts';
 
 const DEFAULT_WIDTH_PX = 140;
 
@@ -94,12 +95,19 @@ export const LvTableSettings = ({
 
   const selectedKeys = useMemo(() => new Set(columns.map((c) => c.key)), [columns]);
 
-  // Same ordering rule as LvColumnPicker — dynamic descriptors by
-  // presenceRate DESC first, then built-ins in catalog order. Kept
-  // local so this component stays a leaf and doesn't pull in helpers.
+  // Dynamic descriptors are filtered down to the active sources so a
+  // single-file tab doesn't list keys from other files (`bytes_sent`
+  // on a pino tab, `$0` from a plain-text source, etc). Empty
+  // `activeIds` is the "no source picked yet" path — show everything
+  // so an empty selection isn't blank. Built-ins are universal.
+  // Sorting: by presenceRate DESC; builtins follow in catalog order.
   const sortedDescriptors = useMemo(() => {
-    const dyn = descriptors.filter((d) => d.origin === 'dynamic').slice();
-    dyn.sort((a, b) => {
+    const dyn = descriptors.filter((d) => d.origin === 'dynamic');
+    const scoped =
+      activeIds.length === 0
+        ? dyn
+        : dyn.filter((d) => isPresentInActiveSources(d, activeIds));
+    const sorted = scoped.slice().sort((a, b) => {
       const aRate = a.presenceRate ?? 0;
       const bRate = b.presenceRate ?? 0;
       if (aRate !== bRate) return bRate - aRate;
@@ -109,8 +117,8 @@ export const LvTableSettings = ({
       return a.key.localeCompare(b.key);
     });
     const builtin = descriptors.filter((d) => d.origin === 'builtin');
-    return { dynamic: dyn, builtin };
-  }, [descriptors]);
+    return { dynamic: sorted, builtin };
+  }, [descriptors, activeIds]);
 
   const toggle = (key: string): void => {
     if (selectedKeys.has(key)) {
