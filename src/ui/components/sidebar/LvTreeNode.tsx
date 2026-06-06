@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { LvNode } from '../../contracts/lv-types.ts';
 import { collectAllFileIds } from '../../utils/build-catalog.ts';
 import { LvChevron } from './LvChevron.tsx';
@@ -61,6 +62,26 @@ export const LvTreeNode = ({
     : false;
   const selected = !isFolder && selectedIds.has(node.id);
 
+  // Right-click context menu for root sources/folders — replaces the
+  // always-visible ✕ button. Closed by Escape, outside click, or after
+  // any of the actions runs.
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (ctxMenu === null) return;
+    const close = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('scroll', close, true);
+    };
+  }, [ctxMenu]);
+
   let folderState: 'all' | 'some' | 'none' = 'none';
   let folderFileIds: ReadonlyArray<string> = [];
   if (isFolder) {
@@ -81,6 +102,12 @@ export const LvTreeNode = ({
           } else {
             onOpenFile(node.id);
           }
+        }}
+        onContextMenu={(e) => {
+          if (!node.root || !onRemoveRoot) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setCtxMenu({ x: e.clientX, y: e.clientY });
         }}
       >
         <span className="lv-tree-chevron">
@@ -174,19 +201,6 @@ export const LvTreeNode = ({
                 ) : null}
               </span>
             )}
-            {node.root && onRemoveRoot && (
-              <button
-                className="lv-root-x"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemoveRoot(node.id);
-                }}
-                title="Remove folder from workspace"
-                aria-label="Remove folder"
-              >
-                ✕
-              </button>
-            )}
           </>
         ) : (
           <>
@@ -273,22 +287,31 @@ export const LvTreeNode = ({
                 </svg>
               ) : null}
             </span>
-            {node.root && onRemoveRoot && (
-              <button
-                className="lv-root-x"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemoveRoot(node.id);
-                }}
-                title="Remove source from workspace"
-                aria-label="Remove source"
-              >
-                ✕
-              </button>
-            )}
           </>
         )}
       </div>
+      {ctxMenu !== null && node.root && onRemoveRoot && (
+        <div
+          className="lv-ctx-menu"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          role="menu"
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            type="button"
+            className="lv-ctx-menu-item lv-ctx-menu-danger"
+            role="menuitem"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCtxMenu(null);
+              onRemoveRoot(node.id);
+            }}
+          >
+            {isFolder ? 'Remove folder' : 'Remove source'}
+          </button>
+        </div>
+      )}
       {node.type === 'folder' &&
         open &&
         node.children.map((c) => (

@@ -654,15 +654,25 @@ button{font-family:inherit}
   color:var(--lv-level-error);
 }
 
-.lv-root-x{
-  width:16px; height:16px; padding:0; border:0; border-radius:3px;
-  background:transparent; color:var(--lv-fg-3); cursor:pointer;
-  font-size:11px; line-height:1; opacity:0; transition:opacity .12s, color .12s, background .12s;
-  flex:none;
-}
-.lv-tree-row.is-root:hover .lv-root-x{opacity:1}
-.lv-root-x:hover{background:var(--lv-bg-hover); color:var(--lv-level-error)}
 .lv-tlink-add{color:var(--lv-accent)}
+
+/* Right-click context menu on root tree nodes — replaces the previous
+   always-visible ✕ button. */
+.lv-ctx-menu{
+  position:fixed; z-index:1000; min-width:160px;
+  background:var(--lv-bg-1); color:var(--lv-fg);
+  border:1px solid var(--lv-border); border-radius:5px;
+  box-shadow:0 4px 16px rgba(0,0,0,.35);
+  padding:4px 0;
+}
+.lv-ctx-menu-item{
+  display:block; width:100%; padding:6px 12px; text-align:left;
+  background:transparent; color:var(--lv-fg); border:0;
+  font-family:var(--lv-font-ui); font-size:12px; cursor:pointer;
+}
+.lv-ctx-menu-item:hover{background:var(--lv-bg-hover)}
+.lv-ctx-menu-danger{color:var(--lv-level-error, #e57373)}
+.lv-ctx-menu-danger:hover{background:rgba(229,115,115,.15)}
 
 /* Add Source full-width button */
 .lv-sb-cta{padding:8px 10px 6px; position:relative}
