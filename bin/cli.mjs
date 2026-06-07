@@ -239,7 +239,13 @@ process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.on('SIGINT', () => shutdown('SIGINT'))
 
 server.listen(PORT, HOST, () => {
-  console.log(`log-viewer listening on http://${HOST}:${PORT}`)
+  // 0.0.0.0/::/blank mean "bind all interfaces" — they are not browsable.
+  // Show localhost as the primary clickable URL, and the wildcard as
+  // "network" so users behind Docker/LAN still see what to reach.
+  const wildcard = HOST === '0.0.0.0' || HOST === '::' || HOST === ''
+  const primary = wildcard ? 'localhost' : HOST
+  console.log(`log-viewer listening on http://${primary}:${PORT}`)
+  if (wildcard) console.log(`  network: http://${HOST}:${PORT}`)
   console.log(`  static root: ${ROOT}`)
   if (NO_SW) console.log('  service-worker: disabled (--no-sw)')
 })
