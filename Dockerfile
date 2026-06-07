@@ -29,7 +29,7 @@ ARG NPM_REGISTRY
 WORKDIR /opt
 RUN npm install --prefix /opt --omit=dev --no-fund --no-audit \
       --registry="${NPM_REGISTRY}" \
-      "@abukhtatyy/log-viewer@${PKG_VERSION}" \
+      "@log-viewer/app@${PKG_VERSION}" \
  && npm cache clean --force
 
 # ── runtime stage ─────────────────────────────────────────────────────────
@@ -48,5 +48,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
 
-ENTRYPOINT ["node", "/opt/node_modules/@abukhtatyy/log-viewer/bin/cli.mjs"]
+ENTRYPOINT ["node", "/opt/node_modules/@log-viewer/app/bin/cli.mjs"]
 CMD []

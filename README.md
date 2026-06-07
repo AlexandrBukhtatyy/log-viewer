@@ -46,19 +46,19 @@ pnpm gen:fixtures   # сгенерировать sample-логи в .tmp/ (см.
 
 ## On-prem развёртывание
 
-Помимо публичной сборки на GitHub Pages, log-viewer публикуется как npm-пакет [`@abukhtatyy/log-viewer`](https://www.npmjs.com/package/@abukhtatyy/log-viewer) — для использования внутри закрытых корпоративных контуров без интернета. Пакет содержит собранную PWA и встроенный HTTP-сервер (`bin/cli.mjs`, без runtime-зависимостей), готовый к запуску за reverse proxy с TLS.
+Помимо публичной сборки на GitHub Pages, log-viewer публикуется как npm-пакет [`@log-viewer/app`](https://www.npmjs.com/package/@log-viewer/app) — для использования внутри закрытых корпоративных контуров без интернета. Пакет содержит собранную PWA и встроенный HTTP-сервер (`bin/cli.mjs`, без runtime-зависимостей), готовый к запуску за reverse proxy с TLS.
 
 Подробное обоснование решения — [ADR-0029](docs/adr/0029-on-prem-npm-package-distribution.md).
 
 ### Локально
 
 ```bash
-npx @abukhtatyy/log-viewer --port 8080
+npx @log-viewer/app --port 8080
 # или
-pnpm dlx @abukhtatyy/log-viewer --port 8080
+pnpm dlx @log-viewer/app --port 8080
 ```
 
-Откроется на `http://localhost:8080/`. Опции: `--port`, `--host`, `--dir`, `--no-sw`, `--healthcheck-path`, `--quiet`. Подробности — `npx @abukhtatyy/log-viewer --help`.
+Откроется на `http://localhost:8080/`. Опции: `--port`, `--host`, `--dir`, `--no-sw`, `--healthcheck-path`, `--quiet`. Подробности — `npx @log-viewer/app --help`.
 
 ### Docker
 

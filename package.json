@@ -1,5 +1,5 @@
 {
-  "name": "@abukhtatyy/log-viewer",
+  "name": "@log-viewer/app",
   "version": "0.1.1",
   "description": "Self-hosted PWA log viewer — runs entirely client-side (OPFS + sqlite-wasm). Ships a bundled HTTP server for on-prem / Docker deploys in air-gapped networks.",
   "license": "MIT",

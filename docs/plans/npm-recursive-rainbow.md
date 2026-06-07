@@ -14,8 +14,8 @@
 
 | Что | Решение | Почему |
 |---|---|---|
-| Имя пакета | `@abukhtatyy/log-viewer` | `log-viewer` занят; личный scope даёт зарезервированный namespace без org. |
-| Имя бинаря | `log-viewer` (`npx @abukhtatyy/log-viewer`) | Совпадает с интуицией; коллизий с существующим `log-viewer@1.x` (его bin = `tail-logs`) нет. |
+| Имя пакета | `@log-viewer/app` | `log-viewer` занят; личный scope даёт зарезервированный namespace без org. |
+| Имя бинаря | `log-viewer` (`npx @log-viewer/app`) | Совпадает с интуицией; коллизий с существующим `log-viewer@1.x` (его bin = `tail-logs`) нет. |
 | HTTP-сервер | Встроенный `node:http`, без зависимостей | Минимум supply chain для закрытого контура. `sirv`/`fastify-static` подтягивают `mrmime`/`totalist` — лишнее. |
 | Сборка | Один `vite.config.ts` с env-флагом `BUILD_TARGET=onprem` | Один источник правды; alt — два конфига — даёт дрейф плагинов. |
 | Base path | `base: '/'` для on-prem (mount только в root) | VitePWA генерирует абсолютные URL в precache manifest и worker URLs; `'./'` ломает SW и `start_url`/`scope`. `--base-path` отложен до явного запроса. |
@@ -68,7 +68,7 @@ workbox: {
 
 ```jsonc
 {
-  "name": "@abukhtatyy/log-viewer",
+  "name": "@log-viewer/app",
   "type": "module",
   "bin": { "log-viewer": "./bin/cli.mjs" },
   "files": ["dist/", "bin/", "README.md", "LICENSE"],
@@ -114,7 +114,7 @@ RUN if [ -s /tmp/pkg.tgz ]; then \
       npm install --prefix /opt /tmp/pkg.tgz --omit=dev ; \
     else \
       npm install --prefix /opt --registry="$NPM_REGISTRY" \
-        @abukhtatyy/log-viewer@${PKG_VERSION} --omit=dev ; \
+        @log-viewer/app@${PKG_VERSION} --omit=dev ; \
     fi
 
 FROM node:20-alpine
@@ -126,13 +126,13 @@ EXPOSE 8080
 ENV PORT=8080 HOST=0.0.0.0
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
-ENTRYPOINT ["node","/opt/node_modules/@abukhtatyy/log-viewer/bin/cli.mjs"]
+ENTRYPOINT ["node","/opt/node_modules/@log-viewer/app/bin/cli.mjs"]
 CMD []
 ```
 
 Оба сценария установки:
 - из registry (с возможностью указать зеркало): `docker build --build-arg PKG_VERSION=0.2.0 --build-arg NPM_REGISTRY=https://nexus.internal/repository/npm-proxy/ .`
-- полный offline через tarball: `pnpm pack` → `docker build --build-arg PKG_TARBALL=./abukhtatyy-log-viewer-0.2.0.tgz .`
+- полный offline через tarball: `pnpm pack` → `docker build --build-arg PKG_TARBALL=./log-viewer-app-0.2.0.tgz .`
 
 Плюс `.dockerignore` (минимум: `node_modules`, `dist`, `dev-dist`, `.tmp`, `.git`).
 
@@ -188,5 +188,5 @@ jobs:
 2. **CLI smoke-тест:** `node bin/cli.mjs --port 8080` → `curl http://127.0.0.1:8080/healthz` = 200; `curl -I http://127.0.0.1:8080/assets/<wasm>` → `Content-Type: application/wasm` + `Cache-Control: immutable`; `curl http://127.0.0.1:8080/whatever-spa-route` → отдаёт `index.html`.
 3. **Playwright проверка app:** через `mcp__playwright__browser_navigate` на `http://localhost:8080/`, загрузить `.tmp/pino.jsonl`, убедиться что таблица рендерится и OPFS не падает (console без ошибок). Скриншоты — в [.tmp/screenshots/](../../.tmp/screenshots/).
 4. **`npm pack --dry-run`:** проверить что в tarball только `dist/`, `bin/`, `README.md`, `LICENSE`, `package.json`. Размер ≤ 3 MB.
-5. **Docker build:** `docker build --build-arg PKG_TARBALL=./abukhtatyy-log-viewer-*.tgz -t log-viewer:test .` → `docker run --rm -p 8080:8080 log-viewer:test` → app открывается на `http://localhost:8080/`, healthcheck зелёный (`docker ps` → status `(healthy)`).
+5. **Docker build:** `docker build --build-arg PKG_TARBALL=./log-viewer-app-*.tgz -t log-viewer:test .` → `docker run --rm -p 8080:8080 log-viewer:test` → app открывается на `http://localhost:8080/`, healthcheck зелёный (`docker ps` → status `(healthy)`).
 6. **CI dry-run:** `act` или `workflow_dispatch` на тестовой ветке (без `npm publish` — заменить на `pnpm publish --dry-run`).
