@@ -1,0 +1,50 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Run pnpm publish in --dry-run mode'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write   # required for npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org/'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build on-prem bundle
+        run: pnpm build:onprem
+
+      - name: Sanity-check tarball contents
+        run: pnpm pack --pack-destination /tmp && ls -la /tmp/*.tgz
+
+      - name: Publish (dry-run)
+        if: ${{ inputs.dry-run == true }}
+        run: pnpm publish --no-git-checks --access public --provenance --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish
+        if: ${{ inputs.dry-run != true }}
+        run: pnpm publish --no-git-checks --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

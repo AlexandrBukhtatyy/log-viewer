@@ -44,6 +44,49 @@ pnpm gen:fixtures   # сгенерировать sample-логи в .tmp/ (см.
   настоящие, когда появится дизайн.
 - Service worker регистрируется автоматически (`registerType: 'autoUpdate'`).
 
+## On-prem развёртывание
+
+Помимо публичной сборки на GitHub Pages, log-viewer публикуется как npm-пакет [`@abukhtatyy/log-viewer`](https://www.npmjs.com/package/@abukhtatyy/log-viewer) — для использования внутри закрытых корпоративных контуров без интернета. Пакет содержит собранную PWA и встроенный HTTP-сервер (`bin/cli.mjs`, без runtime-зависимостей), готовый к запуску за reverse proxy с TLS.
+
+Подробное обоснование решения — [ADR-0029](docs/adr/0029-on-prem-npm-package-distribution.md).
+
+### Локально
+
+```bash
+npx @abukhtatyy/log-viewer --port 8080
+# или
+pnpm dlx @abukhtatyy/log-viewer --port 8080
+```
+
+Откроется на `http://localhost:8080/`. Опции: `--port`, `--host`, `--dir`, `--no-sw`, `--healthcheck-path`, `--quiet`. Подробности — `npx @abukhtatyy/log-viewer --help`.
+
+### Docker
+
+В корне репо есть готовый [`Dockerfile`](Dockerfile). По умолчанию ставит пакет с публичного npmjs.org; для закрытого контура передайте URL зеркала через build-arg:
+
+```bash
+docker build -t log-viewer:0.1.1 \
+  --build-arg PKG_VERSION=0.1.1 \
+  --build-arg NPM_REGISTRY=https://nexus.internal/repository/npm-proxy/ .
+
+docker run --rm -p 8080:8080 log-viewer:0.1.1
+```
+
+Полностью offline-сценарий: собрать образ на машине с интернетом → `docker save log-viewer:0.1.1 -o log-viewer.tar` → перенести `.tar` в закрытый контур → `docker load -i log-viewer.tar`.
+
+### ⚠️ TLS обязателен
+
+Service worker и OPFS (SQLite в браузере) требуют **secure context**: HTTPS или `localhost`. На голом HTTP-IP PWA сломается тихо — SW не зарегистрируется, OPFS-API вернёт `undefined`. Деплоить либо за TLS-terminating reverse proxy, либо запускать с флагом `--no-sw` (отключит PWA-режим, но сохранит работу таблицы логов).
+
+### Сборка on-prem-бандла
+
+```bash
+pnpm build:onprem
+# → dist/app/ — корень для bin/cli.mjs
+```
+
+В отличие от `pnpm build`, эта команда задаёт `BUILD_TARGET=onprem`, что переключает Vite на `base: '/'`, выкидывает лендинг и перенастраивает PWA scope под root. См. [vite.config.ts](vite.config.ts).
+
 ## Структура
 
 - [src/](src/) — исходники приложения

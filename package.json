@@ -1,12 +1,53 @@
 {
-  "name": "log-viewer",
-  "private": true,
+  "name": "@abukhtatyy/log-viewer",
   "version": "0.1.1",
+  "description": "Self-hosted PWA log viewer — runs entirely client-side (OPFS + sqlite-wasm). Ships a bundled HTTP server for on-prem / Docker deploys in air-gapped networks.",
+  "license": "MIT",
+  "author": "Alexandr Bukhtatyy",
+  "homepage": "https://alexandrbukhtatyy.github.io/log-viewer/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlexandrBukhtatyy/log-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AlexandrBukhtatyy/log-viewer/issues"
+  },
+  "keywords": [
+    "log-viewer",
+    "logs",
+    "pwa",
+    "jsonl",
+    "sqlite",
+    "opfs",
+    "offline",
+    "self-hosted",
+    "on-prem"
+  ],
   "type": "module",
+  "bin": {
+    "log-viewer": "./bin/cli.mjs"
+  },
+  "files": [
+    "dist/",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./bin/cli.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "packageManager": "pnpm@10.33.2",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:onprem": "tsc -b && BUILD_TARGET=onprem vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

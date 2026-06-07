@@ -110,3 +110,4 @@ flowchart LR
 - [0026. Versioning, CHANGELOG, and release automation via Release Please + Conventional Commits](0026-release-please-and-conventional-commits.md) — proposed
 - [0027. bfcache lifecycle: shutdown воркеров на pagehide, re-mount на pageshow](0027-bfcache-worker-reset.md) — proposed
 - [0028. Unified column model для таблицы логов](0028-unified-column-model.md) — accepted
+- [0029. On-prem дистрибутив: npm-пакет с bundled CLI + Dockerfile](0029-on-prem-npm-package-distribution.md) — proposed
