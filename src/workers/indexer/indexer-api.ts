@@ -10,6 +10,8 @@ import type {
 import type {
   IndexedSourceRecord,
   IndexerApi,
+  LogicalFieldCoverage,
+  LogicalFieldCoverageSource,
   OpenReport,
   SizeReport,
 } from '../../core/rpc/indexer.contract.ts';
@@ -24,6 +26,7 @@ import type {
   SourceId,
 } from '../../core/types/index.ts';
 import { collectLevelCounts, groupFieldExpr, levelBreakdownSql } from './aggregate.ts';
+import { isValidJsonPath } from '../../core/logical-fields/sql.ts';
 import { openDb } from './db/open-db.ts';
 import {
   aggregateFieldDescriptors,
@@ -714,6 +717,76 @@ export const indexerApi: IndexerApi = {
 
   setLogicalFields: async (fields) => {
     activeLogicalFields = fields;
+  },
+
+  logicalFieldCoverage: async (field): Promise<LogicalFieldCoverage> => {
+    const { db } = requireState();
+
+    // Per-source totals — single pass over the index.
+    const totalsRows = runRows(
+      db,
+      'SELECT source_id, COUNT(*) AS cnt FROM entry GROUP BY source_id',
+    );
+    const totals = new Map<string, number>();
+    for (const r of totalsRows) {
+      totals.set(String(r.source_id), Number(r.cnt ?? 0));
+    }
+
+    // Per-source name lookup. Avoid JOINing in the count queries
+    // below (each `entry` query stays index-friendly).
+    const nameRows = runRows(db, 'SELECT id, name FROM source');
+    const nameById = new Map<string, string>();
+    for (const r of nameRows) {
+      nameById.set(String(r.id), String(r.name ?? ''));
+    }
+
+    const fieldExtractors: ReadonlyArray<{
+      readonly index: number;
+      readonly sql: string;
+    }> = field.extractors.flatMap((ex, index) =>
+      ex.type === 'field' && isValidJsonPath(ex.path)
+        ? [
+            {
+              index,
+              sql: `JSON_EXTRACT(entry.fields_json, '$.${ex.path}')`,
+            },
+          ]
+        : [],
+    );
+
+    let regexExtractorsSkipped = 0;
+    for (const ex of field.extractors) if (ex.type === 'regex') regexExtractorsSkipped++;
+
+    const sources: LogicalFieldCoverageSource[] = [];
+    const sourceIds = [...totals.keys()].sort();
+    for (const sid of sourceIds) {
+      const total = totals.get(sid) ?? 0;
+      const matched = fieldExtractors.length === 0
+        ? 0
+        : (runScalar(
+            db,
+            `SELECT COUNT(*) FROM entry WHERE source_id = ? AND COALESCE(${fieldExtractors.map((e) => e.sql).join(', ')}) IS NOT NULL`,
+            [sid],
+          ) as number | bigint | null) ?? 0;
+      const extractorHits: Array<number | null> = field.extractors.map(() => null);
+      for (const fe of fieldExtractors) {
+        const hits = runScalar(
+          db,
+          `SELECT COUNT(*) FROM entry WHERE source_id = ? AND ${fe.sql} IS NOT NULL`,
+          [sid],
+        ) as number | bigint | null;
+        extractorHits[fe.index] = Number(hits ?? 0);
+      }
+      sources.push({
+        sourceId: sid as SourceId,
+        sourceName: nameById.get(sid) ?? sid,
+        matchedEntries: Number(matched),
+        totalEntries: total,
+        extractorHits,
+      });
+    }
+
+    return { sources, regexExtractorsSkipped };
   },
 
   vacuum: async () => {

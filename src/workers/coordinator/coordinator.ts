@@ -1150,6 +1150,11 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       await deps.getIndexer().proxy.setLogicalFields(fields);
     },
 
+    getLogicalFieldCoverage: async (field) => {
+      await deps.getIndexer().opening;
+      return deps.getIndexer().proxy.logicalFieldCoverage(field);
+    },
+
     listParsers: async () => {
       const metas = await deps.parserPool.withWorker((p) => p.listParsers());
       return metas.map((m) => ({

@@ -28,6 +28,7 @@ import {
   resolveActiveLogicalFields,
 } from '../../core/logical-fields/catalog.ts';
 import { validateLogicalField as validateLogicalFieldCore } from '../../core/logical-fields/validation.ts';
+import { resolveLogicalField as resolveLogicalFieldCore } from '../../core/logical-fields/resolver.ts';
 import type { FieldDescriptor } from '../../core/filter/field-descriptor.ts';
 import { useWorkspace, useWorkspaceStore } from '../../hooks/use-workspace.ts';
 import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
@@ -379,6 +380,22 @@ export const LvAppContainer = () => {
     (entry: LogEntry): string | undefined =>
       sourceRecordsById.get(entry.sourceId)?.parserId,
     [sourceRecordsById],
+  );
+
+  // Resolve activated `~`-fields against an entry for LvRowDetail's
+  // Meta-tab (Phase 2 quick-filter). Empty array when no logical
+  // field is active or no extractor matched.
+  const resolveLogicalRows = useCallback(
+    (entry: LogEntry): ReadonlyArray<readonly [string, string]> => {
+      const rows: Array<readonly [string, string]> = [];
+      for (const field of activeLogicalFields) {
+        const v = resolveLogicalFieldCore(entry, field);
+        if (v === null || v === undefined) continue;
+        rows.push([`~${field.id}`, String(v)] as const);
+      }
+      return rows;
+    },
+    [activeLogicalFields],
   );
 
   // Inline group-expand callbacks: bypass the active-filter/refresh
@@ -977,6 +994,10 @@ export const LvAppContainer = () => {
       logicalFields={logicalFieldsCatalog}
       activeLogicalFieldIds={logicalFieldsConfig.activeIds}
       logicalFieldsConfig={logicalFieldsConfig}
+      resolveLogicalRows={resolveLogicalRows}
+      getLogicalFieldCoverage={(f) =>
+        viewStore.getState().getLogicalFieldCoverage(f)
+      }
       onToggleLogicalField={toggleLogicalField}
       onAddCustomLogicalField={addCustomLogicalField}
       onUpdateCustomLogicalField={updateCustomLogicalField}

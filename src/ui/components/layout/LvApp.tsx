@@ -155,6 +155,16 @@ export interface LvAppProps {
     config: import('../../../core/types/index.ts').LogicalFieldsConfig,
     selfId: string | null,
   ) => string | null;
+  /** Worker-backed coverage query for the Logical fields drill-down. */
+  getLogicalFieldCoverage?: (
+    field: import('../../../core/types/index.ts').LogicalField,
+  ) => Promise<
+    | (Pick<
+        import('../../../core/rpc/indexer.contract.ts').LogicalFieldCoverage,
+        'sources' | 'regexExtractorsSkipped'
+      >)
+    | null
+  >;
   onGrantPermission?: (id: string) => void;
   onCancelSource?: (id: string) => void;
 
@@ -197,6 +207,10 @@ export interface LvAppProps {
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
   /** Returns resolved parser id for the entry's source — drives Meta-tab `@parser.id`. */
   parserIdOf?: (entry: LogEntry) => string | undefined;
+  /** Resolves activated `~`-namespace logical fields against an entry for the Meta-tab. */
+  resolveLogicalRows?: (
+    entry: LogEntry,
+  ) => ReadonlyArray<readonly [string, string]>;
 
   /** File menu → Export → JSONL/CSV; container wires `useExport`. */
   onExport?: (format: 'jsonl' | 'csv') => void;
@@ -264,6 +278,7 @@ export const LvApp = ({
   onUpdateCustomLogicalField,
   onRemoveCustomLogicalField,
   validateLogicalField,
+  getLogicalFieldCoverage,
   onGrantPermission,
   onCancelSource,
   tweaks,
@@ -290,6 +305,7 @@ export const LvApp = ({
   onColumnsChange,
   cellValueOf,
   parserIdOf,
+  resolveLogicalRows,
   onExport,
   onClearAppData,
   histogramData,
@@ -578,6 +594,7 @@ export const LvApp = ({
         onUpdateCustom={(f) => onUpdateCustomLogicalField?.(f)}
         onRemoveCustom={(id) => onRemoveCustomLogicalField?.(id)}
         validate={validateLogicalField ?? (() => null)}
+        getCoverage={getLogicalFieldCoverage}
       />
     ) : (
       <LvAlertsPanel />
@@ -683,6 +700,7 @@ export const LvApp = ({
           onColumnsChange={onColumnsChange}
           cellValueOf={cellValueOf}
           parserIdOf={parserIdOf}
+          resolveLogicalRows={resolveLogicalRows}
           renderDetailEditor={renderDetailEditor}
         />
       </div>

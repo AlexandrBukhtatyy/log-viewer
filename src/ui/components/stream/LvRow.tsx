@@ -62,6 +62,14 @@ export interface LvRowProps {
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
   /** Lookup of parser id for the entry's source — surfaced via Meta-вкладка. */
   parserIdOf?: (entry: LogEntry) => string | undefined;
+  /**
+   * Resolve activated logical fields (`~name`) against the entry —
+   * forwarded to LvRowDetail so the Meta-tab can offer a one-click
+   * filter on cross-format attributes (ADR-0030).
+   */
+  resolveLogicalRows?: (
+    entry: LogEntry,
+  ) => ReadonlyArray<readonly [string, string]>;
   renderDetailEditor?: (props: {
     readonly value: string;
     readonly language: string;
@@ -105,6 +113,7 @@ export const LvRow = ({
   gridTemplate,
   cellValueOf,
   parserIdOf,
+  resolveLogicalRows,
   renderDetailEditor,
   gutterMode = 'line',
 }: LvRowProps) => {
@@ -274,6 +283,7 @@ export const LvRow = ({
             theme={theme}
             renderEditor={renderDetailEditor}
             parserId={parserIdOf?.(entry)}
+            resolveLogicalRows={resolveLogicalRows}
           />
         </div>
       )}

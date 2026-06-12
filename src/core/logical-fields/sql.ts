@@ -34,7 +34,7 @@ export interface LogicalFieldSql {
  */
 const PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-const isValidJsonPath = (path: string): boolean => {
+export const isValidJsonPath = (path: string): boolean => {
   if (path.length === 0) return false;
   for (const seg of path.split('.')) {
     if (!PATH_SEGMENT_RE.test(seg)) return false;

@@ -159,6 +159,17 @@ export interface CoordinatorApi {
   ) => Promise<void>;
 
   /**
+   * Coverage report for one logical field (ADR-0030, Phase 2).
+   * Returns per-source matched/total counts plus per-extractor hits
+   * so the UI can show "matched 3/4 sources" with a drill-down on
+   * which extractor branches are dead. Regex extractors are skipped
+   * (see ADR-0016 — message/raw are not in SQLite).
+   */
+  getLogicalFieldCoverage: (
+    field: import('../types/index.ts').LogicalField,
+  ) => Promise<import('./indexer.contract.ts').LogicalFieldCoverage>;
+
+  /**
    * Enumerate parsers registered in the worker-side `ParserRegistry`.
    * UI uses this to populate the parser-override dropdown when adding
    * a source (Phase 2.B). Returned in priority-descending order so

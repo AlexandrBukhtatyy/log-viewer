@@ -6,6 +6,19 @@ import type {
   LogicalFieldsConfig,
 } from '../../../core/types/index.ts';
 
+interface CoverageSourceView {
+  readonly sourceId: string;
+  readonly sourceName: string;
+  readonly matchedEntries: number;
+  readonly totalEntries: number;
+  readonly extractorHits: ReadonlyArray<number | null>;
+}
+
+interface CoverageView {
+  readonly sources: ReadonlyArray<CoverageSourceView>;
+  readonly regexExtractorsSkipped: number;
+}
+
 const PREFIX = '~';
 
 const extractorSummary = (field: LogicalField): string => {
@@ -25,59 +38,168 @@ const extractorSummary = (field: LogicalField): string => {
 interface RowProps {
   readonly field: LogicalField;
   readonly active: boolean;
+  readonly coverage?: CoverageView | 'loading' | 'error';
   onToggle(id: string): void;
   onEdit?: (id: string) => void;
   onRemove?: (id: string) => void;
+  onLoadCoverage?: (id: string) => void;
 }
 
-const Row = ({ field, active, onToggle, onEdit, onRemove }: RowProps) => (
-  <div className={`lv-parsers-row${active ? ' is-active' : ''}`}>
-    <div className="lv-parsers-row-main">
-      <span className="lv-parsers-row-id">
-        {PREFIX}
-        {field.id}
-      </span>
-      <span className="lv-parsers-row-label">{field.label}</span>
-      <span className="lv-parsers-row-kind">{extractorSummary(field)}</span>
-      {field.description !== undefined && field.description.length > 0 && (
-        <span
-          className="lv-form-help"
-          style={{ display: 'block', marginTop: 4 }}
-        >
-          {field.description}
-        </span>
-      )}
-    </div>
-    <div className="lv-parsers-row-act">
-      <button
-        type="button"
-        className={`lv-btn ${active ? 'lv-btn-danger' : 'lv-btn-secondary'}`}
-        onClick={() => onToggle(field.id)}
-      >
-        {active ? 'Deactivate' : 'Activate'}
-      </button>
-      {onEdit !== undefined && (
-        <button
-          type="button"
-          className="lv-btn lv-btn-secondary"
-          onClick={() => onEdit(field.id)}
-        >
-          Edit
-        </button>
-      )}
-      {onRemove !== undefined && (
-        <button
-          type="button"
-          className="lv-btn lv-btn-danger"
-          onClick={() => onRemove(field.id)}
-          title={`Delete ${PREFIX}${field.id}`}
-        >
-          Delete
-        </button>
-      )}
-    </div>
+const CoverageBadge = ({ coverage }: { coverage: CoverageView }) => {
+  const sources = coverage.sources;
+  const sourcesWithMatch = sources.filter((s) => s.matchedEntries > 0).length;
+  return (
+    <span
+      className="lv-colpick-meta"
+      title="Sources where at least one extractor matched (regex extractors are not counted)"
+      style={{ marginLeft: 6 }}
+    >
+      {sourcesWithMatch}/{sources.length} sources
+    </span>
+  );
+};
+
+const CoverageDrill = ({
+  field,
+  coverage,
+}: {
+  field: LogicalField;
+  coverage: CoverageView;
+}) => (
+  <div
+    className="lv-form-help"
+    style={{ padding: '4px 0 0 0', marginTop: 4 }}
+  >
+    {coverage.sources.length === 0 ? (
+      <span>No sources indexed yet.</span>
+    ) : (
+      <div className="lv-det-tbl">
+        {coverage.sources.map((s) => {
+          // First field-extractor that actually produced any value
+          // in this source — surfaces the dominant branch.
+          const winning = field.extractors
+            .map((ex, i) => ({ ex, idx: i }))
+            .find(
+              (x) =>
+                s.extractorHits[x.idx] !== null &&
+                (s.extractorHits[x.idx] ?? 0) > 0,
+            );
+          return (
+            <div key={s.sourceId} className="lv-det-row is-system">
+              <span className="lv-det-k">
+                {s.matchedEntries > 0 ? '✓' : '✗'} {s.sourceName}
+              </span>
+              <span className="lv-det-v">
+                {s.matchedEntries.toLocaleString()} /{' '}
+                {s.totalEntries.toLocaleString()} entries
+                {winning !== undefined && winning.ex.type === 'field' && (
+                  <span style={{ marginLeft: 6, opacity: 0.7 }}>
+                    via #{winning.idx + 1} (${winning.ex.path})
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    )}
+    {coverage.regexExtractorsSkipped > 0 && (
+      <div style={{ marginTop: 4, opacity: 0.7 }}>
+        {coverage.regexExtractorsSkipped} regex extractor
+        {coverage.regexExtractorsSkipped === 1 ? '' : 's'} skipped — only
+        counted in column display.
+      </div>
+    )}
   </div>
 );
+
+const Row = ({
+  field,
+  active,
+  coverage,
+  onToggle,
+  onEdit,
+  onRemove,
+  onLoadCoverage,
+}: RowProps) => {
+  const [drillOpen, setDrillOpen] = useState(false);
+  const toggleDrill = (): void => {
+    if (!drillOpen && coverage === undefined) onLoadCoverage?.(field.id);
+    setDrillOpen((v) => !v);
+  };
+  return (
+    <div className={`lv-parsers-row${active ? ' is-active' : ''}`}>
+      <div className="lv-parsers-row-main">
+        <span className="lv-parsers-row-id">
+          {PREFIX}
+          {field.id}
+        </span>
+        <span className="lv-parsers-row-label">{field.label}</span>
+        <span className="lv-parsers-row-kind">{extractorSummary(field)}</span>
+        {coverage === 'loading' && (
+          <span className="lv-colpick-meta" style={{ marginLeft: 6 }}>
+            …
+          </span>
+        )}
+        {coverage === 'error' && (
+          <span className="lv-colpick-meta" style={{ marginLeft: 6 }}>
+            err
+          </span>
+        )}
+        {typeof coverage === 'object' && <CoverageBadge coverage={coverage} />}
+        {field.description !== undefined && field.description.length > 0 && (
+          <span
+            className="lv-form-help"
+            style={{ display: 'block', marginTop: 4 }}
+          >
+            {field.description}
+          </span>
+        )}
+        {active && typeof coverage === 'object' && drillOpen && (
+          <CoverageDrill field={field} coverage={coverage} />
+        )}
+      </div>
+      <div className="lv-parsers-row-act">
+        {active && onLoadCoverage !== undefined && (
+          <button
+            type="button"
+            className="lv-btn lv-btn-secondary"
+            onClick={toggleDrill}
+            title="Show per-source extractor coverage"
+          >
+            {drillOpen ? 'Hide' : 'Coverage'}
+          </button>
+        )}
+        <button
+          type="button"
+          className={`lv-btn ${active ? 'lv-btn-danger' : 'lv-btn-secondary'}`}
+          onClick={() => onToggle(field.id)}
+        >
+          {active ? 'Deactivate' : 'Activate'}
+        </button>
+        {onEdit !== undefined && (
+          <button
+            type="button"
+            className="lv-btn lv-btn-secondary"
+            onClick={() => onEdit(field.id)}
+          >
+            Edit
+          </button>
+        )}
+        {onRemove !== undefined && (
+          <button
+            type="button"
+            className="lv-btn lv-btn-danger"
+            onClick={() => onRemove(field.id)}
+            title={`Delete ${PREFIX}${field.id}`}
+          >
+            Delete
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const emptyFieldExtractor = (): LogicalExtractor => ({
   type: 'field',
@@ -416,6 +538,12 @@ export interface LvLogicalFieldsPanelProps {
     config: LogicalFieldsConfig,
     selfId: string | null,
   ): string | null;
+  /**
+   * Optional async callback: ask the worker for a coverage report.
+   * Returns `null` when the worker is not ready. The panel caches
+   * the result per field id and exposes it through the drill-down.
+   */
+  getCoverage?: (field: LogicalField) => Promise<CoverageView | null>;
 }
 
 /**
@@ -424,6 +552,8 @@ export interface LvLogicalFieldsPanelProps {
  * toggle activation, and provides an inline editor for creating /
  * editing customs.
  */
+type CoverageEntry = CoverageView | 'loading' | 'error';
+
 export const LvLogicalFieldsPanel = ({
   fields,
   activeIds,
@@ -433,15 +563,37 @@ export const LvLogicalFieldsPanel = ({
   onUpdateCustom,
   onRemoveCustom,
   validate,
+  getCoverage,
 }: LvLogicalFieldsPanelProps) => {
   const [edit, setEdit] = useState<EditState>({ mode: 'closed' });
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [coverage, setCoverage] = useState<
+    Readonly<Record<string, CoverageEntry>>
+  >({});
 
   const activeSet = useMemo(() => new Set(activeIds), [activeIds]);
   const customIds = useMemo(
     () => new Set(config.customFields.map((f) => f.id)),
     [config.customFields],
   );
+
+  const loadCoverage = (id: string): void => {
+    if (getCoverage === undefined) return;
+    const field = fields.find((f) => f.id === id);
+    if (field === undefined) return;
+    setCoverage((m) => ({ ...m, [id]: 'loading' }));
+    getCoverage(field)
+      .then((cov) => {
+        if (cov === null) {
+          setCoverage((m) => ({ ...m, [id]: 'error' }));
+          return;
+        }
+        setCoverage((m) => ({ ...m, [id]: cov }));
+      })
+      .catch(() => {
+        setCoverage((m) => ({ ...m, [id]: 'error' }));
+      });
+  };
 
   const active = fields.filter((f) => activeSet.has(f.id));
   const inactive = fields.filter((f) => !activeSet.has(f.id));
@@ -521,9 +673,13 @@ export const LvLogicalFieldsPanel = ({
             key={f.id}
             field={f}
             active
+            coverage={coverage[f.id]}
             onToggle={onToggle}
             onEdit={isCustom(f.id) ? startEdit : undefined}
             onRemove={isCustom(f.id) ? onRemoveCustom : undefined}
+            onLoadCoverage={
+              getCoverage !== undefined ? loadCoverage : undefined
+            }
           />
         ))}
       </div>

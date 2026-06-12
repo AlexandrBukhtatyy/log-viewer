@@ -129,6 +129,10 @@ export interface LvViewerProps {
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
   /** Resolves the parser id for an entry's source. Shown in the Meta-vкладке of `LvRowDetail`. */
   parserIdOf?: (entry: LogEntry) => string | undefined;
+  /** Resolves activated `~`-namespace logical fields against an entry. */
+  resolveLogicalRows?: (
+    entry: LogEntry,
+  ) => ReadonlyArray<readonly [string, string]>;
 
   renderDetailEditor?: RenderDetailEditor;
 }
@@ -177,6 +181,7 @@ export const LvViewer = ({
   onColumnsChange,
   cellValueOf,
   parserIdOf,
+  resolveLogicalRows,
   renderDetailEditor,
 }: LvViewerProps) => {
   const gridTemplate = useMemo(() => gridTemplateForColumns(columns), [columns]);
@@ -704,6 +709,7 @@ export const LvViewer = ({
                                 gridTemplate={gridTemplate}
                                 cellValueOf={cellValueOf}
                                 parserIdOf={parserIdOf}
+                                resolveLogicalRows={resolveLogicalRows}
                                 indentPx={12 + (depth + 1) * 16}
                                 renderDetailEditor={renderDetailEditor}
                                 gutterMode={tweaks.gutterMode}
@@ -804,6 +810,7 @@ export const LvViewer = ({
                             gridTemplate={gridTemplate}
                             cellValueOf={cellValueOf}
                             parserIdOf={parserIdOf}
+                                resolveLogicalRows={resolveLogicalRows}
                             renderDetailEditor={renderDetailEditor}
                             gutterMode={tweaks.gutterMode}
                           />

@@ -35,6 +35,29 @@ export interface SizeReport {
   readonly perSource: ReadonlyArray<{ id: SourceId; bytes: number }>;
 }
 
+/**
+ * Per-source coverage for one logical field. `matchedEntries` is the
+ * number of rows where the field-extractor chain produced a
+ * non-null value; `totalEntries` is `entry.entry_count` for that
+ * source. `extractorHits[i]` reports how many rows the i-th
+ * extractor in the chain alone would have matched (ignoring
+ * earlier ones) — handy for diagnosing dead branches. Regex
+ * extractors are reported with `null` (not measurable in SQL).
+ */
+export interface LogicalFieldCoverageSource {
+  readonly sourceId: SourceId;
+  readonly sourceName: string;
+  readonly matchedEntries: number;
+  readonly totalEntries: number;
+  readonly extractorHits: ReadonlyArray<number | null>;
+}
+
+export interface LogicalFieldCoverage {
+  readonly sources: ReadonlyArray<LogicalFieldCoverageSource>;
+  /** Number of regex extractors silently skipped in the SQL path. */
+  readonly regexExtractorsSkipped: number;
+}
+
 export interface IndexerApi {
   ping: () => Promise<string>;
   open: () => Promise<OpenReport>;
@@ -97,6 +120,19 @@ export interface IndexerApi {
   setLogicalFields: (
     fields: ReadonlyArray<LogicalField>,
   ) => Promise<void>;
+
+  /**
+   * Coverage report for one logical field (ADR-0030, Phase 2):
+   * for each source visible to the indexer, count how many entries
+   * have ANY of the field's field-extractors yield a non-null value,
+   * plus per-extractor counts. Regex extractors are skipped — they
+   * cannot run in SQL against the lazy-resolved body (ADR-0016).
+   * Caller passes the resolved field definition so the indexer
+   * doesn't have to round-trip through `setLogicalFields` first.
+   */
+  logicalFieldCoverage: (
+    field: LogicalField,
+  ) => Promise<LogicalFieldCoverage>;
 
   vacuum: () => Promise<void>;
   estimateSize: () => Promise<SizeReport>;

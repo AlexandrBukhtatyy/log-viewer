@@ -11,6 +11,16 @@ export interface LvRowDetailProps {
   readonly theme?: LvTweakTheme;
   /** Parser id resolved for this entry's source (Phase 2.E). Surfaced in Meta-tab. */
   readonly parserId?: string;
+  /**
+   * Resolve activated `~`-namespace logical fields against the entry.
+   * Returns `[key, value]` pairs already formatted for display; `null`
+   * values are skipped by the container. Drives the Logical block in
+   * the Meta-tab where the user can one-click a filter from a
+   * cross-format attribute (ADR-0030).
+   */
+  resolveLogicalRows?: (
+    entry: LogEntry,
+  ) => ReadonlyArray<readonly [string, string]>;
   onAddFieldFilter: (filter: FieldFilter) => void;
   renderEditor?: (props: {
     readonly value: string;
@@ -26,9 +36,11 @@ export const LvRowDetail = ({
   kind,
   theme,
   parserId,
+  resolveLogicalRows,
   onAddFieldFilter,
   renderEditor,
 }: LvRowDetailProps) => {
+  const logicalRows = resolveLogicalRows?.(entry) ?? [];
   const fields = entry.fields;
   const hasFields = Object.keys(fields).length > 0;
   const stack = (fields as Record<string, unknown>).stack;
@@ -81,14 +93,21 @@ export const LvRowDetail = ({
               .map(([k, v]) => `${k}\t${formatFieldValue(v)}`)
               .join('\n')
           : view === 'meta'
-            ? metaFields.map(([k, v]) => `${k}\t${v}`).join('\n')
+            ? [
+                ...metaFields.map(([k, v]) => `${k}\t${v}`),
+                ...logicalRows.map(([k, v]) => `${k}\t${v}`),
+              ].join('\n')
             : entry.raw;
 
   const copyText =
     view === 'fields'
       ? JSON.stringify(fields, null, 2)
       : view === 'meta'
-        ? JSON.stringify(Object.fromEntries(metaFields), null, 2)
+        ? JSON.stringify(
+            Object.fromEntries([...metaFields, ...logicalRows]),
+            null,
+            2,
+          )
         : body;
 
   return (
@@ -190,6 +209,20 @@ export const LvRowDetail = ({
         ) : view === 'meta' ? (
           <div className="lv-det-tbl">
             {metaFields.map(([k, v]) => (
+              <div key={k} className="lv-det-row is-system">
+                <span className="lv-det-k">{k}</span>
+                <span className="lv-det-v">{v}</span>
+                <button
+                  type="button"
+                  className="lv-det-add"
+                  title={`Filter where ${k} = ${v}`}
+                  onClick={() => onAddFieldFilter({ key: k, op: '=', value: v })}
+                >
+                  ＋
+                </button>
+              </div>
+            ))}
+            {logicalRows.map(([k, v]) => (
               <div key={k} className="lv-det-row is-system">
                 <span className="lv-det-k">{k}</span>
                 <span className="lv-det-v">{v}</span>
