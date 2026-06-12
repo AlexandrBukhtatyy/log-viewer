@@ -104,4 +104,62 @@ describe('logicalFieldToSql', () => {
       needsSourceJoin: false,
     });
   });
+
+  it('regex-on-json compiles to regexp_extract_group UDF call', () => {
+    expect(
+      logicalFieldToSql(
+        field('trace_id', [
+          {
+            type: 'regex-on-json',
+            path: 'context',
+            pattern: 'tr=(?<v>\\w+)',
+            flags: 'i',
+            group: 'v',
+          },
+        ]),
+      ),
+    ).toEqual({
+      sql:
+        `regexp_extract_group('tr=(?<v>\\w+)', ` +
+        `JSON_EXTRACT(entry.fields_json, '$.context'), ` +
+        `'v', 'i')`,
+      needsSourceJoin: false,
+    });
+  });
+
+  it('regex-on-json escapes single quotes in pattern/group/flags', () => {
+    expect(
+      logicalFieldToSql(
+        field('odd', [
+          {
+            type: 'regex-on-json',
+            path: 'ctx',
+            pattern: "X'1",
+            group: "g'1",
+            flags: "i'",
+          },
+        ]),
+      ).sql,
+    ).toContain("'X''1'");
+  });
+
+  it('mixed chain combines field, regex-on-json, skips regex', () => {
+    expect(
+      logicalFieldToSql(
+        field('trace_id', [
+          { type: 'field', path: 'trace_id' },
+          {
+            type: 'regex-on-json',
+            path: 'ctx',
+            pattern: 'tr=(\\w+)',
+          },
+          { type: 'regex', on: 'message', pattern: 'tr=(\\w+)' },
+        ]),
+      ).sql,
+    ).toBe(
+      `COALESCE(JSON_EXTRACT(entry.fields_json, '$.trace_id'), ` +
+        `regexp_extract_group('tr=(\\w+)', ` +
+        `JSON_EXTRACT(entry.fields_json, '$.ctx'), '', ''))`,
+    );
+  });
 });

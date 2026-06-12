@@ -45,6 +45,21 @@ export type LogicalExtractor =
       readonly pattern: string;
       readonly flags?: string;
       readonly group?: string;
+    }
+  | {
+      /**
+       * Regex against a JSON-extracted value. Unlike `regex` (which
+       * targets `message`/`raw` and only works on the read-path), this
+       * extractor runs in SQL too — the indexer composes
+       * `regexp_extract_group(JSON_EXTRACT(...), …)`. Useful when a
+       * useful id is buried inside a structured value (e.g.
+       * `fields.context = "user=u_1 trace=tr_42"`).
+       */
+      readonly type: 'regex-on-json';
+      readonly path: string;
+      readonly pattern: string;
+      readonly flags?: string;
+      readonly group?: string;
     };
 
 export interface LogicalField {

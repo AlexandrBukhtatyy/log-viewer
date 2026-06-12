@@ -1,23 +1,27 @@
-import type { LogicalField } from '../types/logical-field.ts';
+import type {
+  LogicalExtractor,
+  LogicalField,
+} from '../types/logical-field.ts';
 
 /**
  * Translate a `LogicalField` into a SQL value expression equivalent to
  * the read-path resolver: try each extractor in order, the first
  * non-null wins (COALESCE).
  *
- * Only `field`-type extractors compile to SQL — they become
- * `JSON_EXTRACT(entry.fields_json, '$.<path>')`. `regex`-type
- * extractors target `entry.message` / `entry.raw`, which are NOT
- * materialised in SQLite after ADR-0016 (the body lives behind a
- * lazy byte-pointer). They are silently skipped here and only run
- * on the read-path resolver — so a `~`-field defined purely as
- * regex(message=…) will display in columns but won't filter or
- * group on the server. The `regexp_extract_group` UDF in `open-db`
- * is wired for a future `regex-on-json` extractor that targets
- * values already living in `fields_json`.
+ * Two extractor types compile to SQL:
+ *  - `field`         → `JSON_EXTRACT(entry.fields_json, '$.<path>')`
+ *  - `regex-on-json` → `regexp_extract_group(JSON_EXTRACT(...), ...)`
+ *    via the UDF installed in `open-db.ts`.
+ *
+ * `regex`-type extractors target `entry.message` / `entry.raw`, which
+ * are NOT materialised in SQLite after ADR-0016 (the body lives
+ * behind a lazy byte-pointer). They are silently skipped here and
+ * only run on the read-path resolver — so a `~`-field defined purely
+ * as `regex(message=…)` will display in columns but won't filter or
+ * group on the server.
  *
  * If the field has no usable extractors (empty chain, or every
- * extractor is regex) the result is the literal `NULL` — callers
+ * extractor is `regex`) the result is the literal `NULL` — callers
  * still get a valid SQL expression, the predicate just never
  * matches, mirroring the read-path resolver returning null.
  */
@@ -42,12 +46,42 @@ export const isValidJsonPath = (path: string): boolean => {
   return true;
 };
 
+/** SQLite string-literal escape: double every single quote. */
+const sqlEscape = (s: string): string => s.replace(/'/g, "''");
+
+/**
+ * Render one extractor as a SQL value expression, or `null` when the
+ * extractor cannot run in SQL (the `regex` type, or an invalid path).
+ * Exposed so the indexer's coverage report and the COALESCE builder
+ * share the same compilation logic.
+ */
+export const extractorToSqlOrNull = (
+  ex: LogicalExtractor,
+): string | null => {
+  if (ex.type === 'field') {
+    if (!isValidJsonPath(ex.path)) return null;
+    return `JSON_EXTRACT(entry.fields_json, '$.${ex.path}')`;
+  }
+  if (ex.type === 'regex-on-json') {
+    if (!isValidJsonPath(ex.path)) return null;
+    const pattern = sqlEscape(ex.pattern);
+    const group = sqlEscape(ex.group ?? '');
+    const flags = sqlEscape(ex.flags ?? '');
+    return (
+      `regexp_extract_group('${pattern}', ` +
+      `JSON_EXTRACT(entry.fields_json, '$.${ex.path}'), ` +
+      `'${group}', '${flags}')`
+    );
+  }
+  // 'regex' on message/raw — body lives outside SQLite (ADR-0016).
+  return null;
+};
+
 export const logicalFieldToSql = (field: LogicalField): LogicalFieldSql => {
   const exprs: string[] = [];
   for (const ex of field.extractors) {
-    if (ex.type !== 'field') continue;
-    if (!isValidJsonPath(ex.path)) continue;
-    exprs.push(`JSON_EXTRACT(entry.fields_json, '$.${ex.path}')`);
+    const sql = extractorToSqlOrNull(ex);
+    if (sql !== null) exprs.push(sql);
   }
   if (exprs.length === 0) return { sql: 'NULL', needsSourceJoin: false };
   if (exprs.length === 1) return { sql: exprs[0]!, needsSourceJoin: false };

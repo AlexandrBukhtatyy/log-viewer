@@ -148,6 +148,38 @@ describe('validateExtractor', () => {
       }),
     ).toBeNull();
   });
+
+  it('regex-on-json: empty path fails', () => {
+    expect(
+      validateExtractor({
+        type: 'regex-on-json',
+        path: '',
+        pattern: '.*',
+      }),
+    ).toMatch(/source field path/i);
+  });
+
+  it('regex-on-json: well-formed passes', () => {
+    expect(
+      validateExtractor({
+        type: 'regex-on-json',
+        path: 'context.message',
+        pattern: 'tr=(?<v>\\w+)',
+        group: 'v',
+      }),
+    ).toBeNull();
+  });
+
+  it('regex-on-json: missing named group fails', () => {
+    expect(
+      validateExtractor({
+        type: 'regex-on-json',
+        path: 'context',
+        pattern: 'tr=(\\w+)',
+        group: 'v',
+      }),
+    ).toMatch(/no named group/i);
+  });
 });
 
 describe('validateLogicalField', () => {

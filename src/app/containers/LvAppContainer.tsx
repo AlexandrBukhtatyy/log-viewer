@@ -29,6 +29,11 @@ import {
 } from '../../core/logical-fields/catalog.ts';
 import { validateLogicalField as validateLogicalFieldCore } from '../../core/logical-fields/validation.ts';
 import { resolveLogicalField as resolveLogicalFieldCore } from '../../core/logical-fields/resolver.ts';
+import { findSuggestedLogicalFields } from '../../core/logical-fields/discovery.ts';
+import {
+  exportLogicalFieldsConfig,
+  parseLogicalFieldsConfig,
+} from '../../core/logical-fields/io.ts';
 import type { FieldDescriptor } from '../../core/filter/field-descriptor.ts';
 import { useWorkspace, useWorkspaceStore } from '../../hooks/use-workspace.ts';
 import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
@@ -329,6 +334,20 @@ export const LvAppContainer = () => {
   const addCustomLogicalField = useLogicalFields((s) => s.addCustom);
   const updateCustomLogicalField = useLogicalFields((s) => s.updateCustom);
   const removeCustomLogicalField = useLogicalFields((s) => s.removeCustom);
+  const replaceLogicalFieldsConfig = useLogicalFields((s) => s.replaceConfig);
+  const exportLogicalFieldsConfigCb = useCallback(
+    () => exportLogicalFieldsConfig(logicalFieldsConfig),
+    [logicalFieldsConfig],
+  );
+  const importLogicalFieldsConfigCb = useCallback(
+    (raw: string): string | null => {
+      const parsed = parseLogicalFieldsConfig(raw);
+      if (typeof parsed === 'string') return parsed;
+      replaceLogicalFieldsConfig(parsed);
+      return null;
+    },
+    [replaceLogicalFieldsConfig],
+  );
   const logicalFieldsCatalog = useMemo(
     () => [...BUILT_IN_LOGICAL_FIELDS, ...logicalFieldsConfig.customFields],
     [logicalFieldsConfig.customFields],
@@ -364,6 +383,19 @@ export const LvAppContainer = () => {
       ...logicalFieldDescriptors,
     ],
     [discoveredDescriptors, logicalFieldDescriptors],
+  );
+  // Suggested logical-field templates: built-ins whose paths overlap
+  // with at least one dynamic field key observed in the open sources.
+  const logicalFieldSuggestions = useMemo(
+    () =>
+      findSuggestedLogicalFields(
+        BUILT_IN_LOGICAL_FIELDS,
+        discoveredDescriptors
+          .filter((d) => d.origin === 'dynamic')
+          .map((d) => d.key),
+        logicalFieldsConfig.activeIds,
+      ),
+    [discoveredDescriptors, logicalFieldsConfig.activeIds],
   );
 
   const cellValueOf = useCallback(
@@ -998,6 +1030,9 @@ export const LvAppContainer = () => {
       getLogicalFieldCoverage={(f) =>
         viewStore.getState().getLogicalFieldCoverage(f)
       }
+      logicalFieldSuggestions={logicalFieldSuggestions}
+      exportLogicalFieldsConfig={exportLogicalFieldsConfigCb}
+      importLogicalFieldsConfig={importLogicalFieldsConfigCb}
       onToggleLogicalField={toggleLogicalField}
       onAddCustomLogicalField={addCustomLogicalField}
       onUpdateCustomLogicalField={updateCustomLogicalField}

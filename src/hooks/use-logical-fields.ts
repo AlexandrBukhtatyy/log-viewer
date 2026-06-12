@@ -37,6 +37,12 @@ export interface LogicalFieldsState {
   removeCustom(id: string): void;
   /** Wipe everything — for clear-app-data flows and tests. */
   reset(): void;
+  /**
+   * Replace the entire config (active ids + custom fields) in one
+   * shot. Used by import flows; the caller is responsible for
+   * parsing/validating the JSON shape before invoking.
+   */
+  replaceConfig(next: LogicalFieldsConfig): void;
 }
 
 const addUnique = (arr: ReadonlyArray<string>, id: string): string[] =>
@@ -115,6 +121,7 @@ export const useLogicalFields = create<LogicalFieldsState>()(
         });
       },
       reset: () => set({ config: EMPTY_LOGICAL_FIELDS_CONFIG }),
+      replaceConfig: (next) => set({ config: next }),
     }),
     {
       name: 'lv:logical-fields',

@@ -46,7 +46,9 @@ export const validateExtractor = (
     if (ex.path.trim().length === 0) return 'Field path is required.';
     return null;
   }
-  // regex
+  if (ex.type === 'regex-on-json') {
+    if (ex.path.trim().length === 0) return 'Source field path is required.';
+  }
   if (ex.pattern.trim().length === 0) return 'Regex pattern is required.';
   try {
     new RegExp(ex.pattern, ex.flags);

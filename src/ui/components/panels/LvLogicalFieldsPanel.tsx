@@ -24,13 +24,19 @@ const PREFIX = '~';
 const extractorSummary = (field: LogicalField): string => {
   let fieldCount = 0;
   let regexCount = 0;
+  let regexOnJsonCount = 0;
   for (const ex of field.extractors) {
     if (ex.type === 'field') fieldCount++;
+    else if (ex.type === 'regex-on-json') regexOnJsonCount++;
     else regexCount++;
   }
   const parts: string[] = [];
   if (fieldCount > 0)
     parts.push(`${fieldCount} field${fieldCount === 1 ? '' : 's'}`);
+  if (regexOnJsonCount > 0)
+    parts.push(
+      `${regexOnJsonCount} regex-on-json`,
+    );
   if (regexCount > 0) parts.push(`${regexCount} regex`);
   return parts.join(' + ') || 'no extractors';
 };
@@ -210,6 +216,11 @@ const emptyRegexExtractor = (): LogicalExtractor => ({
   on: 'message',
   pattern: '',
 });
+const emptyRegexOnJsonExtractor = (): LogicalExtractor => ({
+  type: 'regex-on-json',
+  path: '',
+  pattern: '',
+});
 
 interface FormState {
   id: string;
@@ -358,6 +369,19 @@ const Editor = ({ form, mode, onChange, onSave, onCancel }: EditorProps) => {
           >
             + Regex extractor
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              patch({
+                extractors: [
+                  ...form.extractors,
+                  emptyRegexOnJsonExtractor(),
+                ],
+              })
+            }
+          >
+            + Regex on JSON
+          </button>
         </div>
       </div>
 
@@ -409,15 +433,17 @@ const ExtractorRow = ({
         value={extractor.type}
         onChange={(e) => {
           const next = e.target.value as LogicalExtractor['type'];
-          onChange(
-            next === 'field'
-              ? { type: 'field', path: '' }
-              : { type: 'regex', on: 'message', pattern: '' },
-          );
+          if (next === 'field')
+            onChange({ type: 'field', path: '' });
+          else if (next === 'regex')
+            onChange({ type: 'regex', on: 'message', pattern: '' });
+          else
+            onChange({ type: 'regex-on-json', path: '', pattern: '' });
         }}
       >
         <option value="field">field</option>
         <option value="regex">regex</option>
+        <option value="regex-on-json">regex on JSON</option>
       </select>
       <span style={{ flex: 1 }} />
       <button
@@ -452,6 +478,53 @@ const ExtractorRow = ({
         autoCapitalize="none"
         autoCorrect="off"
       />
+    ) : extractor.type === 'regex-on-json' ? (
+      <>
+        <input
+          type="text"
+          value={extractor.path}
+          onChange={(e) =>
+            onChange({ ...extractor, path: e.target.value })
+          }
+          placeholder="source field path (e.g. context.message)"
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect="off"
+        />
+        <input
+          type="text"
+          value={extractor.pattern}
+          onChange={(e) =>
+            onChange({ ...extractor, pattern: e.target.value })
+          }
+          placeholder="tr[ace]?[_-]?id=(?<v>\\w+)"
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect="off"
+        />
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            type="text"
+            value={extractor.flags ?? ''}
+            onChange={(e) =>
+              onChange({ ...extractor, flags: e.target.value })
+            }
+            placeholder="flags (i, …)"
+            style={{ width: 90 }}
+            spellCheck={false}
+          />
+          <input
+            type="text"
+            value={extractor.group ?? ''}
+            onChange={(e) =>
+              onChange({ ...extractor, group: e.target.value })
+            }
+            placeholder="group (v)"
+            style={{ flex: 1 }}
+            spellCheck={false}
+          />
+        </div>
+      </>
     ) : (
       <>
         <input
@@ -509,6 +582,11 @@ type EditState =
   | { mode: 'new' }
   | { mode: 'edit'; id: string };
 
+export interface LvLogicalFieldSuggestion {
+  readonly field: LogicalField;
+  readonly matchedKeys: ReadonlyArray<string>;
+}
+
 export interface LvLogicalFieldsPanelProps {
   /**
    * Full catalog of logical fields the user can choose from
@@ -519,6 +597,13 @@ export interface LvLogicalFieldsPanelProps {
   /** Currently activated ids — toggles per-row UI state. */
   readonly activeIds: ReadonlyArray<string>;
   /**
+   * Templates the container thinks the user should activate based on
+   * keys observed in open sources (ADR-0030 Phase 3). The panel
+   * surfaces them in a dedicated section above the catalog with the
+   * matched keys explained so the user understands the suggestion.
+   */
+  readonly suggestions?: ReadonlyArray<LvLogicalFieldSuggestion>;
+  /**
    * Snapshot of the persisted config — used by inline validation to
    * detect id collisions without having to peek at `fields` (which
    * mixes built-ins and customs).
@@ -528,6 +613,13 @@ export interface LvLogicalFieldsPanelProps {
   onAddCustom(field: LogicalField): void;
   onUpdateCustom(field: LogicalField): void;
   onRemoveCustom(id: string): void;
+  /** Serialize the current config (callback returns a JSON string). */
+  exportConfig?: () => string;
+  /**
+   * Parse + apply an imported config. Returns a human-readable error
+   * string or `null` on success. The panel shows the error inline.
+   */
+  importConfig?: (raw: string) => string | null;
   /**
    * Validate a candidate field against the current config. Returns
    * a human-readable error or `null`. Injected so the panel stays
@@ -557,6 +649,7 @@ type CoverageEntry = CoverageView | 'loading' | 'error';
 export const LvLogicalFieldsPanel = ({
   fields,
   activeIds,
+  suggestions = [],
   config,
   onToggle,
   onAddCustom,
@@ -564,9 +657,12 @@ export const LvLogicalFieldsPanel = ({
   onRemoveCustom,
   validate,
   getCoverage,
+  exportConfig,
+  importConfig,
 }: LvLogicalFieldsPanelProps) => {
   const [edit, setEdit] = useState<EditState>({ mode: 'closed' });
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [ioError, setIoError] = useState<string | null>(null);
   const [coverage, setCoverage] = useState<
     Readonly<Record<string, CoverageEntry>>
   >({});
@@ -652,7 +748,60 @@ export const LvLogicalFieldsPanel = ({
           <span className="lv-add-src-plus" aria-hidden="true">＋</span>
           <span>New field</span>
         </button>
+        {exportConfig !== undefined && (
+          <button
+            type="button"
+            className="lv-btn lv-btn-secondary"
+            onClick={() => {
+              const raw = exportConfig();
+              const blob = new Blob([raw], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'logical-fields.json';
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+              setIoError(null);
+            }}
+            title="Download the current config as JSON"
+          >
+            Export
+          </button>
+        )}
+        {importConfig !== undefined && (
+          <button
+            type="button"
+            className="lv-btn lv-btn-secondary"
+            onClick={() => {
+              const inp = document.createElement('input');
+              inp.type = 'file';
+              inp.accept = 'application/json,.json';
+              inp.onchange = async () => {
+                const file = inp.files?.[0];
+                if (file === undefined) return;
+                const text = await file.text();
+                const err = importConfig(text);
+                setIoError(err);
+              };
+              inp.click();
+            }}
+            title="Replace the current config from a JSON file"
+          >
+            Import
+          </button>
+        )}
       </div>
+      {ioError !== null && (
+        <div
+          className="lv-tset-vf-error"
+          role="alert"
+          style={{ margin: '0 12px' }}
+        >
+          {ioError}
+        </div>
+      )}
 
       {edit.mode !== 'closed' && (
         <Editor
@@ -683,6 +832,45 @@ export const LvLogicalFieldsPanel = ({
           />
         ))}
       </div>
+
+      {suggestions.length > 0 && (
+        <>
+          <div className="lv-parsers-section-hd">Suggested</div>
+          <div className="lv-parsers-list">
+            {suggestions.map(({ field: f, matchedKeys }) => (
+              <div key={`sugg-${f.id}`} className="lv-parsers-row">
+                <div className="lv-parsers-row-main">
+                  <span className="lv-parsers-row-id">
+                    {PREFIX}
+                    {f.id}
+                  </span>
+                  <span className="lv-parsers-row-label">{f.label}</span>
+                  <span className="lv-parsers-row-kind">
+                    matches: {matchedKeys.join(', ')}
+                  </span>
+                  {f.description !== undefined && f.description.length > 0 && (
+                    <span
+                      className="lv-form-help"
+                      style={{ display: 'block', marginTop: 4 }}
+                    >
+                      {f.description}
+                    </span>
+                  )}
+                </div>
+                <div className="lv-parsers-row-act">
+                  <button
+                    type="button"
+                    className="lv-btn lv-btn-secondary"
+                    onClick={() => onToggle(f.id)}
+                  >
+                    Activate
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {inactive.length > 0 && (
         <div className="lv-parsers-section-hd">Catalog</div>

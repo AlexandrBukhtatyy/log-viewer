@@ -165,6 +165,15 @@ export interface LvAppProps {
       >)
     | null
   >;
+  /** Templates suggested for activation based on observed source keys. */
+  readonly logicalFieldSuggestions?: ReadonlyArray<{
+    readonly field: import('../../../core/types/index.ts').LogicalField;
+    readonly matchedKeys: ReadonlyArray<string>;
+  }>;
+  /** Serialize the current logical-fields config as a JSON string. */
+  exportLogicalFieldsConfig?: () => string;
+  /** Parse + apply an imported config. Returns an error string or `null`. */
+  importLogicalFieldsConfig?: (raw: string) => string | null;
   onGrantPermission?: (id: string) => void;
   onCancelSource?: (id: string) => void;
 
@@ -279,6 +288,9 @@ export const LvApp = ({
   onRemoveCustomLogicalField,
   validateLogicalField,
   getLogicalFieldCoverage,
+  logicalFieldSuggestions,
+  exportLogicalFieldsConfig,
+  importLogicalFieldsConfig,
   onGrantPermission,
   onCancelSource,
   tweaks,
@@ -595,6 +607,9 @@ export const LvApp = ({
         onRemoveCustom={(id) => onRemoveCustomLogicalField?.(id)}
         validate={validateLogicalField ?? (() => null)}
         getCoverage={getLogicalFieldCoverage}
+        suggestions={logicalFieldSuggestions}
+        exportConfig={exportLogicalFieldsConfig}
+        importConfig={importLogicalFieldsConfig}
       />
     ) : (
       <LvAlertsPanel />

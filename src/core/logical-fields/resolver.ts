@@ -37,7 +37,13 @@ const runExtractor = (entry: LogEntry, ex: LogicalExtractor): unknown => {
   if (ex.type === 'field') {
     return readFieldPath(entry.fields, ex.path);
   }
-  const text = ex.on === 'message' ? entry.message : entry.raw;
+  let text: unknown;
+  if (ex.type === 'regex') {
+    text = ex.on === 'message' ? entry.message : entry.raw;
+  } else {
+    // regex-on-json: resolve the path first, only then apply the regex.
+    text = readFieldPath(entry.fields, ex.path);
+  }
   if (typeof text !== 'string' || text.length === 0) return null;
   let re: RegExp;
   try {
@@ -47,7 +53,7 @@ const runExtractor = (entry: LogEntry, ex: LogicalExtractor): unknown => {
   }
   const m = re.exec(text);
   if (m === null) return null;
-  if (ex.group !== undefined) {
+  if (ex.group !== undefined && ex.group.length > 0) {
     return m.groups?.[ex.group] ?? null;
   }
   return m[1] ?? m[0] ?? null;

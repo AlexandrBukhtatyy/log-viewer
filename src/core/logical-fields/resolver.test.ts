@@ -115,6 +115,47 @@ describe('resolveLogicalField — regex extractor', () => {
   });
 });
 
+describe('resolveLogicalField — regex-on-json extractor', () => {
+  it('reads a field path then matches a regex on its value', () => {
+    const entry = makeEntry({
+      fields: { context: 'user=u_1 trace=tr_42' },
+    });
+    const f = field('trace_id', [
+      {
+        type: 'regex-on-json',
+        path: 'context',
+        pattern: 'trace=(?<v>\\w+)',
+        group: 'v',
+      },
+    ]);
+    expect(resolveLogicalField(entry, f)).toBe('tr_42');
+  });
+
+  it('returns null when the JSON path is missing', () => {
+    const entry = makeEntry({ fields: { other: 'x' } });
+    const f = field('trace_id', [
+      {
+        type: 'regex-on-json',
+        path: 'context',
+        pattern: '.*',
+      },
+    ]);
+    expect(resolveLogicalField(entry, f)).toBeNull();
+  });
+
+  it('returns null when the resolved value is not a string', () => {
+    const entry = makeEntry({ fields: { context: 42 } });
+    const f = field('trace_id', [
+      {
+        type: 'regex-on-json',
+        path: 'context',
+        pattern: '.*',
+      },
+    ]);
+    expect(resolveLogicalField(entry, f)).toBeNull();
+  });
+});
+
 describe('resolveLogicalField — chain semantics', () => {
   it('returns the first non-null extractor value', () => {
     const entry = makeEntry({ fields: { traceId: 'abc' } });

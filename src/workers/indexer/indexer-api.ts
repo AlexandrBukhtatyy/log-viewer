@@ -26,7 +26,7 @@ import type {
   SourceId,
 } from '../../core/types/index.ts';
 import { collectLevelCounts, groupFieldExpr, levelBreakdownSql } from './aggregate.ts';
-import { isValidJsonPath } from '../../core/logical-fields/sql.ts';
+import { extractorToSqlOrNull } from '../../core/logical-fields/sql.ts';
 import { openDb } from './db/open-db.ts';
 import {
   aggregateFieldDescriptors,
@@ -743,16 +743,10 @@ export const indexerApi: IndexerApi = {
     const fieldExtractors: ReadonlyArray<{
       readonly index: number;
       readonly sql: string;
-    }> = field.extractors.flatMap((ex, index) =>
-      ex.type === 'field' && isValidJsonPath(ex.path)
-        ? [
-            {
-              index,
-              sql: `JSON_EXTRACT(entry.fields_json, '$.${ex.path}')`,
-            },
-          ]
-        : [],
-    );
+    }> = field.extractors.flatMap((ex, index) => {
+      const sql = extractorToSqlOrNull(ex);
+      return sql === null ? [] : [{ index, sql }];
+    });
 
     let regexExtractorsSkipped = 0;
     for (const ex of field.extractors) if (ex.type === 'regex') regexExtractorsSkipped++;
