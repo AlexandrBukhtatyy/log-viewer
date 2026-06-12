@@ -27,6 +27,7 @@ import {
   BUILT_IN_LOGICAL_FIELDS,
   resolveActiveLogicalFields,
 } from '../../core/logical-fields/catalog.ts';
+import { validateLogicalField as validateLogicalFieldCore } from '../../core/logical-fields/validation.ts';
 import type { FieldDescriptor } from '../../core/filter/field-descriptor.ts';
 import { useWorkspace, useWorkspaceStore } from '../../hooks/use-workspace.ts';
 import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
@@ -324,6 +325,9 @@ export const LvAppContainer = () => {
   // commits, the worker-side filter/group SQL.
   const logicalFieldsConfig = useLogicalFields((s) => s.config);
   const toggleLogicalField = useLogicalFields((s) => s.toggle);
+  const addCustomLogicalField = useLogicalFields((s) => s.addCustom);
+  const updateCustomLogicalField = useLogicalFields((s) => s.updateCustom);
+  const removeCustomLogicalField = useLogicalFields((s) => s.removeCustom);
   const logicalFieldsCatalog = useMemo(
     () => [...BUILT_IN_LOGICAL_FIELDS, ...logicalFieldsConfig.customFields],
     [logicalFieldsConfig.customFields],
@@ -972,7 +976,12 @@ export const LvAppContainer = () => {
       onRemoveCustomParser={onRemoveCustomParser}
       logicalFields={logicalFieldsCatalog}
       activeLogicalFieldIds={logicalFieldsConfig.activeIds}
+      logicalFieldsConfig={logicalFieldsConfig}
       onToggleLogicalField={toggleLogicalField}
+      onAddCustomLogicalField={addCustomLogicalField}
+      onUpdateCustomLogicalField={updateCustomLogicalField}
+      onRemoveCustomLogicalField={removeCustomLogicalField}
+      validateLogicalField={validateLogicalFieldCore}
       onGrantPermission={onGrantPermission}
       onCancelSource={onCancelSource}
       tweaks={{

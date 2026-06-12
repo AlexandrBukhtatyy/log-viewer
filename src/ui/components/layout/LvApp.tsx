@@ -134,8 +134,27 @@ export interface LvAppProps {
   >;
   /** Currently activated logical-field ids. */
   readonly activeLogicalFieldIds?: ReadonlyArray<string>;
+  /** Full persisted config — used by the inline editor for validation. */
+  readonly logicalFieldsConfig?:
+    import('../../../core/types/index.ts').LogicalFieldsConfig;
   /** Toggle a logical field's activation by id. */
   onToggleLogicalField?: (id: string) => void;
+  /** Add a user-defined logical field (also activates it). */
+  onAddCustomLogicalField?: (
+    field: import('../../../core/types/index.ts').LogicalField,
+  ) => void;
+  /** Replace a user-defined logical field in place. */
+  onUpdateCustomLogicalField?: (
+    field: import('../../../core/types/index.ts').LogicalField,
+  ) => void;
+  /** Delete a user-defined logical field (also drops its activation). */
+  onRemoveCustomLogicalField?: (id: string) => void;
+  /** Pure validator for inline editor errors. */
+  validateLogicalField?: (
+    field: import('../../../core/types/index.ts').LogicalField,
+    config: import('../../../core/types/index.ts').LogicalFieldsConfig,
+    selfId: string | null,
+  ) => string | null;
   onGrantPermission?: (id: string) => void;
   onCancelSource?: (id: string) => void;
 
@@ -239,7 +258,12 @@ export const LvApp = ({
   onRemoveCustomParser,
   logicalFields = [],
   activeLogicalFieldIds = [],
+  logicalFieldsConfig,
   onToggleLogicalField,
+  onAddCustomLogicalField,
+  onUpdateCustomLogicalField,
+  onRemoveCustomLogicalField,
+  validateLogicalField,
   onGrantPermission,
   onCancelSource,
   tweaks,
@@ -546,7 +570,14 @@ export const LvApp = ({
       <LvLogicalFieldsPanel
         fields={logicalFields}
         activeIds={activeLogicalFieldIds}
+        config={
+          logicalFieldsConfig ?? { activeIds: [], customFields: [] }
+        }
         onToggle={(id) => onToggleLogicalField?.(id)}
+        onAddCustom={(f) => onAddCustomLogicalField?.(f)}
+        onUpdateCustom={(f) => onUpdateCustomLogicalField?.(f)}
+        onRemoveCustom={(id) => onRemoveCustomLogicalField?.(id)}
+        validate={validateLogicalField ?? (() => null)}
       />
     ) : (
       <LvAlertsPanel />
