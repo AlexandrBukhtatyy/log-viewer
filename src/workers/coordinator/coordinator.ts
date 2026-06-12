@@ -1145,6 +1145,11 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       return [...dynamic, ...BUILT_IN_FIELD_DESCRIPTORS];
     },
 
+    setLogicalFields: async (fields) => {
+      await deps.getIndexer().opening;
+      await deps.getIndexer().proxy.setLogicalFields(fields);
+    },
+
     listParsers: async () => {
       const metas = await deps.parserPool.withWorker((p) => p.listParsers());
       return metas.map((m) => ({

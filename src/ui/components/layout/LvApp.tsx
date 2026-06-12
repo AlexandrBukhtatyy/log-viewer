@@ -20,7 +20,6 @@ import type {
   LvSourceKind,
   LvTab,
   LvTweaks,
-  LvVirtualField,
 } from '../../contracts/lv-types.ts';
 import { collectAllFileIds } from '../../utils/build-catalog.ts';
 import { LvIconRail } from '../rail/LvIconRail.tsx';
@@ -33,6 +32,7 @@ import { LvSearchPanel } from '../panels/LvSearchPanel.tsx';
 import { LvBookmarksPanel } from '../panels/LvBookmarksPanel.tsx';
 import { LvAiPanel } from '../panels/LvAiPanel.tsx';
 import { LvAlertsPanel } from '../panels/LvAlertsPanel.tsx';
+import { LvLogicalFieldsPanel } from '../panels/LvLogicalFieldsPanel.tsx';
 import { LvParsersPanel } from '../panels/LvParsersPanel.tsx';
 import { LvCommandPalette } from '../modals/LvCommandPalette.tsx';
 import { LvShortcutsModal } from '../modals/LvShortcutsModal.tsx';
@@ -124,6 +124,18 @@ export interface LvAppProps {
     def: import('../../../core/parsers/custom-parser-def.ts').CustomParserDef,
   ) => void | Promise<void>;
   onRemoveCustomParser?: (id: string) => void | Promise<void>;
+  /**
+   * Catalog of logical fields exposed in the Logical-Fields rail panel
+   * (built-in templates + user-defined). Order decides display order
+   * within each section.
+   */
+  readonly logicalFields?: ReadonlyArray<
+    import('../../../core/types/index.ts').LogicalField
+  >;
+  /** Currently activated logical-field ids. */
+  readonly activeLogicalFieldIds?: ReadonlyArray<string>;
+  /** Toggle a logical field's activation by id. */
+  onToggleLogicalField?: (id: string) => void;
   onGrantPermission?: (id: string) => void;
   onCancelSource?: (id: string) => void;
 
@@ -163,9 +175,6 @@ export interface LvAppProps {
   readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
   readonly columns: ReadonlyArray<LvColumnPref>;
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
-  /** Active tab's user-defined regex-extracted columns (Phase 2). */
-  readonly virtualFields: ReadonlyArray<LvVirtualField>;
-  onVirtualFieldsChange: (next: ReadonlyArray<LvVirtualField>) => void;
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
   /** Returns resolved parser id for the entry's source — drives Meta-tab `@parser.id`. */
   parserIdOf?: (entry: LogEntry) => string | undefined;
@@ -228,6 +237,9 @@ export const LvApp = ({
   customParsers = [],
   onUpsertCustomParser,
   onRemoveCustomParser,
+  logicalFields = [],
+  activeLogicalFieldIds = [],
+  onToggleLogicalField,
   onGrantPermission,
   onCancelSource,
   tweaks,
@@ -252,8 +264,6 @@ export const LvApp = ({
   fieldDescriptors,
   columns,
   onColumnsChange,
-  virtualFields,
-  onVirtualFieldsChange,
   cellValueOf,
   parserIdOf,
   onExport,
@@ -532,6 +542,12 @@ export const LvApp = ({
         onUpsert={(def) => onUpsertCustomParser?.(def)}
         onRemove={(id) => onRemoveCustomParser?.(id)}
       />
+    ) : rail === 'fields' ? (
+      <LvLogicalFieldsPanel
+        fields={logicalFields}
+        activeIds={activeLogicalFieldIds}
+        onToggle={(id) => onToggleLogicalField?.(id)}
+      />
     ) : (
       <LvAlertsPanel />
     );
@@ -634,8 +650,6 @@ export const LvApp = ({
           fieldDescriptors={fieldDescriptors}
           columns={columns}
           onColumnsChange={onColumnsChange}
-          virtualFields={virtualFields}
-          onVirtualFieldsChange={onVirtualFieldsChange}
           cellValueOf={cellValueOf}
           parserIdOf={parserIdOf}
           renderDetailEditor={renderDetailEditor}

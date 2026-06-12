@@ -32,7 +32,7 @@ export interface FieldDescriptor {
   readonly key: FieldKey;
   readonly label: string;
   readonly type: FieldDescriptorType;
-  readonly origin: 'builtin' | 'dynamic';
+  readonly origin: 'builtin' | 'dynamic' | 'logical';
   /** Occurrences across the requested source set; absent for builtins. */
   readonly occurrences?: number;
   /** occurrences / total_seen; absent for builtins or when total_seen=0. */

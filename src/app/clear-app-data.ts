@@ -24,6 +24,7 @@ const UI_STATE_LOCAL_STORAGE_KEYS: ReadonlyArray<string> = [
   'lv:ui-prefs',
   'lv:workspace',
   'lv:jsParsersEnabled',
+  'lv:logical-fields',
 ];
 
 export const clearUiState = (): void => {

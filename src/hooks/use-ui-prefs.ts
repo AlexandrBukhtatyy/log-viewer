@@ -22,32 +22,15 @@ export interface LvColumnPref {
   readonly widthPx: number;
 }
 
-/** Prefix marker for virtual-field column keys (Phase 2). */
-export const VF_KEY_PREFIX = 'vf:';
-
 /**
- * A user-defined regex-extracted column. Persistence-model lives next
- * to the hook so it can also flow through `LvColumnPreset` without
- * triggering ADR-0002 layer violations.
- */
-export interface LvVirtualField {
-  readonly key: string;
-  readonly label?: string;
-  readonly pattern: string;
-  readonly group: string;
-  readonly target?: 'raw' | 'message';
-}
-
-/**
- * A named bundle of `columns` and (optionally) `virtualFields` that
- * the user can apply to any tab in one click. Built-in presets are
- * hardcoded and read-only; user presets persist to `lv:ui-prefs`.
+ * A named bundle of `columns` that the user can apply to any tab in
+ * one click. Built-in presets are hardcoded and read-only; user
+ * presets persist to `lv:ui-prefs`.
  */
 export interface LvColumnPreset {
   readonly id: string;
   readonly name: string;
   readonly columns: ReadonlyArray<LvColumnPref>;
-  readonly virtualFields?: ReadonlyArray<LvVirtualField>;
   readonly origin: 'builtin' | 'user';
 }
 
@@ -63,8 +46,8 @@ export interface LvTweaks {
   sidebarCollapsed: boolean;
   /**
    * All data columns in the table — built-in (`@ts`, `@level`,
-   * `@source.name`, `@file`), dynamic JSON keys, and virtual
-   * `vf:*` keys. Layout is a flat array; the chrome (LN gutter,
+   * `@source.name`, `@file`), dynamic JSON keys, and logical
+   * `~*` keys. Layout is a flat array; the chrome (LN gutter,
    * caret, message and actions) is always rendered. Empty by
    * default — a fresh table shows only the gutter and message.
    */
@@ -77,11 +60,9 @@ export interface LvTweaks {
   gutterMode: LvGutterMode;
   /**
    * User-defined column presets. Each preset bundles a `columns`
-   * list and an optional `virtualFields` list and can be applied to
-   * any tab in one click (Phase 3 of
-   * docs/plans/columns-multi-format-impl.md). Built-in presets
-   * are not stored here — they live in code and are merged at read
-   * time by the consumer.
+   * list and can be applied to any tab in one click. Built-in
+   * presets are not stored here — they live in code and are merged
+   * at read time by the consumer.
    */
   presets: ReadonlyArray<LvColumnPreset>;
 }

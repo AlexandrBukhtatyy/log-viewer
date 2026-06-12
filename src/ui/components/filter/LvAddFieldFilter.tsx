@@ -41,7 +41,11 @@ export const LvAddFieldFilter = ({ descriptors, onAdd, activeSources }: LvAddFie
       if (aRate !== bRate) return bRate - aRate;
       return a.key.localeCompare(b.key);
     });
-    return { dynamic: dyn, builtin: descriptors.filter((d) => d.origin === 'builtin') };
+    return {
+      dynamic: dyn,
+      builtin: descriptors.filter((d) => d.origin === 'builtin'),
+      logical: descriptors.filter((d) => d.origin === 'logical'),
+    };
   }, [descriptors]);
 
   const selected = useMemo(
@@ -78,6 +82,11 @@ export const LvAddFieldFilter = ({ descriptors, onAdd, activeSources }: LvAddFie
             />
             <datalist id="lv-field-keys">
               {sortedDescriptors.builtin.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+              {sortedDescriptors.logical.map((d) => (
                 <option key={d.key} value={d.key}>
                   {d.label}
                 </option>

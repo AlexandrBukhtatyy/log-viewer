@@ -51,7 +51,8 @@ export const LvColumnPicker = ({ columns, descriptors, onChange }: LvColumnPicke
       return a.key.localeCompare(b.key);
     });
     const builtin = descriptors.filter((d) => d.origin === 'builtin');
-    return { dynamic: dyn, builtin };
+    const logical = descriptors.filter((d) => d.origin === 'logical');
+    return { dynamic: dyn, builtin, logical };
   }, [descriptors]);
 
   const toggle = (key: string) => {
@@ -132,6 +133,12 @@ export const LvColumnPicker = ({ columns, descriptors, onChange }: LvColumnPicke
       </button>
       {open && (
         <div className="lv-colpick-pop" role="menu">
+          {sortedDescriptors.logical.length > 0 && (
+            <div className="lv-colpick-sec">
+              <div className="lv-colpick-sec-title">Logical fields</div>
+              {sortedDescriptors.logical.map(renderRow)}
+            </div>
+          )}
           {sortedDescriptors.dynamic.length > 0 && (
             <div className="lv-colpick-sec">
               <div className="lv-colpick-sec-title">Fields</div>

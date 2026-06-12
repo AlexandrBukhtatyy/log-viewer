@@ -1,3 +1,4 @@
+import type { LogicalFieldsCtx } from '../types/logical-field.ts';
 import type {
   FieldFilter,
   FieldFilterOp,
@@ -44,7 +45,10 @@ const escapeLike = (s: string): string =>
  * outside SQLite and the resolver matches them against decoded bytes
  * for the visible window only.
  */
-export const buildClause = (filter: LogFilter): BuiltClause => {
+export const buildClause = (
+  filter: LogFilter,
+  ctx: LogicalFieldsCtx = {},
+): BuiltClause => {
   const conds: string[] = [];
   const params: Array<string | number> = [];
   let needsSourceJoin = false;
@@ -54,7 +58,7 @@ export const buildClause = (filter: LogFilter): BuiltClause => {
     values: ReadonlyArray<string>,
   ): void => {
     if (values.length === 0) return;
-    const { sql, needsSourceJoin: join } = fieldKeyToSql(key);
+    const { sql, needsSourceJoin: join } = fieldKeyToSql(key, ctx);
     if (join) needsSourceJoin = true;
     const placeholders = values.map(() => '?').join(', ');
     conds.push(`${sql} IN (${placeholders})`);
@@ -75,7 +79,7 @@ export const buildClause = (filter: LogFilter): BuiltClause => {
   }
 
   if (filter.timeRange) {
-    const tsCol = fieldKeyToSql('@ts').sql;
+    const tsCol = fieldKeyToSql('@ts', ctx).sql;
     if (filter.timeRange.from !== null) {
       conds.push(`${tsCol} >= ?`);
       params.push(filter.timeRange.from);
@@ -88,7 +92,7 @@ export const buildClause = (filter: LogFilter): BuiltClause => {
 
   if (filter.fieldFilters && filter.fieldFilters.length > 0) {
     for (const ff of filter.fieldFilters) {
-      const fieldClause = buildFieldFilterClause(ff);
+      const fieldClause = buildFieldFilterClause(ff, ctx);
       if (fieldClause.needsSourceJoin) needsSourceJoin = true;
       conds.push(fieldClause.sql);
       params.push(...fieldClause.params);
@@ -108,8 +112,11 @@ interface FieldClause {
   readonly needsSourceJoin: boolean;
 }
 
-const buildFieldFilterClause = (ff: FieldFilter): FieldClause => {
-  const { sql: lhs, needsSourceJoin } = fieldKeyToSql(ff.key);
+const buildFieldFilterClause = (
+  ff: FieldFilter,
+  ctx: LogicalFieldsCtx,
+): FieldClause => {
+  const { sql: lhs, needsSourceJoin } = fieldKeyToSql(ff.key, ctx);
   switch (ff.op as FieldFilterOp) {
     case '=':
       return {

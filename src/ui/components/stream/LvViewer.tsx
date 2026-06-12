@@ -16,7 +16,6 @@ import type {
   LvSavedSearch,
   LvTab,
   LvTweaks,
-  LvVirtualField,
 } from '../../contracts/lv-types.ts';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import { builtInColumn } from '../../contracts/lv-column-registry.tsx';
@@ -126,9 +125,6 @@ export interface LvViewerProps {
   /** User-picked extra columns; the picker mutates this list. */
   readonly columns: ReadonlyArray<LvColumnPref>;
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
-  /** Active tab's regex-extracted virtual columns (Phase 2). */
-  readonly virtualFields: ReadonlyArray<LvVirtualField>;
-  onVirtualFieldsChange: (next: ReadonlyArray<LvVirtualField>) => void;
   /** Extracts the cell value for a `(entry, columnKey)` pair. */
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
   /** Resolves the parser id for an entry's source. Shown in the Meta-vкладке of `LvRowDetail`. */
@@ -179,8 +175,6 @@ export const LvViewer = ({
   fieldDescriptors,
   columns,
   onColumnsChange,
-  virtualFields,
-  onVirtualFieldsChange,
   cellValueOf,
   parserIdOf,
   renderDetailEditor,
@@ -455,8 +449,6 @@ export const LvViewer = ({
             setTweak={setTweak}
             columns={columns}
             onColumnsChange={onColumnsChange}
-            virtualFields={virtualFields}
-            onVirtualFieldsChange={onVirtualFieldsChange}
             filesById={filesById}
           />
 

@@ -1,8 +1,19 @@
-import type { LogEntry, SourceRecord } from '../types/index.ts';
+import { logicalFieldToSql } from '../logical-fields/sql.ts';
+import { resolveLogicalField } from '../logical-fields/resolver.ts';
+import type {
+  LogEntry,
+  LogicalFieldsCtx,
+  SourceRecord,
+} from '../types/index.ts';
 import type { FieldKey } from '../types/log-filter.ts';
+import {
+  LOGICAL_FIELD_PREFIX,
+  logicalFieldIdOf,
+} from '../types/logical-field.ts';
 
 /**
- * Translation of a `FieldKey` (ADR-0017 `@`-namespace) into an SQL fragment.
+ * Translation of a `FieldKey` (ADR-0017 `@`-namespace, ADR-0030
+ * `~`-namespace) into an SQL fragment.
  *
  * `sql` is a *value expression* that can be used wherever a column reference
  * is allowed: SELECT, WHERE, GROUP BY, ORDER BY. Caller is responsible for
@@ -11,7 +22,9 @@ import type { FieldKey } from '../types/log-filter.ts';
  * Built-in keys interpolate fixed identifiers (whitelisted, no injection
  * risk). Dynamic keys interpolate the user-supplied name into a JSON path
  * after a strict `[A-Za-z_][A-Za-z0-9_]*` check, since SQLite has no
- * placeholder for the path argument that survives `GROUP BY`.
+ * placeholder for the path argument that survives `GROUP BY`. Logical
+ * (`~`) keys expand to a `COALESCE(JSON_EXTRACT(...), …)` chain built
+ * from the matching `LogicalField` definition in `ctx`.
  */
 export interface FieldKeySql {
   readonly sql: string;
@@ -44,7 +57,19 @@ const POSITIONAL_KEY_RE = /^\$\d+$/;
 
 export const isBuiltInFieldKey = (key: FieldKey): boolean => key in BUILT_IN;
 
-export const fieldKeyToSql = (key: FieldKey): FieldKeySql => {
+const UNKNOWN_LOGICAL: FieldKeySql = { sql: 'NULL', needsSourceJoin: false };
+
+export const fieldKeyToSql = (
+  key: FieldKey,
+  ctx: LogicalFieldsCtx = {},
+): FieldKeySql => {
+  if (key.startsWith(LOGICAL_FIELD_PREFIX)) {
+    const id = logicalFieldIdOf(key);
+    if (id === null) return UNKNOWN_LOGICAL;
+    const field = ctx.activeLogicalFields?.find((f) => f.id === id);
+    if (field === undefined) return UNKNOWN_LOGICAL;
+    return logicalFieldToSql(field);
+  }
   const builtIn = BUILT_IN[key];
   if (builtIn !== undefined) return builtIn;
   if (key.startsWith('@')) {
@@ -76,13 +101,22 @@ export const SOURCE_JOIN_SQL = 'JOIN source ON source.id = entry.source_id';
  *
  * `@source.name` / `@source.kind` need a `SourceRecord` lookup; pass
  * `undefined` when the caller does not have it (the cell renders as
- * `null` in that case).
+ * `null` in that case). `~`-keys consult `ctx.activeLogicalFields` to
+ * find their extractor chain — unknown ids resolve to `null`.
  */
 export const getEntryFieldValue = (
   entry: LogEntry,
   key: FieldKey,
   sourceRecord?: SourceRecord | null,
+  ctx: LogicalFieldsCtx = {},
 ): unknown => {
+  if (key.startsWith(LOGICAL_FIELD_PREFIX)) {
+    const id = logicalFieldIdOf(key);
+    if (id === null) return null;
+    const field = ctx.activeLogicalFields?.find((f) => f.id === id);
+    if (field === undefined) return null;
+    return resolveLogicalField(entry, field);
+  }
   switch (key) {
     case '@ts':         return entry.timestamp;
     case '@level':      return entry.level;
@@ -98,4 +132,3 @@ export const getEntryFieldValue = (
       return (entry.fields as Record<string, unknown>)[key];
   }
 };
-

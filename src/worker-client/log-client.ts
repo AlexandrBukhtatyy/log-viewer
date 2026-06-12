@@ -136,6 +136,9 @@ export interface ViewActions {
     to: number,
   ) => Promise<ReadonlyArray<LogEntry>>;
   getFieldSchema: (filter: LogFilter) => Promise<ReadonlyArray<FieldDescriptor>>;
+  setLogicalFields: (
+    fields: ReadonlyArray<import('../core/types/index.ts').LogicalField>,
+  ) => Promise<void>;
   listParsers: () => Promise<ReadonlyArray<ParserInfo>>;
   listCustomParsers: () => Promise<ReadonlyArray<CustomParserDef>>;
   upsertCustomParser: (def: CustomParserDef) => Promise<void>;
@@ -534,6 +537,7 @@ export const createLogClient = (): ViewStore => {
       getEntriesScoped: async (filter, from, to) =>
         api().getEntriesScoped(filter, from, to),
       getFieldSchema: async (filter) => api().getFieldSchema(filter),
+      setLogicalFields: async (fields) => api().setLogicalFields(fields),
       listParsers: async () => api().listParsers(),
       listCustomParsers: async () => api().listCustomParsers(),
       upsertCustomParser: async (def) => api().upsertCustomParser(def),

@@ -89,6 +89,31 @@ const ITEMS: RailItem[] = [
     ),
   },
   {
+    id: 'fields',
+    label: 'Logical fields',
+    icon: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        {/* Tilde-shaped wave atop a label tag — visual cue for
+            "~-namespace fields". */}
+        <path
+          d="M2.5 5.5 C4 3.8 5.5 7 7 6 C8.5 5 10.5 7.6 12 6 C13 5 13.5 5 13.5 5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        <path
+          d="M2.5 9 H10.5 L13 11.5 L10.5 14 H2.5 Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: 'parsers',
     label: 'Parsers',
     icon: (

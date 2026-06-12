@@ -22,7 +22,6 @@ import type {
   LvGroupBy,
   LvSavedSearch,
   LvTweaks,
-  LvVirtualField,
 } from '../../contracts/lv-types.ts';
 import { compatOf } from '../../utils/field-compatibility.ts';
 import { LvGroupBySelect } from './LvGroupBySelect.tsx';
@@ -63,8 +62,6 @@ export interface LvFilterBarProps {
   setTweak: <K extends keyof LvTweaks>(key: K, value: LvTweaks[K]) => void;
   readonly columns: ReadonlyArray<LvColumnPref>;
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
-  readonly virtualFields: ReadonlyArray<LvVirtualField>;
-  onVirtualFieldsChange: (next: ReadonlyArray<LvVirtualField>) => void;
   /**
    * Maps every catalog source id to its tree-node (name + kind etc.).
    * Used by the compatibility badges that flag fields living only in
@@ -91,8 +88,6 @@ export const LvFilterBar = ({
   setTweak,
   columns,
   onColumnsChange,
-  virtualFields,
-  onVirtualFieldsChange,
   filesById,
 }: LvFilterBarProps) => {
   const [savedOpen, setSavedOpen] = useState(false);
@@ -420,8 +415,6 @@ export const LvFilterBar = ({
           columns={columns}
           descriptors={fieldDescriptors}
           onColumnsChange={onColumnsChange}
-          virtualFields={virtualFields}
-          onVirtualFieldsChange={onVirtualFieldsChange}
           activeSources={activeSources}
         />
       </div>

@@ -1,5 +1,9 @@
 import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import type { FieldKey, LogLevel } from '../../core/types/index.ts';
+import type {
+  FieldKey,
+  LogLevel,
+  LogicalFieldsCtx,
+} from '../../core/types/index.ts';
 import { fieldKeyToSql, type FieldKeySql } from '../../core/filter/field-key.ts';
 
 export const ALL_LEVELS: ReadonlyArray<LogLevel> = [
@@ -37,9 +41,12 @@ const LEGACY_BARE_KEY: Readonly<Record<string, FieldKey>> = {
  * mistyped key fails loud at query time instead of silently
  * matching nothing.
  */
-export const groupFieldExpr = (field: string): FieldKeySql => {
+export const groupFieldExpr = (
+  field: string,
+  ctx: LogicalFieldsCtx = {},
+): FieldKeySql => {
   const key = LEGACY_BARE_KEY[field] ?? field;
-  return fieldKeyToSql(key);
+  return fieldKeyToSql(key, ctx);
 };
 
 /**

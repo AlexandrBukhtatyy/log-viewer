@@ -4,6 +4,7 @@ import type {
   LogFilter,
   LogSource,
   LogSourceKind,
+  LogicalField,
   SourceId,
 } from '../types/index.ts';
 import type { FieldDescriptor } from '../filter/field-descriptor.ts';
@@ -84,6 +85,18 @@ export interface IndexerApi {
     filter: LogFilter,
     format: 'jsonl' | 'csv',
   ) => Promise<string>;
+
+  /**
+   * Push the currently activated logical fields (ADR-0030) into the
+   * indexer so subsequent `search`/`count`/`groupCounts`/`histogram`/
+   * `exportFiltered` calls can compile `~name` field-keys into the
+   * matching `COALESCE(JSON_EXTRACT(…), …)` chain. The main thread
+   * calls this on every `LogicalFieldsConfig` change; the indexer
+   * keeps the latest snapshot until the next push.
+   */
+  setLogicalFields: (
+    fields: ReadonlyArray<LogicalField>,
+  ) => Promise<void>;
 
   vacuum: () => Promise<void>;
   estimateSize: () => Promise<SizeReport>;

@@ -9,7 +9,6 @@
 // This keeps `hooks/` from importing `ui/`, satisfying the ADR-0002 layer
 // boundary in eslint.config.js.
 import type { LvColumnPref } from '../../hooks/use-ui-prefs.ts';
-export { VF_KEY_PREFIX } from '../../hooks/use-ui-prefs.ts';
 export type {
   LvTweaks,
   LvTweakTheme,
@@ -17,7 +16,6 @@ export type {
   LvColumnPref,
   LvColumnPreset,
   LvGutterMode,
-  LvVirtualField,
 } from '../../hooks/use-ui-prefs.ts';
 export type { LvSavedSearch } from '../../hooks/use-saved-searches.ts';
 
@@ -117,7 +115,14 @@ export type LvCatalogRoot =
   | (LvFolderNode & { root: true })
   | (LvFileNode & { root: true });
 
-export type LvRail = 'files' | 'search' | 'bookmarks' | 'alerts' | 'ai' | 'parsers';
+export type LvRail =
+  | 'files'
+  | 'search'
+  | 'bookmarks'
+  | 'alerts'
+  | 'ai'
+  | 'parsers'
+  | 'fields';
 
 /**
  * Group-by key (ADR-0017). Free-form `FieldKey` — built-in `@`-attribute
@@ -147,12 +152,6 @@ export interface LvColumn {
   readonly widthPx: number;
 }
 
-// LvVirtualField and VF_KEY_PREFIX live in `hooks/use-ui-prefs.ts`
-// alongside LvColumnPref — they need to flow through LvColumnPreset
-// (also persisted in ui-prefs) without dragging UI types into hooks.
-
-import type { LvVirtualField } from '../../hooks/use-ui-prefs.ts';
-
 export interface LvTab {
   /** Unique tab id; for file tabs equals the SourceId so re-opening the same source is detected. `'__all__'` is reserved for the multi-select aggregate tab. */
   id: string;
@@ -178,10 +177,4 @@ export interface LvTab {
    * picker write back here for non-`__all__` tabs.
    */
   columns?: ReadonlyArray<LvColumnPref>;
-  /**
-   * Per-tab regex-extracted virtual fields. Each entry is referenced
-   * from `columns[].key` via the `vf:` prefix; the cell renderer
-   * resolves the value lazily from `entry.raw`/`entry.message`.
-   */
-  virtualFields?: ReadonlyArray<LvVirtualField>;
 }

@@ -20,6 +20,7 @@ import type {
   LogLevel,
   LogSource,
   LogSourceKind,
+  LogicalField,
   SourceId,
 } from '../../core/types/index.ts';
 import { collectLevelCounts, groupFieldExpr, levelBreakdownSql } from './aggregate.ts';
@@ -84,6 +85,16 @@ const aggregateMinuteBuckets = (
 };
 
 let state: State | null = null;
+
+/**
+ * Latest activated logical fields pushed by the main thread (ADR-0030).
+ * Snapshot is consulted by every SQL builder that may encounter a
+ * `~name` key; an empty array (the default) makes such keys compile
+ * to SQL `NULL`, matching the read-path resolver behaviour.
+ */
+let activeLogicalFields: ReadonlyArray<LogicalField> = [];
+const logicalCtx = (): { activeLogicalFields: ReadonlyArray<LogicalField> } =>
+  ({ activeLogicalFields });
 
 const requireState = (): State => {
   if (state === null) {
@@ -530,7 +541,7 @@ export const indexerApi: IndexerApi = {
 
   search: async (filter, from, to) => {
     const { db } = requireState();
-    const { joinSql, whereSql, params } = buildClause(filter);
+    const { joinSql, whereSql, params } = buildClause(filter, logicalCtx());
     const limit = Math.max(0, to - from);
     const offset = Math.max(0, from);
     if (limit === 0) return [];
@@ -541,7 +552,7 @@ export const indexerApi: IndexerApi = {
 
   count: async (filter) => {
     const { db } = requireState();
-    const { joinSql, whereSql, params } = buildClause(filter);
+    const { joinSql, whereSql, params } = buildClause(filter, logicalCtx());
     const v = runScalar(db, `SELECT COUNT(*) FROM entry ${joinSql} ${whereSql}`, params);
     return typeof v === 'number' ? v : Number(v ?? 0);
   },
@@ -558,8 +569,8 @@ export const indexerApi: IndexerApi = {
 
   groupCounts: async (filter, field, limit): Promise<ReadonlyArray<GroupBucket>> => {
     const { db } = requireState();
-    const { joinSql: filterJoin, whereSql, params } = buildClause(filter);
-    const { sql: expr, needsSourceJoin: groupNeedsJoin } = groupFieldExpr(field);
+    const { joinSql: filterJoin, whereSql, params } = buildClause(filter, logicalCtx());
+    const { sql: expr, needsSourceJoin: groupNeedsJoin } = groupFieldExpr(field, logicalCtx());
     // SOURCE_JOIN_SQL is the only JOIN today; merge to avoid duplicating it.
     const joinSql = (filterJoin === SOURCE_JOIN_SQL || groupNeedsJoin)
       ? SOURCE_JOIN_SQL
@@ -598,7 +609,7 @@ export const indexerApi: IndexerApi = {
   histogram: async (filter, bucketCount): Promise<HistogramResponse> => {
     const { db } = requireState();
     const buckets = Math.max(1, Math.min(1000, Math.floor(bucketCount)));
-    const { joinSql, whereSql, params } = buildClause(filter);
+    const { joinSql, whereSql, params } = buildClause(filter, logicalCtx());
 
     const tsWhere = whereSql === '' ? 'WHERE entry.ts IS NOT NULL' : `${whereSql} AND entry.ts IS NOT NULL`;
 
@@ -693,12 +704,16 @@ export const indexerApi: IndexerApi = {
 
   exportFiltered: async (filter, format) => {
     const { db } = requireState();
-    const { joinSql, whereSql, params } = buildClause(filter);
+    const { joinSql, whereSql, params } = buildClause(filter, logicalCtx());
     const sql =
       `SELECT ${ENTRY_COLS_SELECT} FROM entry ${joinSql} ${whereSql} ${orderByForFilter(filter)}`;
     const rows = runRows(db, sql, params);
     const entries = rows.map(rowToEntry);
     return format === 'csv' ? buildCsv(entries) : buildJsonl(entries);
+  },
+
+  setLogicalFields: async (fields) => {
+    activeLogicalFields = fields;
   },
 
   vacuum: async () => {

@@ -111,3 +111,4 @@ flowchart LR
 - [0027. bfcache lifecycle: shutdown воркеров на pagehide, re-mount на pageshow](0027-bfcache-worker-reset.md) — proposed
 - [0028. Unified column model для таблицы логов](0028-unified-column-model.md) — accepted
 - [0029. On-prem дистрибутив: npm-пакет с bundled CLI + Dockerfile](0029-on-prem-npm-package-distribution.md) — proposed
+- [0030. Logical fields (`~`-namespace) — cross-format semantic attributes](0030-logical-fields-tilde-namespace.md) — proposed

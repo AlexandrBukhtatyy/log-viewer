@@ -58,6 +58,39 @@ const installRegexpUdf = (db: Database): void => {
     deterministic: true,
     innocuous: true,
   });
+
+  /**
+   * regexp_extract_group(pattern, text, group, flags) → matched substring
+   * or NULL. Named capture wins when `group` is non-empty; otherwise the
+   * first capture group, then the whole match (group 0). Used by the
+   * logical-fields `~`-namespace (ADR-0030) to expand `regex`-type
+   * extractors that target text already materialised in SQLite — i.e.
+   * values pulled out of `fields_json`. Regex against `entry.message` /
+   * `entry.raw` is not supported here because those columns are
+   * lazy-resolved through a byte pointer (ADR-0016) and never live in
+   * the database.
+   */
+  const extractMatcher = (
+    _ctxPtr: number,
+    ...values: SqlValue[]
+  ): SqlValue => {
+    const [pattern, text, group, flags] = values;
+    if (typeof pattern !== 'string' || typeof text !== 'string') return null;
+    const f = typeof flags === 'string' ? flags : '';
+    const re = compile(pattern, f);
+    if (re === null) return null;
+    const m = re.exec(text);
+    if (m === null) return null;
+    if (typeof group === 'string' && group.length > 0) {
+      return m.groups?.[group] ?? null;
+    }
+    return m[1] ?? m[0] ?? null;
+  };
+  db.createFunction('regexp_extract_group', extractMatcher, {
+    arity: 4,
+    deterministic: true,
+    innocuous: true,
+  });
 };
 
 const isLockConflict = (err: unknown): boolean =>

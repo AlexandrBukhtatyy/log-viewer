@@ -103,8 +103,14 @@ export const LvGroupBySelect = ({
   // dynamic keys are filtered down by whether they appear in at least
   // one active source. When the user hasn't picked any source we don't
   // restrict — same fallback as the column picker.
+  // Built-ins and active logical fields (ADR-0030) share a section —
+  // both are user-curated rather than auto-discovered, and the picker
+  // does not need to discriminate further beyond the label/key.
   const builtinDescriptors = useMemo(
-    () => descriptors.filter((d) => d.origin === 'builtin'),
+    () =>
+      descriptors.filter(
+        (d) => d.origin === 'builtin' || d.origin === 'logical',
+      ),
     [descriptors],
   );
   const dynamicDescriptors = useMemo(() => {
@@ -318,7 +324,8 @@ export const LvGroupBySelect = ({
                       {filtered.map((d, idx) => {
                         const on = active.includes(d.key);
                         const isHi = idx === effectiveIdx;
-                        const isSys = d.origin === 'builtin';
+                        const isSys =
+                          d.origin === 'builtin' || d.origin === 'logical';
                         const c = compatOf(d, activeIds);
                         const compatTxt = compatBadgeText(c, sourceNameById);
                         // Section headers: the first dynamic item and

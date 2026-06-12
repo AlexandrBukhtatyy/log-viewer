@@ -22,15 +22,16 @@ import { useUiPrefs } from '../../hooks/use-ui-prefs.ts';
 import { useBookmarks } from '../../hooks/use-bookmarks.ts';
 import { useRecentFiles } from '../../hooks/use-recent-files.ts';
 import { useSavedSearches } from '../../hooks/use-saved-searches.ts';
+import { useLogicalFields } from '../../hooks/use-logical-fields.ts';
+import {
+  BUILT_IN_LOGICAL_FIELDS,
+  resolveActiveLogicalFields,
+} from '../../core/logical-fields/catalog.ts';
+import type { FieldDescriptor } from '../../core/filter/field-descriptor.ts';
 import { useWorkspace, useWorkspaceStore } from '../../hooks/use-workspace.ts';
 import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
 import { LvApp } from '../../ui/components/layout/LvApp.tsx';
 import { resolveActiveColumns } from '../../ui/utils/active-columns.ts';
-import {
-  compileVirtualFields,
-  isVirtualFieldKey,
-  resolveVirtualField,
-} from '../../ui/utils/virtual-fields.ts';
 import type {
   LvGroupBy,
   LvLogKind,
@@ -63,6 +64,14 @@ import {
   buildCatalogTree,
   filesByIdFromSources,
 } from '../../ui/utils/build-catalog.ts';
+
+/**
+ * Plain-text parser emits positional tokens `$0`/`$1`/… as fields.
+ * They are synthetic — no semantic meaning — and only confuse the
+ * picker UX when surfaced as selectable attributes, so the container
+ * strips them out before handing the schema to LvApp.
+ */
+const POSITIONAL_KEY_RE = /^\$\d+$/;
 
 const promptOrEmpty = (msg: string, def = ''): string =>
   (typeof window !== 'undefined' && window.prompt(msg, def)) || '';
@@ -239,8 +248,10 @@ export const LvAppContainer = () => {
   );
 
   // Field schema discovery (ADR-0017) — drives the column picker /
-  // group-by picker / filter-on-field popovers.
-  const { descriptors: fieldDescriptors } = useFieldSchema();
+  // group-by picker / filter-on-field popovers. We layer activated
+  // logical fields (ADR-0030, `~`-namespace) on top so the same
+  // pickers see them as first-class entries.
+  const { descriptors: discoveredDescriptors } = useFieldSchema();
   // Per-tab column profile (Phase 1, A+D in
   // docs/plans/columns-multi-format-impl.md):
   //  - `'__all__'` aggregate tab → reads/writes the global
@@ -268,33 +279,6 @@ export const LvAppContainer = () => {
     [activeTabId, openTabs, tweaks.columns],
   );
   // Per-tab virtual fields (Phase 2 of
-  // docs/plans/columns-multi-format-impl.md). Only meaningful for
-  // file tabs — the `__all__` aggregate tab has no parser context and
-  // the column builder is hidden there. Writes go into the active
-  // tab's `virtualFields`, never into the global `tweaks`.
-  const onVirtualFieldsChange = useCallback(
-    (
-      next: ReadonlyArray<{
-        key: string;
-        label?: string;
-        pattern: string;
-        group: string;
-        target?: 'raw' | 'message';
-      }>,
-    ) => {
-      const id = useWorkspaceStore.getState().activeTabId;
-      if (id === '__all__') return;
-      setOpenTabs((prev) =>
-        prev.map((t) =>
-          t.id === id
-            ? { ...t, virtualFields: next.length > 0 ? next : undefined }
-            : t,
-        ),
-      );
-    },
-    [setOpenTabs],
-  );
-
   // Phase 2.E: auto-apply parser's `defaultColumns` the first time a
   // source reports them, *and only if* the user hasn't picked any
   // columns yet. Tracked via a render-time signature so the new
@@ -334,25 +318,58 @@ export const LvAppContainer = () => {
   useEffect(() => {
     sourceRecordsByIdRef.current = sourceRecordsById;
   }, [sourceRecordsById]);
-  // Active tab's virtual fields, compiled once per tab change. Used by
-  // the cell resolver below to evaluate `vf:` keys against entry.raw.
-  const activeVirtualFields = useMemo(() => {
-    if (activeTabId === '__all__') return [];
-    const tab = openTabs.find((t) => t.id === activeTabId);
-    return tab?.virtualFields ?? [];
-  }, [activeTabId, openTabs]);
-  const compiledVirtualFields = useMemo(
-    () => compileVirtualFields(activeVirtualFields),
-    [activeVirtualFields],
+  // Logical fields (ADR-0030). Built-in templates concatenated with
+  // user-defined ones form the catalog handed to LvApp; `activeIds`
+  // drives the per-row resolver (`cellValueOf` below) and, in later
+  // commits, the worker-side filter/group SQL.
+  const logicalFieldsConfig = useLogicalFields((s) => s.config);
+  const toggleLogicalField = useLogicalFields((s) => s.toggle);
+  const logicalFieldsCatalog = useMemo(
+    () => [...BUILT_IN_LOGICAL_FIELDS, ...logicalFieldsConfig.customFields],
+    [logicalFieldsConfig.customFields],
   );
+  const activeLogicalFields = useMemo(
+    () => resolveActiveLogicalFields(logicalFieldsConfig),
+    [logicalFieldsConfig],
+  );
+  // Build FieldDescriptor entries for the active logical fields so
+  // they show up in column / group-by / filter-on-field pickers next
+  // to built-ins. The key is `~name`; the descriptor maps the chain's
+  // declared type onto the picker's display-kind hint.
+  const logicalFieldDescriptors = useMemo<ReadonlyArray<FieldDescriptor>>(
+    () =>
+      activeLogicalFields.map((f) => ({
+        key: `~${f.id}`,
+        label: f.label,
+        type:
+          f.type === 'number'
+            ? 'number'
+            : f.type === 'bool'
+              ? 'boolean'
+              : 'string',
+        origin: 'logical',
+      })),
+    [activeLogicalFields],
+  );
+  const fieldDescriptors = useMemo<ReadonlyArray<FieldDescriptor>>(
+    () => [
+      ...discoveredDescriptors.filter(
+        (d) => d.origin !== 'dynamic' || !POSITIONAL_KEY_RE.test(d.key),
+      ),
+      ...logicalFieldDescriptors,
+    ],
+    [discoveredDescriptors, logicalFieldDescriptors],
+  );
+
   const cellValueOf = useCallback(
-    (entry: LogEntry, key: string) => {
-      if (isVirtualFieldKey(key)) {
-        return resolveVirtualField(entry, key, compiledVirtualFields);
-      }
-      return getEntryFieldValue(entry, key, sourceRecordsById.get(entry.sourceId) ?? null);
-    },
-    [sourceRecordsById, compiledVirtualFields],
+    (entry: LogEntry, key: string) =>
+      getEntryFieldValue(
+        entry,
+        key,
+        sourceRecordsById.get(entry.sourceId) ?? null,
+        { activeLogicalFields },
+      ),
+    [sourceRecordsById, activeLogicalFields],
   );
   const parserIdOf = useCallback(
     (entry: LogEntry): string | undefined =>
@@ -373,6 +390,14 @@ export const LvAppContainer = () => {
       viewStore.getState().getEntriesScoped(f, from, to),
     [viewStore],
   );
+
+  // Push activated logical fields into the indexer so `~`-keys compile
+  // into the right COALESCE/JSON_EXTRACT in WHERE / GROUP BY. Bounces
+  // a no-op call when the indexer hasn't opened yet — coordinator
+  // awaits `opening` itself, so we don't gate this effect on it.
+  useEffect(() => {
+    void viewStore.getState().setLogicalFields(activeLogicalFields);
+  }, [viewStore, activeLogicalFields]);
 
   const bookmarksHook = useBookmarks();
   const toggleBookmark = useCallback(
@@ -602,6 +627,7 @@ export const LvAppContainer = () => {
     },
     [viewStore, reloadAvailableParsers],
   );
+
 
   // Tabs render order:
   //   1. `__all__` aggregate tab — pinned, always present, always first.
@@ -944,6 +970,9 @@ export const LvAppContainer = () => {
       customParsers={customParsers}
       onUpsertCustomParser={onUpsertCustomParser}
       onRemoveCustomParser={onRemoveCustomParser}
+      logicalFields={logicalFieldsCatalog}
+      activeLogicalFieldIds={logicalFieldsConfig.activeIds}
+      onToggleLogicalField={toggleLogicalField}
       onGrantPermission={onGrantPermission}
       onCancelSource={onCancelSource}
       tweaks={{
@@ -979,8 +1008,6 @@ export const LvAppContainer = () => {
       fieldDescriptors={fieldDescriptors}
       columns={activeColumns}
       onColumnsChange={onColumnsChange}
-      virtualFields={activeVirtualFields}
-      onVirtualFieldsChange={onVirtualFieldsChange}
       cellValueOf={cellValueOf}
       parserIdOf={parserIdOf}
       onExport={onExport}

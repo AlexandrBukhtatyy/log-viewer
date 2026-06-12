@@ -148,6 +148,17 @@ export interface CoordinatorApi {
   getFieldSchema: (filter: LogFilter) => Promise<ReadonlyArray<FieldDescriptor>>;
 
   /**
+   * Push the active logical-field definitions (ADR-0030, `~`-namespace)
+   * down to the indexer. Called by the main thread whenever the user
+   * activates / deactivates / edits a logical field. The indexer keeps
+   * the latest snapshot until the next push; an empty array disables
+   * the feature (`~`-keys compile to SQL NULL).
+   */
+  setLogicalFields: (
+    fields: ReadonlyArray<import('../types/index.ts').LogicalField>,
+  ) => Promise<void>;
+
+  /**
    * Enumerate parsers registered in the worker-side `ParserRegistry`.
    * UI uses this to populate the parser-override dropdown when adding
    * a source (Phase 2.B). Returned in priority-descending order so

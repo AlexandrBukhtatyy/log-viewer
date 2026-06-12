@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   EntryId,
   LogEntry,
+  LogicalField,
   SourceId,
   SourceRecord,
 } from '../types/index.ts';
@@ -137,5 +138,92 @@ describe('getEntryFieldValue', () => {
 
   it('unknown @-key returns null (mirrors fieldKeyToSql throwing)', () => {
     expect(getEntryFieldValue(entry, '@nope')).toBeNull();
+  });
+});
+
+describe('fieldKeyToSql / ~-namespace (logical fields)', () => {
+  const traceField: LogicalField = {
+    id: 'trace_id',
+    type: 'string',
+    label: 'Trace id',
+    origin: 'user',
+    extractors: [
+      { type: 'field', path: 'trace_id' },
+      { type: 'field', path: 'traceId' },
+    ],
+  };
+
+  it('expands a known ~key into the field chain via logicalFieldToSql', () => {
+    expect(
+      fieldKeyToSql('~trace_id', { activeLogicalFields: [traceField] }),
+    ).toEqual({
+      sql:
+        'COALESCE(' +
+        "JSON_EXTRACT(entry.fields_json, '$.trace_id'), " +
+        "JSON_EXTRACT(entry.fields_json, '$.traceId')" +
+        ')',
+      needsSourceJoin: false,
+    });
+  });
+
+  it('returns SQL NULL when no ctx is supplied', () => {
+    expect(fieldKeyToSql('~trace_id')).toEqual({
+      sql: 'NULL',
+      needsSourceJoin: false,
+    });
+  });
+
+  it('returns SQL NULL when the ~id is not active', () => {
+    expect(
+      fieldKeyToSql('~trace_id', { activeLogicalFields: [] }),
+    ).toEqual({ sql: 'NULL', needsSourceJoin: false });
+  });
+});
+
+describe('getEntryFieldValue / ~-namespace (logical fields)', () => {
+  const traceField: LogicalField = {
+    id: 'trace_id',
+    type: 'string',
+    label: 'Trace id',
+    origin: 'user',
+    extractors: [
+      { type: 'field', path: 'trace_id' },
+      { type: 'field', path: 'traceId' },
+    ],
+  };
+  const entry: LogEntry = {
+    id: 'e' as EntryId,
+    sourceId: 's' as SourceId,
+    seq: 0,
+    timestamp: 0,
+    level: 'info',
+    message: '',
+    raw: '',
+    fields: { traceId: 'abc' },
+    filePath: '',
+    byteStart: 0,
+    byteEnd: 0,
+    lineNumber: 0,
+    fileSeq: 0,
+  };
+
+  it('resolves the chain by id', () => {
+    expect(
+      getEntryFieldValue(entry, '~trace_id', null, {
+        activeLogicalFields: [traceField],
+      }),
+    ).toBe('abc');
+  });
+
+  it('returns null without ctx', () => {
+    expect(getEntryFieldValue(entry, '~trace_id')).toBeNull();
+  });
+
+  it('returns null when the active list is empty', () => {
+    expect(
+      getEntryFieldValue(entry, '~trace_id', null, {
+        activeLogicalFields: [],
+      }),
+    ).toBeNull();
   });
 });
