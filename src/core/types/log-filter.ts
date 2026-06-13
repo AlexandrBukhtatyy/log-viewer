@@ -37,6 +37,17 @@ export interface TimeRange {
   readonly to: number | null;
 }
 
+/**
+ * Single-column sort imposed by the user clicking a table header.
+ * When present on `LogFilter`, the SQL builder's ORDER BY uses this
+ * instead of the `orderBy` shape hint. `key` is a `FieldKey` —
+ * built-in `@`-attribute, dynamic JSON key, or `~`-logical (ADR-0030).
+ */
+export interface LogFilterSort {
+  readonly key: FieldKey;
+  readonly dir: 'asc' | 'desc';
+}
+
 export interface LogFilter {
   readonly levels: ReadonlyArray<LogLevel> | null;
   readonly query: string;
@@ -73,6 +84,12 @@ export interface LogFilter {
    * shape — used by saved searches and future UI toggles.
    */
   readonly orderBy?: 'time' | 'physical';
+  /**
+   * User-imposed column sort. When set, wins over `orderBy` and the
+   * auto-infer in `orderByForFilter`. `undefined` means "no explicit
+   * sort — fall back to the existing time/physical pipeline".
+   */
+  readonly sortBy?: LogFilterSort;
 }
 
 export type FilterPredicate = (entry: LogEntry) => boolean;
@@ -122,6 +139,12 @@ export const filtersEqual = (a: LogFilter, b: LogFilter): boolean => {
     a.orderBy !== b.orderBy
   ) {
     return false;
+  }
+  const as = a.sortBy;
+  const bs = b.sortBy;
+  if (as !== bs) {
+    if (as === undefined || bs === undefined) return false;
+    if (as.key !== bs.key || as.dir !== bs.dir) return false;
   }
   if (!sameArr(a.levels, b.levels)) return false;
   if (!sameArr(a.sources, b.sources)) return false;

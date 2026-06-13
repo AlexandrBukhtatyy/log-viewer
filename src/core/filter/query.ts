@@ -3,6 +3,7 @@ import type {
   FieldFilter,
   FieldFilterOp,
   LogFilter,
+  LogFilterSort,
 } from '../types/log-filter.ts';
 import { fieldKeyToSql, SOURCE_JOIN_SQL } from './field-key.ts';
 
@@ -158,6 +159,61 @@ export const ORDER_BY_PHYSICAL =
   'ORDER BY entry.source_id ASC, entry.seq ASC';
 
 /**
+ * Severity-ordered ranking of `@level` values. Lexicographic ASC
+ * yields `debug, error, fatal, info, trace, warn` which is nonsense
+ * for a "sort by log level" UX, so we map the well-known values to
+ * a numeric rank and fall back to a high bucket for anything else.
+ */
+const LEVEL_CASE_SQL =
+  "CASE entry.level " +
+  "WHEN 'trace' THEN 0 " +
+  "WHEN 'debug' THEN 1 " +
+  "WHEN 'info' THEN 2 " +
+  "WHEN 'warn' THEN 3 " +
+  "WHEN 'error' THEN 4 " +
+  "WHEN 'fatal' THEN 5 " +
+  'ELSE 99 END';
+
+/**
+ * Translate a user-imposed column sort (`LogFilterSort`) into a SQL
+ * ORDER BY clause. Stable tie-breaker on `source_id, seq` is appended
+ * so equal values keep a deterministic order between renders.
+ *
+ * Special-cases:
+ *  - `@level` uses the severity CASE above (lexicographic order is
+ *    useless for log levels).
+ *  - `@ts` keeps the existing `IS NULL` first treatment so missing
+ *    timestamps don't drift around when the user toggles asc/desc.
+ *  - Anything else compiles via `fieldKeyToSql` — built-in columns,
+ *    dynamic JSON keys, and `~`-logical fields (ADR-0030) all
+ *    flow through the same translator.
+ */
+export const sortBySql = (
+  sort: LogFilterSort,
+  ctx: LogicalFieldsCtx = {},
+): { sql: string; needsSourceJoin: boolean } => {
+  const dir = sort.dir === 'desc' ? 'DESC' : 'ASC';
+  const tail = ', entry.source_id ASC, entry.seq ASC';
+  if (sort.key === '@level') {
+    return {
+      sql: `ORDER BY ${LEVEL_CASE_SQL} ${dir}${tail}`,
+      needsSourceJoin: false,
+    };
+  }
+  if (sort.key === '@ts') {
+    return {
+      sql: `ORDER BY entry.ts IS NULL, entry.ts ${dir}${tail}`,
+      needsSourceJoin: false,
+    };
+  }
+  const { sql: expr, needsSourceJoin } = fieldKeyToSql(sort.key, ctx);
+  return {
+    sql: `ORDER BY ${expr} ${dir}${tail}`,
+    needsSourceJoin,
+  };
+};
+
+/**
  * Choose the `ORDER BY` clause for entry listings.
  *
  * - Explicit `filter.orderBy` always wins — user has consciously picked an
@@ -174,11 +230,29 @@ export const ORDER_BY_PHYSICAL =
  *       grouping by `source_id` would render the view file-by-file
  *       instead of interleaved.
  */
-export const orderByForFilter = (filter: LogFilter): string => {
+export const orderByForFilter = (
+  filter: LogFilter,
+  ctx: LogicalFieldsCtx = {},
+): string => {
+  if (filter.sortBy !== undefined) return sortBySql(filter.sortBy, ctx).sql;
   if (filter.orderBy === 'time') return ORDER_BY_TIME;
   if (filter.orderBy === 'physical') return ORDER_BY_PHYSICAL;
   const filePathCount = filter.filePaths?.length ?? 0;
   const sourceCount = filter.sources?.length ?? 0;
   const isSingleScope = sourceCount === 1 && filePathCount <= 1;
   return isSingleScope ? ORDER_BY_PHYSICAL : ORDER_BY_TIME;
+};
+
+/**
+ * Returns true when the active `sortBy` references a column that
+ * lives on the `source` table, so the caller can extend the FROM
+ * clause with `SOURCE_JOIN_SQL`. Built-in entry columns and the
+ * `@ts` / `@level` specials never need it.
+ */
+export const sortByNeedsSourceJoin = (
+  sort: LogFilterSort,
+  ctx: LogicalFieldsCtx = {},
+): boolean => {
+  if (sort.key === '@ts' || sort.key === '@level') return false;
+  return sortBySql(sort, ctx).needsSourceJoin;
 };

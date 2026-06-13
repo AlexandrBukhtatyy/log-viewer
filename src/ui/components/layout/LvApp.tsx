@@ -213,6 +213,11 @@ export interface LvAppProps {
   readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
   readonly columns: ReadonlyArray<LvColumnPref>;
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
+  /** Active per-tab single-column sort (ADR — see plan). */
+  readonly sortBy?: { readonly key: string; readonly dir: 'asc' | 'desc' };
+  onSortByChange?: (
+    next: { readonly key: string; readonly dir: 'asc' | 'desc' } | null,
+  ) => void;
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
   /** Returns resolved parser id for the entry's source — drives Meta-tab `@parser.id`. */
   parserIdOf?: (entry: LogEntry) => string | undefined;
@@ -315,6 +320,8 @@ export const LvApp = ({
   fieldDescriptors,
   columns,
   onColumnsChange,
+  sortBy,
+  onSortByChange,
   cellValueOf,
   parserIdOf,
   resolveLogicalRows,
@@ -713,6 +720,8 @@ export const LvApp = ({
           fieldDescriptors={fieldDescriptors}
           columns={columns}
           onColumnsChange={onColumnsChange}
+          sortBy={sortBy}
+          onSortByChange={onSortByChange}
           cellValueOf={cellValueOf}
           parserIdOf={parserIdOf}
           resolveLogicalRows={resolveLogicalRows}

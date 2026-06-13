@@ -1,254 +1,94 @@
-# Logical fields (`~`-namespace) — работа с одним понятием поперёк форматов
+# Column sort — single-column sort with per-tab persistence
 
 ## 1. Context
 
-В реальных логах одно и то же логическое понятие записывается по-разному в зависимости от формата и конвенции сервиса. Канонический пример — `trace_id`:
+Сейчас порядок строк таблицы задаётся через `LogFilter.orderBy: 'time' | 'physical'` (см. [src/core/filter/query.ts](../../src/core/filter/query.ts#L177)) с auto-infer для пустого значения: single-source-single-file → physical (стабильные line-numbers), всё остальное → time. Это closed-set из двух режимов, и пользователь не может явно отсортировать таблицу по конкретной колонке.
 
-- `pino.jsonl` → `{"trace_id": "abc"}`
-- `bunyan.jsonl` → `{"traceId": "abc"}`
-- `nginx-access.log` → парсер выдаёт поле `http_x_trace_id`
-- `app.log` → plain-text `... traceId=abc` (regex по message)
+Реально нужное поведение: **click на header колонки → строки переупорядочиваются по этому полю, ↑/↓ показывает текущее направление, второй click меняет на desc, третий — снимает sort**. Так работают стандартные дата-таблицы (Excel, GitHub PR-list, Jira). Без этой фичи пользователь, например, не может разом увидеть «самые медленные HTTP-запросы» в nginx-логе (sort by `~http.status` desc или dynamic `latency_ms`).
 
-Сейчас в проекте есть `LogEntry.fields` (произвольный JSON от парсера) и динамическая field-schema с `@`-namespace для built-in атрибутов ([ADR-0017](../adr/0017-dynamic-field-schema.md)). Но **нет слоя «логических полей»**: пользователь не может одним кликом сказать «trace_id — это вот эта штука во всех моих файлах» и дальше использовать её как обычное поле в filter / group / column.
+**Outcome:** добавить single-column пользовательскую сортировку, per-tab persistence, поверх существующего ORDER BY pipeline. Без multi-column (Phase 4 территория), без context-menu, без global sort.
 
-В индустрии это решено давно: **Datadog Attribute Remapper + Standard Attributes**, Elastic ECS, Splunk FIELDALIAS, Loki `label_format`. Datadog подход — наиболее близкий: chain попыток (`sources: ["traceId", "trace_id", ...] → target: "trace_id"`) + каталог Standard Attributes (`http.*`, `user.*`, `trace_id`, `network.*`, …).
+## 2. Архитектурное решение
 
-**Outcome:** ввести в проект слой **logical fields** в `~`-namespace, global workspace-wide. Активируется явно пользователем (из built-in каталога или custom). Поверх любого источника / формата ведёт себя как обычное поле в filter / group / column picker'ах.
+- **Sort state** — новое поле в `LvTab`: `sortBy?: { key: FieldKey; dir: 'asc' | 'desc' }`. Per-tab автоматически persistится через `lv:workspace` (LvTab уже там).
+- **Filter shape** — расширить `LogFilter.orderBy`. Текущий тип `'time' | 'physical'` остаётся для backward-compat (legacy саved-searches могут содержать), добавляется third variant — column sort. Альтернативно: новое поле `sortBy?: { key, dir }`. **Выбран второй** — отдельное поле yields cleaner model: `orderBy` остаётся как «shape hint» для auto-infer, `sortBy` (когда указан) выигрывает у всего.
+- **SQL** — `orderByForFilter(filter)` получает приоритет: `sortBy` → custom ORDER BY → `orderBy` → fallback auto-infer.
+- **UX cycle** — click на header: `none → asc → desc → none`. Visual indicator (↑/↓) рядом с label. Stable tie-breaker `source_id ASC, seq ASC` после основного sort'а, чтобы порядок одинаковых значений был детерминирован.
+- **`@level` requires CASE** — лексикографический ASC (`debug, error, fatal, info, trace, warn`) бессмысленен; нужен severity-order через `CASE WHEN entry.level = 'trace' THEN 0 WHEN ... END`. Для остальных полей — generic ORDER BY через `fieldKeyToSql`.
+- **Logical fields в sort** — `fieldKeyToSql('~name', ctx)` уже компилирует `~`-keys в COALESCE/JSON_EXTRACT (ADR-0030). Передаём тот же ctx в SQL builder.
 
-Видимость самого формата файла остаётся **implicit** (расширение в имени файла в sidebar). Никаких parser-badges, parser-фильтр-чипов, отдельной `@parser` колонки — эту ветку отбрасываем.
+## 3. Файлы — модификации
 
-## 2. Mapping model: chain extractors
+### Core / SQL
+- [src/core/types/log-filter.ts](../../src/core/types/log-filter.ts) — добавить `LogFilterSort` type + поле `sortBy?: LogFilterSort` в `LogFilter`. Расширить `filtersEqual` и `EMPTY_FILTER` (нет default sortBy).
+- [src/core/filter/query.ts](../../src/core/filter/query.ts) — переписать `orderByForFilter(filter, ctx?)` принимать `LogicalFieldsCtx`, ранее всех условий проверять `filter.sortBy`. Извлечь helper `sortBySql(sort, ctx)` который рендерит `<expr> ASC|DESC, source_id ASC, seq ASC` + special-case для `@level` (CASE WHEN). Существующие `ORDER_BY_TIME`/`ORDER_BY_PHYSICAL` оставить как fallback для auto-infer.
+- [src/core/filter/query.test.ts](../../src/core/filter/query.test.ts) — добавить кейсы: sortBy по `@ts`, `@level` (CASE order), dynamic key, `~`-key, ASC/DESC, sortBy выигрывает у `orderBy: 'physical'`.
 
-Logical field = именованная цепочка extractor'ов. При resolve берём первый non-null:
-
-```ts
-interface LogicalField {
-  name: string;                    // 'trace_id', 'user_id', 'http.status', ...
-  type: 'string' | 'number' | 'bool';
-  extractors: Extractor[];         // try in order, first non-null wins
-  source: 'builtin' | 'user';
-  enabled: boolean;
-}
-
-type Extractor =
-  | { type: 'field'; path: string }                      // JSONPath-like, $.a.b
-  | { type: 'regex'; on: 'message' | 'raw'; pattern: string; flags?: string; group?: string };
-  // future: { type: 'expr'; expression: string } — Phase 3+
-```
-
-Пример `trace_id`:
-
-```yaml
-name: trace_id
-type: string
-extractors:
-  - { type: field, path: trace_id }
-  - { type: field, path: traceId }
-  - { type: field, path: tid }
-  - { type: field, path: dd.trace_id }
-  - { type: regex, on: message, pattern: 'tr[ace]?[_-]?id[=:]\s*(?<v>[\w-]+)', flags: i, group: v }
-```
-
-Эта одна цепочка покрывает все 4 файла из §1.
-
-### Что НЕ делаем
-
-- Полноценный expression DSL (Vector VRL-style) — отложено. Дверь открыта: новый extractor type `expr` добавляется в цепочку, не ломая существующих определений.
-- Per-format / per-source mapping (Splunk FIELDALIAS / ECS rename) — не масштабируется на mixed-convention внутри одного формата.
-- Inline label_format в queries (Loki) — не наш UX.
-
-## 3. Namespace и storage
-
-- Имена логических полей живут в `~`-namespace: `~trace_id`, `~user_id`, `~http.status`. Не конфликтуют с `@`-built-ins и сырыми ключами из `fields`.
-- Scope — **global workspace-wide**. Активные logical fields доступны во всех табах и всех источниках.
-- Persistence — рядом с workspace state (там же, где `LvTab[]`, `LvTweaks`). Один JSON-документ: `LogicalFieldsConfig { activeFieldIds, customFields }`.
-- Built-in каталог — статический list в коде, версионируется вместе с релизом. User-defined — в persistent storage.
-
-## 4. Built-in каталог (стартовый набор)
-
-Baseline берём из Datadog Standard Attributes, адаптируем под наши форматы (pino/bunyan/nginx/syslog/app-text):
-
-```ts
-// src/core/logical-fields/catalog.ts
-[
-  { name: 'trace_id', type: 'string', extractors: [
-      { type: 'field', path: 'trace_id' },
-      { type: 'field', path: 'traceId' },
-      { type: 'field', path: 'tid' },
-      { type: 'field', path: 'dd.trace_id' },
-      { type: 'field', path: 'http_x_trace_id' },
-      { type: 'regex', on: 'message', pattern: 'tr[ace]?[_-]?id[=:]\\s*(?<v>[\\w-]+)', flags: 'i', group: 'v' },
-  ]},
-  { name: 'span_id', type: 'string', extractors: [ ...{ path: span_id | spanId | sid } ]},
-  { name: 'request_id', type: 'string', extractors: [ ...{ path: request_id | requestId | reqId | req_id | http_x_request_id } ]},
-  { name: 'user_id', type: 'string', extractors: [ ...{ path: user_id | userId | usr.id | uid } ]},
-  { name: 'session_id', type: 'string', extractors: [ ...{ path: session_id | sessionId | sid } ]},
-  { name: 'service', type: 'string', extractors: [ ...{ path: service | service.name | logger } ]},
-  { name: 'host', type: 'string', extractors: [ ...{ path: host | hostname | host.name } ]},
-  { name: 'http.method', type: 'string', extractors: [ ...{ path: http.method | method } ]},
-  { name: 'http.status', type: 'number', extractors: [ ...{ path: http.status_code | status | response_code } ]},
-  { name: 'http.path', type: 'string', extractors: [ ...{ path: http.url | request_uri | path } ]},
-  { name: 'error.kind', type: 'string', extractors: [ ...{ path: error.kind | exception_type | err.type } ]},
-  { name: 'error.message', type: 'string', extractors: [ ...{ path: error.message | err.message | exception_message } ]},
-]
-```
-
-По умолчанию все **disabled**. Активирует юзер вручную.
-
-## 5. Resolution: read-path и worker-path
-
-### Read-path (UI rendering)
-Per-row resolver в `LogEntry` → `(fieldName) => unknown`:
-- Берём activeLogicalFields из workspace state.
-- Для каждой записи: `resolveLogicalField(entry, field)` бежит по extractors:
-  - `field` → lookup в `entry.fields` через JSON-path
-  - `regex` → match по `entry.message` / `entry.raw`
-- Кэш per-field per-entry внутри одного render-pass (cheap memoization).
-
-### Worker-path (SQL filter + group + groupCounts)
-Через `fieldKeyToSql('~name')` → SQL-expression:
-- `field`-extractor → `JSON_EXTRACT(entry.fields_json, '$.<path>')`
-- `regex`-extractor → `REGEXP_EXTRACT_GROUP(entry.message, '<pattern>', '<group>')` через REGEXP UDF в SQLite (ADR-0011 «server-side regex» уже под это закладывался)
-- COALESCE всех вместе:
-
-```sql
-COALESCE(
-  JSON_EXTRACT(entry.fields_json, '$.trace_id'),
-  JSON_EXTRACT(entry.fields_json, '$.traceId'),
-  JSON_EXTRACT(entry.fields_json, '$.tid'),
-  REGEXP_EXTRACT_GROUP(entry.message, 'tr[ace]?[_-]?id[=:]\s*(?<v>[\w-]+)', 'v')
-)
-```
-
-WHERE `... IN (?, ?)` и GROUP BY работают без дополнительной логики поверх — стандартный flow `buildClause` + `groupFieldExpr`.
-
-**Performance trade-off:** делаем chain inline в SQL, без материализации. Если будет тормозить на больших фильтрах — Phase 2 добавит computed-column в indexer (precompute logical fields при ingest). Не сейчас.
-
-## 6. UI
-
-### Settings → Logical Fields panel (новая)
-
-Вход: gear-кнопка в filter-bar или header. Содержимое:
-
-- **Active fields** — список включённых (built-in и custom вместе). У каждого:
-  - Имя (`~trace_id`), coverage badge («3/4 sources, 12 480 / 12 500 lines»)
-  - [Edit], [Toggle off], [Show coverage] (drill-down per source)
-- **Catalog** — список доступных built-in templates. У каждого:
-  - Имя, описание, preview chain'а, [Activate]
-- **+ New custom field** — wizard:
-  - Name (validate: `[a-z_][a-z0-9_.]*`), type
-  - Add extractor (field или regex), reorder, test against open sources
-  - Live coverage preview
-
-### Coverage drill-down (per-source)
-```
-✓ pino.jsonl    extractor #1 ($.trace_id)      230/230
-✓ bunyan.jsonl  extractor #2 ($.traceId)       156/156
-✓ app.log       extractor #6 (regex)            89/103
-✗ nginx.log     no match    [Add extractor for nginx]
-```
-
-### Filter bar / Group-by / Column picker
-
-- `LvAddFieldFilter`, `LvGroupBySelect`, `LvColumnPicker` показывают активные logical fields как новую секцию **"Logical"** наверху. Имена с префиксом `~`.
-- В group-by picker — pinned-section: `@level`, `@source.name`, `@file`, потом активные `~`-поля, потом dynamic из `fields`.
-- В column picker — `~`-секция отдельно.
-
-### Quick filter из строки
-В `LvRow` / `LvRowDetail`: context-menu на значении (которое resolved через logical field) → "Filter by `~trace_id` = abc123". Это закрывает основной use-case корреляции (US-1).
-
-## 7. Список изменений по файлам
-
-### Core
-- [src/core/types/logical-field.ts](../../src/core/types/logical-field.ts) — НОВЫЙ. Типы `LogicalField`, `Extractor`, `LogicalFieldsConfig`.
-- [src/core/logical-fields/catalog.ts](../../src/core/logical-fields/catalog.ts) — НОВЫЙ. Built-in templates (§4).
-- [src/core/logical-fields/resolver.ts](../../src/core/logical-fields/resolver.ts) — НОВЫЙ. `resolveLogicalField(entry, field)` + memoization helpers.
-- [src/core/filter/field-key.ts](../../src/core/filter/field-key.ts) — extend: префикс `~` → строим COALESCE-выражение из конфига активных logical fields (передаётся через context).
-- [src/core/filter/field-descriptor.ts](../../src/core/filter/field-descriptor.ts) — расширить FieldDescriptor `origin: 'builtin' | 'dynamic' | 'logical'`. Активные logical fields подмешиваются в field-schema.
-
-### Worker
-- [src/workers/indexer/sql/regexp-udf.ts](../../src/workers/indexer/sql/regexp-udf.ts) — НОВЫЙ (если ещё нет). Регистрация `REGEXP_EXTRACT_GROUP(text, pattern, group)` UDF на SQLite-инстанс indexer'а.
-- [src/workers/indexer/aggregate.ts](../../src/workers/indexer/aggregate.ts) — `groupFieldExpr` для `~name` берёт chain из workspace-config (передаётся в filter/group payload через RPC).
-- [src/workers/indexer/indexer-api.ts](../../src/workers/indexer/indexer-api.ts) — `getFieldSchema` / `getGroupCounts` принимают `logicalFields: LogicalFieldsConfig` в payload и используют его в SQL builder'е.
-- [src/workers/coordinator/coordinator.ts](../../src/workers/coordinator/coordinator.ts) — `logicalFieldsConfig` в state, прокидывается в RPC payload.
+### Worker — нет changes
+`buildClause` и `orderByForFilter` уже вызываются worker'ом из тех же мест ([indexer-api.ts](../../src/workers/indexer/indexer-api.ts) методы `search`, `exportFiltered`). Передача filter через RPC не меняется — `sortBy` сериализуется как часть filter. Расширения contract не нужно.
 
 ### UI
-- [src/ui/components/settings/LvLogicalFieldsPanel.tsx](../../src/ui/components/settings/LvLogicalFieldsPanel.tsx) — НОВЫЙ. Settings panel.
-- [src/ui/components/settings/LvLogicalFieldEditor.tsx](../../src/ui/components/settings/LvLogicalFieldEditor.tsx) — НОВЫЙ. Edit/create wizard.
-- [src/ui/components/settings/LvCoverageDrill.tsx](../../src/ui/components/settings/LvCoverageDrill.tsx) — НОВЫЙ. Per-source coverage breakdown.
-- [src/ui/components/filter/LvAddFieldFilter.tsx](../../src/ui/components/filter/LvAddFieldFilter.tsx) — секция "Logical" в picker'е.
-- [src/ui/components/filter/LvGroupBySelect.tsx](../../src/ui/components/filter/LvGroupBySelect.tsx) — pinned built-ins + `~`-section + dynamic.
-- [src/ui/components/filter/LvColumnPicker.tsx](../../src/ui/components/filter/LvColumnPicker.tsx) — `~`-section.
-- [src/ui/components/stream/LvRowDetail.tsx](../../src/ui/components/stream/LvRowDetail.tsx) — Meta-tab: показывать resolved logical fields с indicator'ом «via extractor #N».
-- [src/ui/contracts/lv-column-registry.tsx](../../src/ui/contracts/lv-column-registry.tsx) — поддержка `~`-колонок (resolver-based render).
+- [src/ui/contracts/lv-types.ts](../../src/ui/contracts/lv-types.ts) — поле `sortBy?: { readonly key: string; readonly dir: 'asc' | 'desc' }` в `LvTab`. Symmetрично существующим per-tab полям (`columns`).
+- [src/ui/components/stream/LvViewer.tsx](../../src/ui/components/stream/LvViewer.tsx) — converter header `<span>` → `<button type="button">` (для accessibility), onClick → cycle. Visual: indicator `↑`/`↓` рядом с label через `<span>` с CSS-class. Опциональный prop `sortBy` (текущий) + `onSortByChange(next | null)`. Header chrome для `line`, `caret`, `message`, `act` — не sortable (без button-обёртки).
+- [src/ui/components/layout/LvApp.tsx](../../src/ui/components/layout/LvApp.tsx) — прокинуть `sortBy` + `onSortByChange` props сквозь до LvViewer.
+- [src/app/containers/LvAppContainer.tsx](../../src/app/containers/LvAppContainer.tsx) — взять `sortBy` из активного `LvTab`, при изменении писать обратно в openTabs. При формировании filter (там где собирается `coreFilter`/active filter): включить `sortBy` если не `null`.
 
-### Hooks / containers
-- [src/hooks/use-logical-fields.ts](../../src/hooks/use-logical-fields.ts) — НОВЫЙ. Read/write `LogicalFieldsConfig` из workspace storage, экспонирует resolver.
-- [src/hooks/use-field-schema.ts](../../src/hooks/use-field-schema.ts) — подмешивает активные `~`-поля в schema.
-- [src/app/containers/LvAppContainer.tsx](../../src/app/containers/LvAppContainer.tsx) — прокидывает `logicalFieldsConfig` в worker RPC + UI props.
+### Hooks / workspace
+- [src/hooks/use-workspace.ts](../../src/hooks/use-workspace.ts) — миграция `version` ↑1: legacy табы без `sortBy` остаются как есть (optional). Никаких структурных изменений.
 
-### Не трогать
-- Парсеры (`json-lines-parser.ts` etc.) — слой logical fields поверх их выходов.
-- `LogEntry` / `ParsedRecord` — никаких новых полей. Logical fields резолвятся при чтении, не хранятся.
-- Schema migration — не нужна (никаких новых колонок в `entry`).
+## 4. UX-детали
 
-## 8. Sequencing (commit-границы)
+- **Click cycle.** Click на header: если `sortBy.key !== c.key` → `{ key: c.key, dir: 'asc' }`. Если `sortBy.key === c.key && dir === 'asc'` → `dir: 'desc'`. Если `dir === 'desc'` → `sortBy = null` (вернуться к auto-infer).
+- **Visual indicator.** Активная колонка показывает `↑` или `↓` в header. Inactive колонки могут показывать `⇅` opacity 0.3 на hover, чтобы намекнуть на интерактивность; без hover — ничего. Не тратим горизонтальное пространство.
+- **Что не sortable.** Заголовки `line`, `caret`, `message`, `act` (action column). `@parser` (если вернётся) — sortable.
+- **Group-by mode.** Когда group-by активна, sort применяется к bucket-рядам (после `expand`). Server-side `groupCounts` уже сортируется по `cnt DESC, gv ASC` — это independent; не трогаем. Внутри развернутой группы sort работает как обычно.
 
-**Phase 1 — Foundation (MVP).**
+## 5. SQL: `@level` CASE
 
-1. `feat: types and built-in catalog for logical fields` — core types, catalog, без resolver'а.
-2. `feat: read-path resolver for logical fields` — `resolveLogicalField` для UI rendering.
-3. `feat: workspace persistence of LogicalFieldsConfig` — read/write через `use-logical-fields`.
-4. `feat: LogicalFieldsPanel in Settings — list + activate built-ins` — UI без editor/coverage пока.
-5. `feat: ~-namespace in field-schema + picker integration` — picker'ы видят активные logical fields. Только field-extractor через JSON_EXTRACT, regex пока не работает в SQL.
-6. `feat: regex extractor + REGEXP_EXTRACT_GROUP UDF in indexer` — regex работает в filter/group SQL.
+```sql
+ORDER BY
+  CASE entry.level
+    WHEN 'trace' THEN 0
+    WHEN 'debug' THEN 1
+    WHEN 'info'  THEN 2
+    WHEN 'warn'  THEN 3
+    WHEN 'error' THEN 4
+    WHEN 'fatal' THEN 5
+    ELSE 99
+  END ASC,                           -- main sort
+  entry.source_id ASC, entry.seq ASC -- stable tie-breaker
+```
 
-**Phase 2 — Power.**
+Generic case (`@ts`, dynamic, `~`-logical):
+```sql
+ORDER BY <fieldKeyToSql(key).sql> ASC|DESC,
+  entry.source_id ASC, entry.seq ASC
+```
 
-7. `feat: coverage drill-down per source` — sample-query на open sources, считает per-extractor hits.
-8. `feat: LvLogicalFieldEditor — create/edit custom logical fields` — full wizard.
-9. `feat: quick filter from row value (~ field context menu)` — US-1 acceleration.
+NULLs handling: для `@ts` — `entry.ts IS NULL` сначала (как в `ORDER_BY_TIME`). Для остальных — NULL last в ASC, first в DESC (SQLite default).
 
-**Phase 3 — Polish (отдельная задача).**
+## 6. Verification
 
-- Discovery / auto-suggest (баннер «обнаружили похожее на trace_id»).
-- Computed/composite fields (extractor type `expr`).
+1. `pnpm gen:fixtures` ; `pnpm dev`.
+2. Открыть `.tmp/nginx-access.log` → таблица должна иметь sortable headers (cursor pointer на hover).
+3. Click на `status` header → строки переупорядочиваются по status ASC; indicator `↑`.
+4. Второй click → desc; indicator `↓`.
+5. Третий click → indicator пропадает, ordering возвращается к auto-infer.
+6. Включить `@level` колонку → sort по ней даёт `trace < debug < info < warn < error < fatal`, не лексикографический.
+7. Активировать `~http.status` (logical field) → sort работает через chain.
+8. Переключиться между табами → sortBy у каждого таба свой (persisted через reload).
+9. `pnpm lint && pnpm test && pnpm build` — зелёные.
+10. Скриншот sort-by-status в `.tmp/screenshots/column-sort.png`.
 
-После Phase 1 — фича уже useful (built-in trace_id / request_id работают). Phase 2 — для серьёзного аудита/настройки.
+## 7. Что НЕ делается
 
-## 9. ADR
+- **Multi-column sort** (shift+click → secondary). Отдельная фаза.
+- **Global / per-source sort.** Только per-tab.
+- **Context-menu sort** (right-click). Только header-click.
+- **Sort через picker/UI button** отдельно от header. Header — единственная точка входа.
+- **Backward-compat** — `LogFilter.orderBy` остаётся как есть, `sortBy` уходит в стейт независимо.
+- **`@parser` namespace** — он не существует сейчас (отброшено в ADR-0030). Если когда-нибудь вернётся — будет sortable автоматически.
 
-Новый **ADR-0030 «Logical fields (`~`-namespace)»**:
-- Контекст: trace_id в pino/bunyan/nginx/app-text поперёк форматов.
-- Решение: chain extractors + built-in catalog + явная активация + `~`-namespace + global workspace scope.
-- Альтернативы: per-format mapping (A), expression DSL (C, Vector VRL-style), inline в queries (Loki label_format).
-- Reference: Datadog Attribute Remapper + Standard Attributes, Elastic ECS, Splunk FIELDALIAS.
-- Связь: ADR-0017 (`@`-namespace расширяется до `~`), ADR-0028 (column registry поддерживает `~`-колонки), ADR-0011 (REGEXP UDF — теперь обязательна для logical fields).
+## 8. ADR
 
-## 10. Verification (end-to-end)
-
-1. `pnpm gen:fixtures`; `pnpm dev` → `http://localhost:5173/log-viewer/app/`.
-2. Загрузить `.tmp/pino.jsonl`, `.tmp/bunyan.jsonl`, `.tmp/nginx-access.log`, `.tmp/app.log`.
-3. Открыть `__all__` таб.
-4. **Activate built-in:** Settings → Logical Fields → catalog → `trace_id` → [Activate]. Видим в active list с coverage badge.
-5. **Filter:** `LvAddFieldFilter` → секция Logical → выбрать `~trace_id`. Op `=`. Ввести значение из строки. Поток фильтруется поперёк всех 4 источников.
-6. **Group:** `LvGroupBySelect` → `~trace_id`. Server-side aggregation работает (counts по реальным trace_id из всех источников).
-7. **Column:** `LvColumnPicker` → активировать `~trace_id`. В строках видно значение (или `—` если нет).
-8. **Coverage drill-down:** click на `~trace_id` в active list → видна per-source разбивка. Если nginx 0 hits — баннер с «Add extractor».
-9. **Custom field:** "+ New" → `audit_id`, добавить два extractor'а (field + regex), сохранить. Доступен в picker'ах.
-10. **Quick filter from row:** в `LvRowDetail` (Meta tab) click на значение `~trace_id` → context menu → "Filter by this" → автомат применяется фильтр.
-11. **Single-file scenario:** открыть один pino.jsonl. `~trace_id` работает (одна цепочка, первый extractor pops). Coverage 1/1.
-12. **Mixed.log:** открыть `.tmp/mixed.log`. Внутри plain-text + JSON. `~trace_id` срабатывает там, где находит — coverage показывает partial.
-13. `pnpm lint && pnpm test && pnpm build` зелёные.
-14. Скриншот: Settings panel с активными logical fields + aggregate-вью с filter `~trace_id=...` и group by `~trace_id` → `.tmp/screenshots/`.
-
-## 11. Out of scope (явно)
-
-- Сортировка по колонкам.
-- Custom user-defined парсеры (отдельная Phase 2.C).
-- Discovery / auto-suggest logical fields (Phase 3).
-- Computed/composite logical fields (extractor type `expr`, Phase 3).
-- Cross-workspace sharing logical fields (export/import — Phase 3).
-- Merge-sort timestamps между источниками в aggregate (отдельный ADR).
-- Format-aware визуализация (badges/иконки парсеров) — отброшено по итогам обсуждения. Расширение в имени файла в sidebar достаточно.
-- Materialization logical fields в indexer (computed column) — только если будут проблемы с perf.
+Не нужен. Это расширение существующей filter/SQL-машинерии в рамках уже принятых решений (ADR-0017 dynamic field schema, ADR-0028 unified column model). Новых архитектурных развилок нет: extractor pattern не меняется, column registry — расширяется опциональным sort flag, RPC contract — не трогается. Если по ходу всплывёт неочевидное решение — заведём ADR тогда.

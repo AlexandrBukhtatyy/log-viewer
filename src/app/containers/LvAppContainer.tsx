@@ -194,14 +194,28 @@ export const LvAppContainer = () => {
     };
   }, [activeTabId, selectedIds, splitSelection]);
 
+  // Per-tab single-column sort. Lives on `LvTab.sortBy` (persisted
+  // through `lv:workspace`) and is folded into the effective
+  // `LogFilter` so the worker's ORDER BY honours it. `undefined`
+  // when the active tab has no explicit sort — `orderByForFilter`
+  // falls back to the existing time/physical auto-infer.
+  const activeTabSortBy = useMemo(
+    () =>
+      activeTabId === '__all__'
+        ? undefined
+        : openTabs.find((t) => t.id === activeTabId)?.sortBy,
+    [activeTabId, openTabs],
+  );
+
   const filter = useMemo<LogFilter>(() => {
     const { sourcesArr, filePaths } = tabSelection();
     return {
       ...coreFilter,
       sources: sourcesArr.length === 0 ? null : sourcesArr,
       filePaths: filePaths.length === 0 ? null : filePaths,
+      sortBy: activeTabSortBy,
     };
-  }, [coreFilter, tabSelection]);
+  }, [coreFilter, tabSelection, activeTabSortBy]);
 
   const setFilter = useCallback(
     (next: (prev: LogFilter) => LogFilter) => {
@@ -284,6 +298,23 @@ export const LvAppContainer = () => {
   const activeColumns = useMemo(
     () => resolveActiveColumns(activeTabId, openTabs, tweaks.columns),
     [activeTabId, openTabs, tweaks.columns],
+  );
+
+  // Header-click handler for column sort. Writes per-tab — the
+  // `__all__` aggregate tab gets its own row in `openTabs` so it
+  // can carry its own sort too.
+  const onSortByChange = useCallback(
+    (
+      next: { readonly key: string; readonly dir: 'asc' | 'desc' } | null,
+    ) => {
+      const id = useWorkspaceStore.getState().activeTabId;
+      setOpenTabs((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, sortBy: next ?? undefined } : t,
+        ),
+      );
+    },
+    [setOpenTabs],
   );
   // Per-tab virtual fields (Phase 2 of
   // Phase 2.E: auto-apply parser's `defaultColumns` the first time a
@@ -1073,6 +1104,8 @@ export const LvAppContainer = () => {
       fieldDescriptors={fieldDescriptors}
       columns={activeColumns}
       onColumnsChange={onColumnsChange}
+      sortBy={activeTabSortBy}
+      onSortByChange={onSortByChange}
       cellValueOf={cellValueOf}
       parserIdOf={parserIdOf}
       onExport={onExport}

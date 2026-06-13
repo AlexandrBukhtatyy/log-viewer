@@ -29,6 +29,7 @@ export type {
   FieldKey,
   FilterPredicate,
   LogFilter,
+  LogFilterSort,
   QueryMode,
   TimeRange,
 } from './log-filter.ts';

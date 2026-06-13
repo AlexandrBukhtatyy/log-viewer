@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { LogFilter } from '../types/log-filter.ts';
 import { EMPTY_FILTER } from '../types/log-filter.ts';
 import type { SourceId } from '../types/log-entry.ts';
+import type { LogicalField } from '../types/logical-field.ts';
 import {
   buildClause,
   ORDER_BY_PHYSICAL,
   ORDER_BY_TIME,
   orderByForFilter,
+  sortByNeedsSourceJoin,
+  sortBySql,
 } from './query.ts';
 
 const f = (overrides: Partial<LogFilter> = {}): LogFilter => ({
@@ -249,5 +252,83 @@ describe('orderByForFilter', () => {
 
   it('no source / file constraint → time (potentially multi-source)', () => {
     expect(orderByForFilter(f())).toBe(ORDER_BY_TIME);
+  });
+
+  it('explicit sortBy wins over orderBy and auto-infer', () => {
+    expect(
+      orderByForFilter(
+        f({
+          orderBy: 'physical',
+          sortBy: { key: '@ts', dir: 'desc' },
+        }),
+      ),
+    ).toBe(
+      'ORDER BY entry.ts IS NULL, entry.ts DESC, entry.source_id ASC, entry.seq ASC',
+    );
+  });
+});
+
+describe('sortBySql', () => {
+  it('@level uses severity CASE (not lexicographic)', () => {
+    const out = sortBySql({ key: '@level', dir: 'asc' });
+    expect(out.sql).toContain("WHEN 'trace' THEN 0");
+    expect(out.sql).toContain("WHEN 'fatal' THEN 5");
+    expect(out.sql).toMatch(/END ASC,/);
+    expect(out.needsSourceJoin).toBe(false);
+  });
+
+  it('@level desc flips direction but keeps severity ranking', () => {
+    expect(sortBySql({ key: '@level', dir: 'desc' }).sql).toMatch(/END DESC,/);
+  });
+
+  it('@ts keeps NULL handling first', () => {
+    expect(sortBySql({ key: '@ts', dir: 'asc' }).sql).toBe(
+      'ORDER BY entry.ts IS NULL, entry.ts ASC, entry.source_id ASC, entry.seq ASC',
+    );
+  });
+
+  it('dynamic key compiles via JSON_EXTRACT', () => {
+    expect(sortBySql({ key: 'service', dir: 'desc' }).sql).toBe(
+      `ORDER BY JSON_EXTRACT(entry.fields_json, '$.service') DESC, ` +
+        'entry.source_id ASC, entry.seq ASC',
+    );
+  });
+
+  it('~-logical key compiles via the COALESCE chain', () => {
+    const trace: LogicalField = {
+      id: 'trace_id',
+      type: 'string',
+      label: 'Trace id',
+      origin: 'user',
+      extractors: [
+        { type: 'field', path: 'trace_id' },
+        { type: 'field', path: 'traceId' },
+      ],
+    };
+    expect(
+      sortBySql(
+        { key: '~trace_id', dir: 'asc' },
+        { activeLogicalFields: [trace] },
+      ).sql,
+    ).toBe(
+      'ORDER BY COALESCE(' +
+        "JSON_EXTRACT(entry.fields_json, '$.trace_id'), " +
+        "JSON_EXTRACT(entry.fields_json, '$.traceId')) ASC, " +
+        'entry.source_id ASC, entry.seq ASC',
+    );
+  });
+
+  it('@source.name reports needsSourceJoin', () => {
+    expect(
+      sortBySql({ key: '@source.name', dir: 'asc' }).needsSourceJoin,
+    ).toBe(true);
+    expect(sortByNeedsSourceJoin({ key: '@source.name', dir: 'asc' })).toBe(
+      true,
+    );
+  });
+
+  it('@level / @ts do not need a source JOIN', () => {
+    expect(sortByNeedsSourceJoin({ key: '@level', dir: 'asc' })).toBe(false);
+    expect(sortByNeedsSourceJoin({ key: '@ts', dir: 'asc' })).toBe(false);
   });
 });

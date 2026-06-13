@@ -1,5 +1,9 @@
 import type { Database, PreparedStatement, SqlValue } from '@sqlite.org/sqlite-wasm';
-import { buildClause, orderByForFilter } from '../../core/filter/query.ts';
+import {
+  buildClause,
+  orderByForFilter,
+  sortByNeedsSourceJoin,
+} from '../../core/filter/query.ts';
 import { SOURCE_JOIN_SQL } from '../../core/filter/field-key.ts';
 import { buildCsv, buildJsonl } from '../../core/util/export.ts';
 import type {
@@ -544,11 +548,16 @@ export const indexerApi: IndexerApi = {
 
   search: async (filter, from, to) => {
     const { db } = requireState();
-    const { joinSql, whereSql, params } = buildClause(filter, logicalCtx());
+    const ctx = logicalCtx();
+    const { joinSql, whereSql, params } = buildClause(filter, ctx);
     const limit = Math.max(0, to - from);
     const offset = Math.max(0, from);
     if (limit === 0) return [];
-    const sql = `SELECT ${ENTRY_COLS_SELECT} FROM entry ${joinSql} ${whereSql} ${orderByForFilter(filter)} LIMIT ? OFFSET ?`;
+    const sortNeedsJoin =
+      filter.sortBy !== undefined && sortByNeedsSourceJoin(filter.sortBy, ctx);
+    const effectiveJoin =
+      sortNeedsJoin && joinSql.length === 0 ? SOURCE_JOIN_SQL : joinSql;
+    const sql = `SELECT ${ENTRY_COLS_SELECT} FROM entry ${effectiveJoin} ${whereSql} ${orderByForFilter(filter, ctx)} LIMIT ? OFFSET ?`;
     const rows = runRows(db, sql, [...params, limit, offset]);
     return rows.map(rowToEntry);
   },
@@ -707,9 +716,14 @@ export const indexerApi: IndexerApi = {
 
   exportFiltered: async (filter, format) => {
     const { db } = requireState();
-    const { joinSql, whereSql, params } = buildClause(filter, logicalCtx());
+    const ctx = logicalCtx();
+    const { joinSql, whereSql, params } = buildClause(filter, ctx);
+    const sortNeedsJoin =
+      filter.sortBy !== undefined && sortByNeedsSourceJoin(filter.sortBy, ctx);
+    const effectiveJoin =
+      sortNeedsJoin && joinSql.length === 0 ? SOURCE_JOIN_SQL : joinSql;
     const sql =
-      `SELECT ${ENTRY_COLS_SELECT} FROM entry ${joinSql} ${whereSql} ${orderByForFilter(filter)}`;
+      `SELECT ${ENTRY_COLS_SELECT} FROM entry ${effectiveJoin} ${whereSql} ${orderByForFilter(filter, ctx)}`;
     const rows = runRows(db, sql, params);
     const entries = rows.map(rowToEntry);
     return format === 'csv' ? buildCsv(entries) : buildJsonl(entries);

@@ -1271,6 +1271,13 @@ button{font-family:inherit}
 .lv-sh-add{position:absolute; right:60px; top:50%; transform:translateY(-50%)}
 .lv-sh{padding:0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .lv-sh-ln{text-align:right; padding-right:8px}
+button.lv-sh{
+  background:transparent; border:0; color:inherit; font:inherit;
+  text-align:left; cursor:pointer; user-select:none;
+}
+button.lv-sh:hover{color:var(--lv-fg)}
+button.lv-sh.is-sorted{color:var(--lv-fg); font-weight:600}
+.lv-sh-sort{opacity:.8; font-weight:600}
 
 .lv-stream{
   flex:1; min-height:0; overflow:auto;

@@ -125,6 +125,18 @@ export interface LvViewerProps {
   /** User-picked extra columns; the picker mutates this list. */
   readonly columns: ReadonlyArray<LvColumnPref>;
   onColumnsChange: (next: ReadonlyArray<LvColumnPref>) => void;
+  /**
+   * Active per-tab single-column sort. `undefined` means the worker
+   * falls back to `orderByForFilter` auto-infer (physical / time).
+   */
+  readonly sortBy?: { readonly key: string; readonly dir: 'asc' | 'desc' };
+  /**
+   * Driven by header clicks; null clears the sort (back to auto-infer).
+   * Click cycle: none → asc → desc → none.
+   */
+  onSortByChange?: (
+    next: { readonly key: string; readonly dir: 'asc' | 'desc' } | null,
+  ) => void;
   /** Extracts the cell value for a `(entry, columnKey)` pair. */
   cellValueOf?: (entry: LogEntry, key: string) => unknown;
   /** Resolves the parser id for an entry's source. Shown in the Meta-vкладке of `LvRowDetail`. */
@@ -179,6 +191,8 @@ export const LvViewer = ({
   fieldDescriptors,
   columns,
   onColumnsChange,
+  sortBy,
+  onSortByChange,
   cellValueOf,
   parserIdOf,
   resolveLogicalRows,
@@ -602,10 +616,43 @@ export const LvViewer = ({
                 const d = builtInColumn(c.key);
                 const label = d?.label ?? c.label ?? c.key;
                 const extra = d?.headerClass ? ` ${d.headerClass}` : '';
+                const active = sortBy?.key === c.key;
+                const indicator = active
+                  ? sortBy?.dir === 'desc'
+                    ? '↓'
+                    : '↑'
+                  : null;
+                const cycle = (): void => {
+                  if (onSortByChange === undefined) return;
+                  if (!active) onSortByChange({ key: c.key, dir: 'asc' });
+                  else if (sortBy?.dir === 'asc')
+                    onSortByChange({ key: c.key, dir: 'desc' });
+                  else onSortByChange(null);
+                };
+                const titleSuffix = active
+                  ? sortBy?.dir === 'desc'
+                    ? ' — click to clear sort'
+                    : ' — click to sort descending'
+                  : ' — click to sort ascending';
                 return (
-                  <span key={c.key} className={`lv-sh${extra}`} title={label}>
+                  <button
+                    type="button"
+                    key={c.key}
+                    className={
+                      `lv-sh${extra}` +
+                      (active ? ` is-sorted is-sort-${sortBy?.dir}` : '')
+                    }
+                    title={label + titleSuffix}
+                    onClick={cycle}
+                  >
                     {label}
-                  </span>
+                    {indicator !== null && (
+                      <span className="lv-sh-sort" aria-hidden="true">
+                        {' '}
+                        {indicator}
+                      </span>
+                    )}
+                  </button>
                 );
               })}
               <span className="lv-sh lv-sh-msg">message</span>

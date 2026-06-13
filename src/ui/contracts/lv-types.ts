@@ -177,4 +177,11 @@ export interface LvTab {
    * picker write back here for non-`__all__` tabs.
    */
   columns?: ReadonlyArray<LvColumnPref>;
+  /**
+   * Per-tab single-column sort. Driven by clicks on the table header
+   * in `LvViewer`. When absent, the viewer falls back to
+   * `orderByForFilter`'s auto-infer (physical for single-source
+   * single-file, time everywhere else).
+   */
+  sortBy?: { readonly key: string; readonly dir: 'asc' | 'desc' };
 }
