@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import type {
-  LogicalExtractor,
   LogicalField,
-  LogicalFieldType,
   LogicalFieldsConfig,
 } from '../../../core/types/index.ts';
+import { LvLogicalFieldEditorModal } from '../modals/LvLogicalFieldEditorModal.tsx';
 
 interface CoverageSourceView {
   readonly sourceId: string;
@@ -34,9 +33,7 @@ const extractorSummary = (field: LogicalField): string => {
   if (fieldCount > 0)
     parts.push(`${fieldCount} field${fieldCount === 1 ? '' : 's'}`);
   if (regexOnJsonCount > 0)
-    parts.push(
-      `${regexOnJsonCount} regex-on-json`,
-    );
+    parts.push(`${regexOnJsonCount} regex-on-json`);
   if (regexCount > 0) parts.push(`${regexCount} regex`);
   return parts.join(' + ') || 'no extractors';
 };
@@ -207,376 +204,6 @@ const Row = ({
   );
 };
 
-const emptyFieldExtractor = (): LogicalExtractor => ({
-  type: 'field',
-  path: '',
-});
-const emptyRegexExtractor = (): LogicalExtractor => ({
-  type: 'regex',
-  on: 'message',
-  pattern: '',
-});
-const emptyRegexOnJsonExtractor = (): LogicalExtractor => ({
-  type: 'regex-on-json',
-  path: '',
-  pattern: '',
-});
-
-interface FormState {
-  id: string;
-  label: string;
-  type: LogicalFieldType;
-  description: string;
-  extractors: LogicalExtractor[];
-  error: string | null;
-}
-
-const emptyForm = (): FormState => ({
-  id: '',
-  label: '',
-  type: 'string',
-  description: '',
-  extractors: [emptyFieldExtractor()],
-  error: null,
-});
-
-const formFromField = (f: LogicalField): FormState => ({
-  id: f.id,
-  label: f.label,
-  type: f.type,
-  description: f.description ?? '',
-  extractors: f.extractors.map((ex) =>
-    ex.type === 'field'
-      ? { ...ex }
-      : { ...ex },
-  ),
-  error: null,
-});
-
-interface EditorProps {
-  readonly form: FormState;
-  readonly mode: 'new' | 'edit';
-  onChange(next: FormState): void;
-  onSave(): void;
-  onCancel(): void;
-}
-
-const Editor = ({ form, mode, onChange, onSave, onCancel }: EditorProps) => {
-  const patch = (over: Partial<FormState>): void =>
-    onChange({ ...form, ...over, error: null });
-
-  const updateExtractor = (
-    idx: number,
-    next: LogicalExtractor,
-  ): void => {
-    const list = form.extractors.slice();
-    list[idx] = next;
-    patch({ extractors: list });
-  };
-  const removeExtractor = (idx: number): void => {
-    const list = form.extractors.slice();
-    list.splice(idx, 1);
-    patch({ extractors: list });
-  };
-  const moveExtractor = (idx: number, dir: -1 | 1): void => {
-    const next = form.extractors.slice();
-    const target = idx + dir;
-    if (target < 0 || target >= next.length) return;
-    const tmp = next[idx]!;
-    next[idx] = next[target]!;
-    next[target] = tmp;
-    patch({ extractors: next });
-  };
-
-  return (
-    <div className="lv-tset-vf-form" style={{ padding: 12 }}>
-      <label className="lv-tset-vf-field">
-        <span className="lv-tset-lbl">Id</span>
-        <input
-          type="text"
-          value={form.id}
-          onChange={(e) => patch({ id: e.target.value })}
-          placeholder="audit_id"
-          spellCheck={false}
-          autoCapitalize="none"
-          autoCorrect="off"
-          disabled={mode === 'edit'}
-        />
-        <span className="lv-form-help">
-          Lowercase identifier — appears in pickers as{' '}
-          <code>~{form.id || 'name'}</code>.
-        </span>
-      </label>
-      <label className="lv-tset-vf-field">
-        <span className="lv-tset-lbl">Label</span>
-        <input
-          type="text"
-          value={form.label}
-          onChange={(e) => patch({ label: e.target.value })}
-          placeholder="Audit id"
-        />
-      </label>
-      <label className="lv-tset-vf-field">
-        <span className="lv-tset-lbl">Type</span>
-        <select
-          value={form.type}
-          onChange={(e) =>
-            patch({ type: e.target.value as LogicalFieldType })
-          }
-        >
-          <option value="string">string</option>
-          <option value="number">number</option>
-          <option value="bool">bool</option>
-        </select>
-      </label>
-      <label className="lv-tset-vf-field">
-        <span className="lv-tset-lbl">Description (optional)</span>
-        <input
-          type="text"
-          value={form.description}
-          onChange={(e) => patch({ description: e.target.value })}
-          placeholder="Per-action audit-trail id"
-        />
-      </label>
-
-      <div className="lv-tset-vf-field">
-        <span className="lv-tset-lbl">Extractors (first match wins)</span>
-        {form.extractors.map((ex, idx) => (
-          <ExtractorRow
-            key={idx}
-            extractor={ex}
-            index={idx}
-            total={form.extractors.length}
-            onChange={(next) => updateExtractor(idx, next)}
-            onRemove={() => removeExtractor(idx)}
-            onMove={(dir) => moveExtractor(idx, dir)}
-          />
-        ))}
-        <div className="lv-tset-vf-actions">
-          <button
-            type="button"
-            onClick={() =>
-              patch({ extractors: [...form.extractors, emptyFieldExtractor()] })
-            }
-          >
-            + Field extractor
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              patch({ extractors: [...form.extractors, emptyRegexExtractor()] })
-            }
-          >
-            + Regex extractor
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              patch({
-                extractors: [
-                  ...form.extractors,
-                  emptyRegexOnJsonExtractor(),
-                ],
-              })
-            }
-          >
-            + Regex on JSON
-          </button>
-        </div>
-      </div>
-
-      {form.error !== null && (
-        <div className="lv-tset-vf-error" role="alert">
-          {form.error}
-        </div>
-      )}
-      <div className="lv-tset-vf-actions">
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="lv-tset-vf-primary"
-          onClick={onSave}
-        >
-          {mode === 'edit' ? 'Save' : 'Create'}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-interface ExtractorRowProps {
-  readonly extractor: LogicalExtractor;
-  readonly index: number;
-  readonly total: number;
-  onChange(next: LogicalExtractor): void;
-  onRemove(): void;
-  onMove(dir: -1 | 1): void;
-}
-
-const ExtractorRow = ({
-  extractor,
-  index,
-  total,
-  onChange,
-  onRemove,
-  onMove,
-}: ExtractorRowProps) => (
-  <div
-    className="lv-colpick-row is-on"
-    style={{ flexDirection: 'column', alignItems: 'stretch', padding: 8, gap: 4 }}
-  >
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-      <span className="lv-colpick-meta">#{index + 1}</span>
-      <select
-        value={extractor.type}
-        onChange={(e) => {
-          const next = e.target.value as LogicalExtractor['type'];
-          if (next === 'field')
-            onChange({ type: 'field', path: '' });
-          else if (next === 'regex')
-            onChange({ type: 'regex', on: 'message', pattern: '' });
-          else
-            onChange({ type: 'regex-on-json', path: '', pattern: '' });
-        }}
-      >
-        <option value="field">field</option>
-        <option value="regex">regex</option>
-        <option value="regex-on-json">regex on JSON</option>
-      </select>
-      <span style={{ flex: 1 }} />
-      <button
-        type="button"
-        onClick={() => onMove(-1)}
-        disabled={index === 0}
-        title="Move up"
-      >
-        ↑
-      </button>
-      <button
-        type="button"
-        onClick={() => onMove(1)}
-        disabled={index === total - 1}
-        title="Move down"
-      >
-        ↓
-      </button>
-      <button type="button" onClick={onRemove} title="Remove extractor">
-        ✕
-      </button>
-    </div>
-    {extractor.type === 'field' ? (
-      <input
-        type="text"
-        value={extractor.path}
-        onChange={(e) =>
-          onChange({ type: 'field', path: e.target.value })
-        }
-        placeholder="service.name"
-        spellCheck={false}
-        autoCapitalize="none"
-        autoCorrect="off"
-      />
-    ) : extractor.type === 'regex-on-json' ? (
-      <>
-        <input
-          type="text"
-          value={extractor.path}
-          onChange={(e) =>
-            onChange({ ...extractor, path: e.target.value })
-          }
-          placeholder="source field path (e.g. context.message)"
-          spellCheck={false}
-          autoCapitalize="none"
-          autoCorrect="off"
-        />
-        <input
-          type="text"
-          value={extractor.pattern}
-          onChange={(e) =>
-            onChange({ ...extractor, pattern: e.target.value })
-          }
-          placeholder="tr[ace]?[_-]?id=(?<v>\\w+)"
-          spellCheck={false}
-          autoCapitalize="none"
-          autoCorrect="off"
-        />
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input
-            type="text"
-            value={extractor.flags ?? ''}
-            onChange={(e) =>
-              onChange({ ...extractor, flags: e.target.value })
-            }
-            placeholder="flags (i, …)"
-            style={{ width: 90 }}
-            spellCheck={false}
-          />
-          <input
-            type="text"
-            value={extractor.group ?? ''}
-            onChange={(e) =>
-              onChange({ ...extractor, group: e.target.value })
-            }
-            placeholder="group (v)"
-            style={{ flex: 1 }}
-            spellCheck={false}
-          />
-        </div>
-      </>
-    ) : (
-      <>
-        <input
-          type="text"
-          value={extractor.pattern}
-          onChange={(e) =>
-            onChange({ ...extractor, pattern: e.target.value })
-          }
-          placeholder="tr[ace]?[_-]?id=(?<v>\\w+)"
-          spellCheck={false}
-          autoCapitalize="none"
-          autoCorrect="off"
-        />
-        <div style={{ display: 'flex', gap: 6 }}>
-          <select
-            value={extractor.on}
-            onChange={(e) =>
-              onChange({
-                ...extractor,
-                on: e.target.value as 'message' | 'raw',
-              })
-            }
-          >
-            <option value="message">on: message</option>
-            <option value="raw">on: raw</option>
-          </select>
-          <input
-            type="text"
-            value={extractor.flags ?? ''}
-            onChange={(e) =>
-              onChange({ ...extractor, flags: e.target.value })
-            }
-            placeholder="flags (i, …)"
-            style={{ width: 90 }}
-            spellCheck={false}
-          />
-          <input
-            type="text"
-            value={extractor.group ?? ''}
-            onChange={(e) =>
-              onChange({ ...extractor, group: e.target.value })
-            }
-            placeholder="group (v)"
-            style={{ flex: 1 }}
-            spellCheck={false}
-          />
-        </div>
-      </>
-    )}
-  </div>
-);
-
 type EditState =
   | { mode: 'closed' }
   | { mode: 'new' }
@@ -641,8 +268,8 @@ export interface LvLogicalFieldsPanelProps {
 /**
  * Settings panel for the `~`-namespace logical fields (ADR-0030).
  * Lists built-in templates + user-defined customs, lets the user
- * toggle activation, and provides an inline editor for creating /
- * editing customs.
+ * toggle activation, and opens a modal editor for creating / editing
+ * customs.
  */
 type CoverageEntry = CoverageView | 'loading' | 'error';
 
@@ -661,7 +288,6 @@ export const LvLogicalFieldsPanel = ({
   importConfig,
 }: LvLogicalFieldsPanelProps) => {
   const [edit, setEdit] = useState<EditState>({ mode: 'closed' });
-  const [form, setForm] = useState<FormState>(emptyForm);
   const [ioError, setIoError] = useState<string | null>(null);
   const [coverage, setCoverage] = useState<
     Readonly<Record<string, CoverageEntry>>
@@ -694,46 +320,25 @@ export const LvLogicalFieldsPanel = ({
   const active = fields.filter((f) => activeSet.has(f.id));
   const inactive = fields.filter((f) => !activeSet.has(f.id));
 
-  const startNew = (): void => {
-    setForm(emptyForm());
-    setEdit({ mode: 'new' });
-  };
+  const startNew = (): void => setEdit({ mode: 'new' });
   const startEdit = (id: string): void => {
     const f = config.customFields.find((x) => x.id === id);
     if (f === undefined) return;
-    setForm(formFromField(f));
     setEdit({ mode: 'edit', id });
   };
-  const cancel = (): void => {
-    setEdit({ mode: 'closed' });
-    setForm(emptyForm());
-  };
-  const save = (): void => {
-    const candidate: LogicalField = {
-      id: form.id.trim(),
-      type: form.type,
-      label: form.label.trim(),
-      description: form.description.trim() || undefined,
-      extractors: form.extractors,
-      origin: 'user',
-    };
-    const selfId = edit.mode === 'edit' ? edit.id : null;
-    const err = validate(candidate, config, selfId);
-    if (err !== null) {
-      setForm({ ...form, error: err });
-      return;
-    }
-    try {
-      if (edit.mode === 'edit') onUpdateCustom(candidate);
-      else onAddCustom(candidate);
-    } catch (e) {
-      setForm({ ...form, error: (e as Error).message });
-      return;
-    }
-    cancel();
+  const cancel = (): void => setEdit({ mode: 'closed' });
+
+  const handleSave = (candidate: LogicalField): void => {
+    if (edit.mode === 'edit') onUpdateCustom(candidate);
+    else onAddCustom(candidate);
   };
 
   const isCustom = (id: string): boolean => customIds.has(id);
+
+  const initialField =
+    edit.mode === 'edit'
+      ? config.customFields.find((f) => f.id === edit.id)
+      : undefined;
 
   return (
     <aside className="lv-sidebar lv-fields-panel">
@@ -803,15 +408,15 @@ export const LvLogicalFieldsPanel = ({
         </div>
       )}
 
-      {edit.mode !== 'closed' && (
-        <Editor
-          form={form}
-          mode={edit.mode}
-          onChange={setForm}
-          onSave={save}
-          onCancel={cancel}
-        />
-      )}
+      <LvLogicalFieldEditorModal
+        open={edit.mode !== 'closed'}
+        mode={edit.mode === 'edit' ? 'edit' : 'new'}
+        initial={initialField}
+        config={config}
+        validate={validate}
+        onSave={handleSave}
+        onClose={cancel}
+      />
 
       {active.length > 0 && (
         <div className="lv-parsers-section-hd">Active</div>

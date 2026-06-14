@@ -311,6 +311,17 @@ button{font-family:inherit}
 
 /* "Add log source" modal — generic form layout reusable for future kinds. */
 .lv-add-src-modal{width:480px; max-width:calc(100vw - 32px)}
+
+/* Logical-field editor modal — wider than default to give the extractor
+   list room for nested inputs (regex, flags, group, JSON path). */
+.lv-logical-field-modal{width:min(720px, calc(100vw - 48px))}
+.lv-logical-field-form{display:flex; flex-direction:column; gap:8px}
+
+/* Logical-fields panel CTA row — primary "New field" stays prominent on
+   the left, secondary Export/Import sit inline beside it instead of
+   wrapping to a second row. */
+.lv-fields-panel .lv-sb-cta{display:flex; align-items:center; gap:6px}
+.lv-fields-panel .lv-sb-cta .lv-add-src-btn{flex:1; width:auto}
 .lv-form-row{display:flex; align-items:center; gap:10px; padding:6px 0}
 .lv-form-row .lv-form-label{
   width:80px; flex-shrink:0; font-size:11px; color:var(--lv-fg-2); font-weight:500;
@@ -1898,14 +1909,32 @@ button.lv-sh.is-sorted{color:var(--lv-fg); font-weight:600}
   background:var(--lv-bg-2);
 }
 .lv-tset-vf-field{display:flex; flex-direction:column; gap:3px}
-.lv-tset-vf-field input{
+/* Reset row-layout `lv-tset-lbl` flex sizing when it's used in the
+   column-direction editor form — otherwise `flex: 0 0 80px` reads
+   as a fixed 80px height and the label drifts away from its input. */
+.lv-tset-vf-field > .lv-tset-lbl{
+  flex:initial; font-size:11px; padding:0;
+}
+.lv-tset-vf-field input,
+.lv-tset-vf-field select{
   padding:4px 6px; background:var(--lv-bg-1); color:var(--lv-fg);
   border:1px solid var(--lv-border); border-radius:3px;
   font-family:var(--lv-mono, monospace); font-size:12px;
 }
-.lv-tset-vf-field input:focus{outline:none; border-color:var(--lv-accent)}
+.lv-tset-vf-field input:focus,
+.lv-tset-vf-field select:focus{outline:none; border-color:var(--lv-accent)}
 .lv-tset-vf-error{color:var(--lv-level-error, #e57373); font-size:11px; padding:2px 0}
 .lv-tset-vf-actions{display:flex; justify-content:flex-end; gap:6px}
+.lv-tset-vf-add-row{
+  display:flex; flex-wrap:wrap; justify-content:flex-start; gap:6px;
+  margin-top:4px;
+}
+.lv-tset-vf-add-row button{
+  padding:3px 8px; background:transparent; color:var(--lv-fg-2);
+  border:1px dashed var(--lv-border); border-radius:3px; cursor:pointer;
+  font-size:11px; white-space:nowrap; flex:0 0 auto;
+}
+.lv-tset-vf-add-row button:hover{background:var(--lv-bg-hover); color:var(--lv-fg)}
 .lv-tset-vf-actions button{
   padding:4px 10px; background:transparent; color:var(--lv-fg);
   border:1px solid var(--lv-border); border-radius:3px; cursor:pointer;

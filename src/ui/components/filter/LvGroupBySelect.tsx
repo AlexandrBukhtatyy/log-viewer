@@ -94,31 +94,34 @@ export const LvGroupBySelect = ({
     setHighlightedIdx(0);
   };
 
-  // Two sections in the group-by dropdown (per user request):
-  //   1. System variables — built-in `@`-keys. Universal, always visible.
-  //   2. Log fields — dynamic keys gathered from the actively opened
-  //      sources (the multi-select aggregate tab uses the union of
-  //      selected sources; a single file tab uses just that source).
-  // Built-ins live in `descriptors` regardless of source presence;
-  // dynamic keys are filtered down by whether they appear in at least
-  // one active source. When the user hasn't picked any source we don't
-  // restrict — same fallback as the column picker.
-  // Built-ins and active logical fields (ADR-0030) share a section —
-  // both are user-curated rather than auto-discovered, and the picker
-  // does not need to discriminate further beyond the label/key.
-  const builtinDescriptors = useMemo(
-    () =>
-      descriptors.filter(
-        (d) => d.origin === 'builtin' || d.origin === 'logical',
-      ),
-    [descriptors],
-  );
+  // Three sections in the group-by dropdown:
+  //   1. Fields from open logs — dynamic JSON keys gathered from the
+  //      actively opened sources (the multi-select aggregate tab uses
+  //      the union of selected sources; a single file tab uses just
+  //      that source).
+  //   2. Logical fields — user-activated `~`-namespace chains
+  //      (ADR-0030). Listed separately so the user can spot the
+  //      curated cross-format aliases at a glance.
+  //   3. System variables — built-in `@`-keys. Universal, always
+  //      visible.
+  // Built-ins and logicals live in `descriptors` regardless of source
+  // presence; dynamic keys are filtered down by whether they appear in
+  // at least one active source. When the user hasn't picked any source
+  // we don't restrict — same fallback as the column picker.
   const dynamicDescriptors = useMemo(() => {
     const dyn = descriptors.filter((d) => d.origin === 'dynamic');
     if (activeIds.length === 0) return sortDynamic(dyn);
     const inActive = dyn.filter((d) => isPresentInActiveSources(d, activeIds));
     return sortDynamic(inActive);
   }, [descriptors, activeIds]);
+  const logicalDescriptors = useMemo(
+    () => descriptors.filter((d) => d.origin === 'logical'),
+    [descriptors],
+  );
+  const builtinDescriptors = useMemo(
+    () => descriptors.filter((d) => d.origin === 'builtin'),
+    [descriptors],
+  );
 
   const matchesQuery = (d: FieldDescriptor, q: string): boolean =>
     d.key.toLowerCase().includes(q) ||
@@ -129,23 +132,28 @@ export const LvGroupBySelect = ({
     if (q === '') return dynamicDescriptors;
     return dynamicDescriptors.filter((d) => matchesQuery(d, q));
   }, [dynamicDescriptors, query]);
+  const filteredLogical = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q === '') return logicalDescriptors;
+    return logicalDescriptors.filter((d) => matchesQuery(d, q));
+  }, [logicalDescriptors, query]);
   const filteredBuiltin = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (q === '') return builtinDescriptors;
     return builtinDescriptors.filter((d) => matchesQuery(d, q));
   }, [builtinDescriptors, query]);
 
-  // Flat order for keyboard navigation — dynamic first, builtins
-  // after. Section headers are rendered between the two groups but
-  // they don't take an index slot.
+  // Flat order for keyboard navigation: dynamic → logical → builtin.
+  // Section headers are rendered between groups but don't take an
+  // index slot.
   const filtered = useMemo(
-    () => [...filteredDynamic, ...filteredBuiltin],
-    [filteredDynamic, filteredBuiltin],
+    () => [...filteredDynamic, ...filteredLogical, ...filteredBuiltin],
+    [filteredDynamic, filteredLogical, filteredBuiltin],
   );
 
   const sorted = useMemo(
-    () => [...dynamicDescriptors, ...builtinDescriptors],
-    [dynamicDescriptors, builtinDescriptors],
+    () => [...dynamicDescriptors, ...logicalDescriptors, ...builtinDescriptors],
+    [dynamicDescriptors, logicalDescriptors, builtinDescriptors],
   );
 
   // Derived clamp — never trust raw `highlightedIdx` against the
@@ -328,19 +336,30 @@ export const LvGroupBySelect = ({
                           d.origin === 'builtin' || d.origin === 'logical';
                         const c = compatOf(d, activeIds);
                         const compatTxt = compatBadgeText(c, sourceNameById);
-                        // Section headers: the first dynamic item and
-                        // the first builtin item each emit one. Built-
-                        // ins always live after dynamics in `filtered`
-                        // so the heading order is stable.
+                        // Section headers fire at the first item of
+                        // each origin slice. Order is fixed: dynamic →
+                        // logical → builtin, so the boundary indices
+                        // are stable as long as `filtered` keeps that
+                        // concat order.
+                        const logicalStart = filteredDynamic.length;
+                        const builtinStart =
+                          filteredDynamic.length + filteredLogical.length;
                         const isFirstDynamic =
-                          !isSys && idx === 0;
+                          d.origin === 'dynamic' && idx === 0;
+                        const isFirstLogical =
+                          d.origin === 'logical' && idx === logicalStart;
                         const isFirstBuiltin =
-                          isSys && idx === filteredDynamic.length;
+                          d.origin === 'builtin' && idx === builtinStart;
                         return (
                           <div key={d.key} className="lv-group-search-row">
                             {isFirstDynamic && (
                               <div className="lv-group-search-section">
                                 Fields from open logs
+                              </div>
+                            )}
+                            {isFirstLogical && (
+                              <div className="lv-group-search-section">
+                                Logical fields
                               </div>
                             )}
                             {isFirstBuiltin && (
