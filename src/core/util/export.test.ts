@@ -59,7 +59,9 @@ describe('buildJsonl', () => {
 
 describe('buildCsv', () => {
   it('emits the canonical header even on empty input', () => {
-    expect(buildCsv([])).toBe('timestamp,level,source_id,seq,message,fields_json\n');
+    expect(buildCsv([])).toBe(
+      'timestamp,level,source_id,seq,message,fields_json\n',
+    );
   });
 
   it('formats timestamps as ISO-8601 and serializes fields as JSON', () => {
@@ -70,7 +72,9 @@ describe('buildCsv', () => {
       }),
     ]);
     const [, row] = out.trimEnd().split('\n');
-    expect(row).toBe('2026-01-02T03:04:05.000Z,info,s-A,1,hello,"{""svc"":""api""}"');
+    expect(row).toBe(
+      '2026-01-02T03:04:05.000Z,info,s-A,1,hello,"{""svc"":""api""}"',
+    );
   });
 
   it('renders null timestamps as empty cell', () => {

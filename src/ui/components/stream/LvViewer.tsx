@@ -5,10 +5,12 @@ import type {
   GroupBucket,
   HistogramResponse,
 } from '../../../core/rpc/coordinator.contract.ts';
-import type { LogEntry, LogFilter, LogLevel } from '../../../core/types/index.ts';
 import type {
-  FieldFilter,
+  LogEntry,
+  LogFilter,
+  LogLevel,
 } from '../../../core/types/index.ts';
+import type { FieldFilter } from '../../../core/types/index.ts';
 import type {
   LvColumnPref,
   LvFileNode,
@@ -35,7 +37,9 @@ const ROW_HEIGHT = 28;
  * the data strip; every entry in `columns` becomes one data slot of
  * its declared width.
  */
-const gridTemplateForColumns = (columns: ReadonlyArray<LvColumnPref>): string => {
+const gridTemplateForColumns = (
+  columns: ReadonlyArray<LvColumnPref>,
+): string => {
   const parts: string[] = ['52px', '16px'];
   for (const c of columns) parts.push(`${c.widthPx}px`);
   parts.push('1fr', '52px');
@@ -116,9 +120,17 @@ export interface LvViewerProps {
   /** Drill into a group: container appends a `fieldFilter` and clears group-by. */
   onGroupDrillDown: (bucket: GroupBucket, field: string) => void;
   /** Fetch group buckets for a scoped filter (used by inline expand). */
-  fetchGroupCounts: (filter: LogFilter, field: string, limit?: number) => Promise<ReadonlyArray<GroupBucket>>;
+  fetchGroupCounts: (
+    filter: LogFilter,
+    field: string,
+    limit?: number,
+  ) => Promise<ReadonlyArray<GroupBucket>>;
   /** Fetch entries for a scoped filter (used by inline expand of the leaf). */
-  fetchEntries: (filter: LogFilter, from: number, to: number) => Promise<ReadonlyArray<LogEntry>>;
+  fetchEntries: (
+    filter: LogFilter,
+    from: number,
+    to: number,
+  ) => Promise<ReadonlyArray<LogEntry>>;
 
   /** Available fields from coordinator.getFieldSchema (built-in + dynamic). */
   readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
@@ -198,7 +210,10 @@ export const LvViewer = ({
   resolveLogicalRows,
   renderDetailEditor,
 }: LvViewerProps) => {
-  const gridTemplate = useMemo(() => gridTemplateForColumns(columns), [columns]);
+  const gridTemplate = useMemo(
+    () => gridTemplateForColumns(columns),
+    [columns],
+  );
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   // Inline group expansion. Each entry maps a `<field>=<value>/...`
@@ -206,19 +221,29 @@ export const LvViewer = ({
   // log entries (when the path reaches the bottom of `groupBy`).
   type GroupNode =
     | { readonly kind: 'loading' }
-    | { readonly kind: 'buckets'; readonly field: string; readonly buckets: ReadonlyArray<GroupBucket> }
+    | {
+        readonly kind: 'buckets';
+        readonly field: string;
+        readonly buckets: ReadonlyArray<GroupBucket>;
+      }
     | { readonly kind: 'entries'; readonly entries: ReadonlyArray<LogEntry> }
     | { readonly kind: 'error'; readonly message: string };
-  const [groupExpanded, setGroupExpanded] = useState<Map<string, GroupNode>>(() => new Map());
+  const [groupExpanded, setGroupExpanded] = useState<Map<string, GroupNode>>(
+    () => new Map(),
+  );
 
   // Reset expansion whenever the chain of group fields changes —
   // an old path is meaningless under a different grouping.
   useEffect(() => {
     setGroupExpanded(new Map());
   }, [groupBy]);
-  const [menu, setMenu] = useState<
-    { path: string; line: number; sourceId: string; x: number; y: number } | null
-  >(null);
+  const [menu, setMenu] = useState<{
+    path: string;
+    line: number;
+    sourceId: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
 
   const [findOpen, setFindOpen] = useState(false);
@@ -232,7 +257,10 @@ export const LvViewer = ({
 
   // Path = stack of field/value pairs that uniquely identify a node
   // in the group tree. Root buckets have `path=[bucket]`.
-  type GroupPath = ReadonlyArray<{ readonly field: string; readonly value: string }>;
+  type GroupPath = ReadonlyArray<{
+    readonly field: string;
+    readonly value: string;
+  }>;
   const pathKey = (p: GroupPath): string =>
     p.map((x) => `${x.field}=${x.value}`).join('/');
 
@@ -270,7 +298,9 @@ export const LvViewer = ({
         );
       } else {
         const entries = await fetchEntries(scoped, 0, 500);
-        setGroupExpanded((m) => new Map(m).set(key, { kind: 'entries', entries }));
+        setGroupExpanded((m) =>
+          new Map(m).set(key, { kind: 'entries', entries }),
+        );
       }
     } catch (err) {
       setGroupExpanded((m) =>
@@ -282,7 +312,6 @@ export const LvViewer = ({
     }
   };
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual incompat with React Compiler
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => streamRef.current,
@@ -326,10 +355,7 @@ export const LvViewer = ({
       return n;
     });
 
-  const openAtLine = (
-    e: React.MouseEvent<HTMLElement>,
-    entry: LogEntry,
-  ) => {
+  const openAtLine = (e: React.MouseEvent<HTMLElement>, entry: LogEntry) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const file = filesById[entry.sourceId];
     // Prefer the physical line number — that's what an external editor
@@ -358,7 +384,9 @@ export const LvViewer = ({
   const findRe = useMemo<RegExp | null>(() => {
     if (!findQ) return null;
     try {
-      let pattern = findRegex ? findQ : findQ.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+      let pattern = findRegex
+        ? findQ
+        : findQ.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
       if (findWord) pattern = `\\b(?:${pattern})\\b`;
       return new RegExp(pattern, findCase ? '' : 'i');
     } catch {
@@ -372,7 +400,8 @@ export const LvViewer = ({
     for (let i = 0; i < rowCount; i++) {
       const entry = getRow(i);
       if (!entry) continue;
-      const tsTxt = entry.timestamp === null ? '' : new Date(entry.timestamp).toISOString();
+      const tsTxt =
+        entry.timestamp === null ? '' : new Date(entry.timestamp).toISOString();
       const file = filesById[entry.sourceId]?.name ?? '';
       // Search every cell shown in the table — fixed columns plus
       // any user-added ones — so the find-bar matches anything the
@@ -382,7 +411,8 @@ export const LvViewer = ({
             const v = cellValueOf(entry, c.key);
             if (v === null || v === undefined) return '';
             if (typeof v === 'string') return v;
-            if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+            if (typeof v === 'number' || typeof v === 'boolean')
+              return String(v);
             try {
               return JSON.stringify(v);
             } catch {
@@ -390,7 +420,14 @@ export const LvViewer = ({
             }
           })
         : [];
-      const hay = [tsTxt, entry.level, file, ...customCells, entry.message, entry.raw].join(' ');
+      const hay = [
+        tsTxt,
+        entry.level,
+        file,
+        ...customCells,
+        entry.message,
+        entry.raw,
+      ].join(' ');
       if (findRe.test(hay)) out.push(i);
     }
     return out;
@@ -472,7 +509,11 @@ export const LvViewer = ({
           />
 
           {timelineOn && (
-            <LvTimeline data={histogramData} range={filter.timeRange} onRangeChange={setTimeRange} />
+            <LvTimeline
+              data={histogramData}
+              range={filter.timeRange}
+              onRangeChange={setTimeRange}
+            />
           )}
 
           <div className="lv-stream-wrap">
@@ -495,8 +536,20 @@ export const LvViewer = ({
                     height="12"
                     aria-hidden="true"
                   >
-                    <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.2" />
-                    <path d="M9 9 L12 12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                    <circle
+                      cx="6"
+                      cy="6"
+                      r="4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                    />
+                    <path
+                      d="M9 9 L12 12"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeLinecap="round"
+                    />
                   </svg>
                   <input
                     ref={findInputRef}
@@ -516,9 +569,32 @@ export const LvViewer = ({
                       title="Match Case"
                       aria-label="Match Case"
                     >
-                      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                        <text x="1" y="12" fontSize="9" fontFamily="sans-serif" fontWeight="700" fill="currentColor">A</text>
-                        <text x="7" y="12" fontSize="7" fontFamily="sans-serif" fontWeight="700" fill="currentColor">a</text>
+                      <svg
+                        viewBox="0 0 16 16"
+                        width="12"
+                        height="12"
+                        aria-hidden="true"
+                      >
+                        <text
+                          x="1"
+                          y="12"
+                          fontSize="9"
+                          fontFamily="sans-serif"
+                          fontWeight="700"
+                          fill="currentColor"
+                        >
+                          A
+                        </text>
+                        <text
+                          x="7"
+                          y="12"
+                          fontSize="7"
+                          fontFamily="sans-serif"
+                          fontWeight="700"
+                          fill="currentColor"
+                        >
+                          a
+                        </text>
                       </svg>
                     </button>
                     <button
@@ -528,9 +604,28 @@ export const LvViewer = ({
                       title="Match Whole Word"
                       aria-label="Match Whole Word"
                     >
-                      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                        <text x="1" y="11" fontSize="8" fontFamily="sans-serif" fontWeight="700" fill="currentColor">ab</text>
-                        <path d="M1 13 H15" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      <svg
+                        viewBox="0 0 16 16"
+                        width="12"
+                        height="12"
+                        aria-hidden="true"
+                      >
+                        <text
+                          x="1"
+                          y="11"
+                          fontSize="8"
+                          fontFamily="sans-serif"
+                          fontWeight="700"
+                          fill="currentColor"
+                        >
+                          ab
+                        </text>
+                        <path
+                          d="M1 13 H15"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                        />
                       </svg>
                     </button>
                     <button
@@ -540,7 +635,12 @@ export const LvViewer = ({
                       title="Use Regular Expression"
                       aria-label="Regex"
                     >
-                      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 16 16"
+                        width="12"
+                        height="12"
+                        aria-hidden="true"
+                      >
                         <path
                           d="M9 2 V8 M6.4 3.4 L11.6 6.6 M6.4 6.6 L11.6 3.4"
                           stroke="currentColor"
@@ -548,7 +648,14 @@ export const LvViewer = ({
                           strokeLinecap="round"
                           fill="none"
                         />
-                        <rect x="2" y="11" width="3" height="3" rx="0.5" fill="currentColor" />
+                        <rect
+                          x="2"
+                          y="11"
+                          width="3"
+                          height="3"
+                          rx="0.5"
+                          fill="currentColor"
+                        />
                       </svg>
                     </button>
                   </div>
@@ -568,7 +675,14 @@ export const LvViewer = ({
                   aria-label="Previous"
                 >
                   <svg viewBox="0 0 10 10" width="10" height="10">
-                    <path d="M2 6 L5 3 L8 6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    <path
+                      d="M2 6 L5 3 L8 6"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </button>
                 <button
@@ -579,7 +693,14 @@ export const LvViewer = ({
                   aria-label="Next"
                 >
                   <svg viewBox="0 0 10 10" width="10" height="10">
-                    <path d="M2 4 L5 7 L8 4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    <path
+                      d="M2 4 L5 7 L8 4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </button>
                 <button
@@ -594,7 +715,10 @@ export const LvViewer = ({
               </div>
             )}
 
-            <div className="lv-stream-hd" style={{ gridTemplateColumns: gridTemplate }}>
+            <div
+              className="lv-stream-hd"
+              style={{ gridTemplateColumns: gridTemplate }}
+            >
               <span
                 className="lv-sh lv-sh-ln"
                 title={
@@ -670,7 +794,8 @@ export const LvViewer = ({
                   <div className="lv-stream-empty">
                     <div className="lv-stream-empty-title">No groups</div>
                     <div className="lv-stream-empty-sub">
-                      No matches for the current filter, or the field is empty in all entries.
+                      No matches for the current filter, or the field is empty
+                      in all entries.
                     </div>
                   </div>
                 ) : (
@@ -699,7 +824,9 @@ export const LvViewer = ({
                             onFocus={() => onGroupDrillDown(bucket, field)}
                             onCopy={() => {
                               if (bucket.value !== null) {
-                                void navigator.clipboard?.writeText(bucket.value);
+                                void navigator.clipboard?.writeText(
+                                  bucket.value,
+                                );
                               }
                             }}
                           />
@@ -747,7 +874,9 @@ export const LvViewer = ({
                                 bookmarked={bookmarks.has(bookmarkKeyOf(entry))}
                                 onSelect={() => {}}
                                 onToggleExpand={() => toggleExpand(entry.id)}
-                                onBookmark={() => onBookmark(bookmarkKeyOf(entry))}
+                                onBookmark={() =>
+                                  onBookmark(bookmarkKeyOf(entry))
+                                }
                                 onOpenAtLine={openAtLine}
                                 onContextMenu={openAtLine}
                                 onAddFieldFilter={addFieldFilter}
@@ -780,7 +909,8 @@ export const LvViewer = ({
                 <div className="lv-stream-empty">
                   <div className="lv-stream-empty-title">No matching lines</div>
                   <div className="lv-stream-empty-sub">
-                    Try relaxing filters, widening the time range, or clearing the query.
+                    Try relaxing filters, widening the time range, or clearing
+                    the query.
                   </div>
                 </div>
               ) : (
@@ -793,7 +923,9 @@ export const LvViewer = ({
                 >
                   {items.map((vi) => {
                     const entry = getRow(vi.index);
-                    const fileMeta = entry ? filesById[entry.sourceId] ?? null : null;
+                    const fileMeta = entry
+                      ? (filesById[entry.sourceId] ?? null)
+                      : null;
                     return (
                       <div
                         key={vi.key}
@@ -819,7 +951,10 @@ export const LvViewer = ({
                             </span>
                             <span className="lv-row-caret" />
                             {columns.map((c) => (
-                              <span key={c.key} className="lv-skel lv-skel-cell" />
+                              <span
+                                key={c.key}
+                                className="lv-skel lv-skel-cell"
+                              />
                             ))}
                             <span className="lv-skel lv-skel-cell lv-skel-msg" />
                             <span />
@@ -842,7 +977,9 @@ export const LvViewer = ({
                                 : null
                             }
                             isFindMatch={findOpen && findMatchSet.has(vi.index)}
-                            isFindCurrent={findOpen && findMatches[findIdx] === vi.index}
+                            isFindCurrent={
+                              findOpen && findMatches[findIdx] === vi.index
+                            }
                             selected={false}
                             expanded={expanded.has(entry.id)}
                             bookmarked={bookmarks.has(bookmarkKeyOf(entry))}
@@ -857,7 +994,7 @@ export const LvViewer = ({
                             gridTemplate={gridTemplate}
                             cellValueOf={cellValueOf}
                             parserIdOf={parserIdOf}
-                                resolveLogicalRows={resolveLogicalRows}
+                            resolveLogicalRows={resolveLogicalRows}
                             renderDetailEditor={renderDetailEditor}
                             gutterMode={tweaks.gutterMode}
                           />
@@ -874,7 +1011,11 @@ export const LvViewer = ({
                 </div>
               )}
               {isLoading && !hasLoadedEntries && rowCount > 0 && (
-                <div className="lv-stream-loading-overlay" role="status" aria-live="polite">
+                <div
+                  className="lv-stream-loading-overlay"
+                  role="status"
+                  aria-live="polite"
+                >
                   <span className="lv-spinner" aria-hidden="true" />
                   <span>Loading entries…</span>
                 </div>

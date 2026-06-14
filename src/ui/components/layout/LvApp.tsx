@@ -119,7 +119,9 @@ export interface LvAppProps {
   /** Available parsers from the worker registry — populates the parser dropdown in Add-Source modal. */
   readonly availableParsers?: ReadonlyArray<{ readonly id: string }>;
   /** User-defined custom parsers (Phase 2.C) — rendered in the Parsers rail panel. */
-  readonly customParsers?: ReadonlyArray<import('../../../core/parsers/custom-parser-def.ts').CustomParserDef>;
+  readonly customParsers?: ReadonlyArray<
+    import('../../../core/parsers/custom-parser-def.ts').CustomParserDef
+  >;
   onUpsertCustomParser?: (
     def: import('../../../core/parsers/custom-parser-def.ts').CustomParserDef,
   ) => void | Promise<void>;
@@ -135,8 +137,7 @@ export interface LvAppProps {
   /** Currently activated logical-field ids. */
   readonly activeLogicalFieldIds?: ReadonlyArray<string>;
   /** Full persisted config — used by the inline editor for validation. */
-  readonly logicalFieldsConfig?:
-    import('../../../core/types/index.ts').LogicalFieldsConfig;
+  readonly logicalFieldsConfig?: import('../../../core/types/index.ts').LogicalFieldsConfig;
   /** Toggle a logical field's activation by id. */
   onToggleLogicalField?: (id: string) => void;
   /** Add a user-defined logical field (also activates it). */
@@ -158,13 +159,10 @@ export interface LvAppProps {
   /** Worker-backed coverage query for the Logical fields drill-down. */
   getLogicalFieldCoverage?: (
     field: import('../../../core/types/index.ts').LogicalField,
-  ) => Promise<
-    | (Pick<
-        import('../../../core/rpc/indexer.contract.ts').LogicalFieldCoverage,
-        'sources' | 'regexExtractorsSkipped'
-      >)
-    | null
-  >;
+  ) => Promise<Pick<
+    import('../../../core/rpc/indexer.contract.ts').LogicalFieldCoverage,
+    'sources' | 'regexExtractorsSkipped'
+  > | null>;
   /** Templates suggested for activation based on observed source keys. */
   readonly logicalFieldSuggestions?: ReadonlyArray<{
     readonly field: import('../../../core/types/index.ts').LogicalField;
@@ -206,8 +204,16 @@ export interface LvAppProps {
   readonly groupField: string | null;
   readonly groupRootFilter: LogFilter;
   onGroupDrillDown: (bucket: GroupBucket, field: string) => void;
-  fetchGroupCounts: (filter: LogFilter, field: string, limit?: number) => Promise<ReadonlyArray<GroupBucket>>;
-  fetchEntries: (filter: LogFilter, from: number, to: number) => Promise<ReadonlyArray<LogEntry>>;
+  fetchGroupCounts: (
+    filter: LogFilter,
+    field: string,
+    limit?: number,
+  ) => Promise<ReadonlyArray<GroupBucket>>;
+  fetchEntries: (
+    filter: LogFilter,
+    from: number,
+    to: number,
+  ) => Promise<ReadonlyArray<LogEntry>>;
 
   // Column picker (ADR-0017 Phase 5).
   readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
@@ -445,7 +451,10 @@ export const LvApp = ({
         setTweak('theme', tweaks.theme === 'dark' ? 'light' : 'dark');
         break;
       case 'density-toggle':
-        setTweak('density', tweaks.density === 'compact' ? 'comfortable' : 'compact');
+        setTweak(
+          'density',
+          tweaks.density === 'compact' ? 'comfortable' : 'compact',
+        );
         break;
       case 'select-all':
         setSelectedIds(() => new Set(collectAllFileIds(catalog)));
@@ -555,7 +564,11 @@ export const LvApp = ({
         }}
         savedSearches={savedSearches}
         onApplyPreset={(p) => {
-          setFilter((f) => ({ ...f, query: p.query, levels: p.levels.length ? p.levels : null }));
+          setFilter((f) => ({
+            ...f,
+            query: p.query,
+            levels: p.levels.length ? p.levels : null,
+          }));
           setRail('files');
         }}
       />
@@ -605,9 +618,7 @@ export const LvApp = ({
       <LvLogicalFieldsPanel
         fields={logicalFields}
         activeIds={activeLogicalFieldIds}
-        config={
-          logicalFieldsConfig ?? { activeIds: [], customFields: [] }
-        }
+        config={logicalFieldsConfig ?? { activeIds: [], customFields: [] }}
         onToggle={(id) => onToggleLogicalField?.(id)}
         onAddCustom={(f) => onAddCustomLogicalField?.(f)}
         onUpdateCustom={(f) => onUpdateCustomLogicalField?.(f)}
@@ -623,7 +634,11 @@ export const LvApp = ({
     );
 
   return (
-    <div className="lv-root" data-theme={tweaks.theme} data-density={tweaks.density}>
+    <div
+      className="lv-root"
+      data-theme={tweaks.theme}
+      data-density={tweaks.density}
+    >
       <LvTitlebar
         onOpenCmd={() => setCmdOpen(true)}
         onOpenFile={() => {
@@ -735,7 +750,12 @@ export const LvApp = ({
         onOpenAbout={() => setSettingsOpen(true)}
       />
 
-      {cmdOpen && <LvCommandPalette onClose={() => setCmdOpen(false)} onRun={runCommand} />}
+      {cmdOpen && (
+        <LvCommandPalette
+          onClose={() => setCmdOpen(false)}
+          onRun={runCommand}
+        />
+      )}
 
       <LvSettingsPopover
         open={settingsOpen}
@@ -744,7 +764,10 @@ export const LvApp = ({
         setTweak={setTweak}
       />
 
-      <LvShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <LvShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
 
       {clearDataOpen && (
         <LvClearDataModal

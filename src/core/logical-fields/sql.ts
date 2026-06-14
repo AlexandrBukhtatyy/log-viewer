@@ -1,7 +1,4 @@
-import type {
-  LogicalExtractor,
-  LogicalField,
-} from '../types/logical-field.ts';
+import type { LogicalExtractor, LogicalField } from '../types/logical-field.ts';
 
 /**
  * Translate a `LogicalField` into a SQL value expression equivalent to
@@ -55,9 +52,7 @@ const sqlEscape = (s: string): string => s.replace(/'/g, "''");
  * Exposed so the indexer's coverage report and the COALESCE builder
  * share the same compilation logic.
  */
-export const extractorToSqlOrNull = (
-  ex: LogicalExtractor,
-): string | null => {
+export const extractorToSqlOrNull = (ex: LogicalExtractor): string | null => {
   if (ex.type === 'field') {
     if (!isValidJsonPath(ex.path)) return null;
     return `JSON_EXTRACT(entry.fields_json, '$.${ex.path}')`;

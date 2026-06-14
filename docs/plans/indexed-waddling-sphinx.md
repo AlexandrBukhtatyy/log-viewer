@@ -33,29 +33,40 @@
 [src/ui/styles/lv.css](../../src/ui/styles/lv.css) — правки в трёх правилах:
 
 ```css
-.lv-titlebar{
-  display:grid;
+.lv-titlebar {
+  display: grid;
   grid-template-columns: 1fr minmax(0, 560px) 1fr;
-  align-items:center;
-  gap:12px;
-  padding:0 10px;
-  background:var(--lv-bg-titlebar);
-  border-bottom:1px solid var(--lv-border);
+  align-items: center;
+  gap: 12px;
+  padding: 0 10px;
+  background: var(--lv-bg-titlebar);
+  border-bottom: 1px solid var(--lv-border);
   -webkit-app-region: drag;
-  user-select:none;
+  user-select: none;
 }
 
-.lv-tb-omni{
+.lv-tb-omni {
   -webkit-app-region: no-drag;
-  width:100%;
-  display:flex; align-items:center; gap:8px;
-  height:24px; padding:0 8px 0 10px;
-  background:var(--lv-bg-2); border:1px solid var(--lv-border);
-  border-radius:6px; color:var(--lv-fg-2); font-size:12px;
-  cursor:text;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 8px 0 10px;
+  background: var(--lv-bg-2);
+  border: 1px solid var(--lv-border);
+  border-radius: 6px;
+  color: var(--lv-fg-2);
+  font-size: 12px;
+  cursor: text;
 }
 
-.lv-tb-right{ justify-self:end; display:flex; gap:4px; -webkit-app-region: no-drag }
+.lv-tb-right {
+  justify-self: end;
+  display: flex;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
 ```
 
 Изменения по сути:

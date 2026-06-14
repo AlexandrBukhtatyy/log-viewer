@@ -92,7 +92,13 @@ export const tagLineStream = (
         const byteEnd = byteStart + byteLen;
         cursor = byteEnd + 1; // +1 for the synthetic `\n` terminator
         lineNo += 1;
-        controller.enqueue({ path, line, byteStart, byteEnd, lineNumber: lineNo });
+        controller.enqueue({
+          path,
+          line,
+          byteStart,
+          byteEnd,
+          lineNumber: lineNo,
+        });
       },
     }),
   );

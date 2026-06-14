@@ -8,9 +8,30 @@ interface AlertRule {
 }
 
 const RULES: AlertRule[] = [
-  { id: 'r1', name: 'Prod 5xx spike', level: 'error', threshold: '> 5/min', enabled: true, fires: 2 },
-  { id: 'r2', name: 'Slow query', level: 'warn', threshold: '> 1000ms', enabled: true, fires: 11 },
-  { id: 'r3', name: 'Queue depth', level: 'warn', threshold: '> 2000 msgs', enabled: false, fires: 0 },
+  {
+    id: 'r1',
+    name: 'Prod 5xx spike',
+    level: 'error',
+    threshold: '> 5/min',
+    enabled: true,
+    fires: 2,
+  },
+  {
+    id: 'r2',
+    name: 'Slow query',
+    level: 'warn',
+    threshold: '> 1000ms',
+    enabled: true,
+    fires: 11,
+  },
+  {
+    id: 'r3',
+    name: 'Queue depth',
+    level: 'warn',
+    threshold: '> 2000 msgs',
+    enabled: false,
+    fires: 0,
+  },
 ];
 
 export const LvAlertsPanel = () => (
@@ -35,7 +56,9 @@ export const LvAlertsPanel = () => (
           </div>
           <div className="lv-alert-meta">
             <span>{r.threshold}</span>
-            {r.fires > 0 && <span className="lv-alert-fires">fired {r.fires}× today</span>}
+            {r.fires > 0 && (
+              <span className="lv-alert-fires">fired {r.fires}× today</span>
+            )}
           </div>
         </div>
       ))}

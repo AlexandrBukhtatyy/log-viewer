@@ -28,8 +28,20 @@ const ITEMS: RailItem[] = [
     label: 'Search',
     icon: (
       <svg viewBox="0 0 16 16" width="16" height="16">
-        <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M10.5 10.5 L14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <circle
+          cx="7"
+          cy="7"
+          r="4.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+        />
+        <path
+          d="M10.5 10.5 L14 14"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+        />
       </svg>
     ),
   },
@@ -149,7 +161,14 @@ const SETTINGS_ICON = (
       strokeWidth="1.25"
       strokeLinejoin="round"
     />
-    <circle cx="8.35" cy="8.15" r="1.9" fill="none" stroke="currentColor" strokeWidth="1.25" />
+    <circle
+      cx="8.35"
+      cy="8.15"
+      r="1.9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.25"
+    />
   </svg>
 );
 

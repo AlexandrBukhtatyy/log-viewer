@@ -16,6 +16,7 @@
 ## Scope
 
 **Входит:**
+
 - 3 issue templates + config.yml с дисейблом blank и ссылками наружу.
 - Утилита `collectDiagnostics()` + Markdown-форматтер.
 - `ErrorBoundary` + module-level ring-buffer на 30 последних ошибок (хук на `console.error/warn`, `window.onerror`, `onunhandledrejection`).
@@ -29,6 +30,7 @@
 - Конфиг-модуль `src/config/feedback.ts` (URL'ы репозитория и Telegram invite — одной константой).
 
 **Не входит** (отдельные задачи):
+
 - Telegram-бот с webhook (рассматривалось, отвергнуто в пользу группы).
 - Anonymous-форма через Formspree/Web3Forms.
 - Featurebase / Canny / голосование вне GitHub.
@@ -45,7 +47,8 @@
   export const FEEDBACK_CONFIG = {
     repoUrl: 'https://github.com/AlexandrBukhtatyy/log-viewer',
     issuesUrl: 'https://github.com/AlexandrBukhtatyy/log-viewer/issues',
-    discussionsUrl: 'https://github.com/AlexandrBukhtatyy/log-viewer/discussions',
+    discussionsUrl:
+      'https://github.com/AlexandrBukhtatyy/log-viewer/discussions',
     roadmapUrl: 'https://github.com/users/AlexandrBukhtatyy/projects/<N>', // вписать после создания Project
     telegramInviteUrl: 'https://t.me/+<invite>', // вписать после создания группы
   } as const;
@@ -76,7 +79,7 @@
 
 - `src/utils/diagnostics.ts`:
   - `collectDiagnostics(viewStore): Diagnostics` — синхронно читает версию/хеш/build time, `navigator.userAgent`, `navigator.onLine`, `navigator.serviceWorker.controller !== null`, последние ошибки через `snapshotErrors()`, и через `viewStore.getState()` — `sources` (для каждого: `parserId`, `source.size`, `entryCount` при `status.kind==='done'`), `totalCount`, `filteredCount`.
-  - `formatDiagnosticsMarkdown(d: Diagnostics): string` — формирует Markdown-блок ```` ```\n...\n``` ```` для вставки в Issue body или Telegram.
+  - `formatDiagnosticsMarkdown(d: Diagnostics): string` — формирует Markdown-блок ` ```\n...\n``` ` для вставки в Issue body или Telegram.
 - Источники полей (для справки исполнителя):
   - Версия/хеш: [vite.config.ts](../../vite.config.ts), пример использования в [LvStatusBar.tsx:33](../../src/ui/components/status/LvStatusBar.tsx#L33).
   - ViewStore: [src/worker-client/log-client.ts](../../src/worker-client/log-client.ts), context [src/app/providers/view-store-context.ts](../../src/app/providers/view-store-context.ts).
@@ -135,6 +138,7 @@
 ## Файлы
 
 **Новые:**
+
 - [.github/ISSUE_TEMPLATE/bug_report.yml](../../.github/ISSUE_TEMPLATE/bug_report.yml)
 - [.github/ISSUE_TEMPLATE/feature_request.yml](../../.github/ISSUE_TEMPLATE/feature_request.yml)
 - [.github/ISSUE_TEMPLATE/question.yml](../../.github/ISSUE_TEMPLATE/question.yml)
@@ -146,6 +150,7 @@
 - [src/ui/components/feedback/LvFeedbackModal.tsx](../../src/ui/components/feedback/LvFeedbackModal.tsx)
 
 **Изменяемые:**
+
 - [package.json](../../package.json) — `repository`, `bugs`, `homepage`.
 - [vite.config.ts](../../vite.config.ts) — `__BUILD_TIME__`.
 - [src/types/app-version.d.ts](../../src/types/app-version.d.ts) — декларация `__BUILD_TIME__`.

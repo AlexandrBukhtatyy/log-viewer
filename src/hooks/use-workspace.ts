@@ -51,7 +51,9 @@ interface WorkspaceStoreState {
    *  effect in LvAppContainer). */
   _hydrated: boolean;
 
-  setOpenTabs(updater: (prev: ReadonlyArray<LvTab>) => ReadonlyArray<LvTab>): void;
+  setOpenTabs(
+    updater: (prev: ReadonlyArray<LvTab>) => ReadonlyArray<LvTab>,
+  ): void;
   setActiveTabId(id: string): void;
   setSelectedIds(updater: (prev: Set<string>) => Set<string>): void;
   setCoreFilter(updater: (prev: LogFilter) => LogFilter): void;
@@ -99,7 +101,9 @@ export interface WorkspaceData {
  *  and `filePaths` from the filter (derived from selection / tabs, would
  *  freeze stale ids); converts the `selectedIds` Set to a sorted array
  *  for deterministic output. */
-export const partializeWorkspace = (s: WorkspaceData): WorkspacePersistedV1 => ({
+export const partializeWorkspace = (
+  s: WorkspaceData,
+): WorkspacePersistedV1 => ({
   version: 1,
   openTabs: s.openTabs,
   activeTabId: s.activeTabId,
@@ -135,8 +139,7 @@ export const mergeWorkspaceData = (
     : [];
   return {
     openTabs,
-    activeTabId:
-      typeof p.activeTabId === 'string' ? p.activeTabId : '__all__',
+    activeTabId: typeof p.activeTabId === 'string' ? p.activeTabId : '__all__',
     selectedIds,
     coreFilter: {
       ...EMPTY_FILTER,
@@ -153,7 +156,10 @@ export const mergeWorkspaceData = (
   };
 };
 
-const stripSelection = (ids: ReadonlySet<string>, sourceId: string): Set<string> => {
+const stripSelection = (
+  ids: ReadonlySet<string>,
+  sourceId: string,
+): Set<string> => {
   const prefix = `${sourceId}::`;
   const next = new Set<string>();
   for (const id of ids) {
@@ -179,8 +185,10 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
 
       setOpenTabs: (updater) => set({ openTabs: updater(get().openTabs) }),
       setActiveTabId: (id) => set({ activeTabId: id }),
-      setSelectedIds: (updater) => set({ selectedIds: updater(get().selectedIds) }),
-      setCoreFilter: (updater) => set({ coreFilter: updater(get().coreFilter) }),
+      setSelectedIds: (updater) =>
+        set({ selectedIds: updater(get().selectedIds) }),
+      setCoreFilter: (updater) =>
+        set({ coreFilter: updater(get().coreFilter) }),
       setGroupBy: (next) => set({ groupBy: next }),
       setLiveTail: (v) => set({ liveTail: v }),
 

@@ -27,11 +27,7 @@ export class HandleCache {
     return handle;
   }
 
-  set(
-    sourceId: string,
-    filePath: string,
-    handle: FileSystemFileHandle,
-  ): void {
+  set(sourceId: string, filePath: string, handle: FileSystemFileHandle): void {
     this.cache.set(HandleCache.key(sourceId, filePath), new WeakRef(handle));
   }
 

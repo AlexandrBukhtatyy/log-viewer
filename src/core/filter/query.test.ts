@@ -58,18 +58,17 @@ describe('buildClause', () => {
     // resolver matches `query`/`queryMode`/`wholeWord`/`caseSensitive`
     // against decoded body bytes for the visible window. buildClause must
     // therefore ignore them entirely, regardless of the mode.
-    it.each([
-      'substring',
-      'fts',
-      'regex',
-    ] as const)('queryMode=%s does not contribute to WHERE/JOIN', (mode) => {
-      const built = buildClause(
-        f({ query: 'something', queryMode: mode, wholeWord: true }),
-      );
-      expect(built.joinSql).toBe('');
-      expect(built.whereSql).toBe('');
-      expect(built.params).toEqual([]);
-    });
+    it.each(['substring', 'fts', 'regex'] as const)(
+      'queryMode=%s does not contribute to WHERE/JOIN',
+      (mode) => {
+        const built = buildClause(
+          f({ query: 'something', queryMode: mode, wholeWord: true }),
+        );
+        expect(built.joinSql).toBe('');
+        expect(built.whereSql).toBe('');
+        expect(built.params).toEqual([]);
+      },
+    );
   });
 
   it('filePaths filter routes through @file (entry.file_path column)', () => {
@@ -91,9 +90,7 @@ describe('buildClause', () => {
       const built = buildClause(
         f({ fieldFilters: [{ key: '@level', op: '=', value: 'error' }] }),
       );
-      expect(built.whereSql).toBe(
-        'WHERE CAST(entry.level AS TEXT) = ?',
-      );
+      expect(built.whereSql).toBe('WHERE CAST(entry.level AS TEXT) = ?');
       expect(built.params).toEqual(['error']);
       expect(built.joinSql).toBe('');
     });
@@ -190,13 +187,7 @@ describe('buildClause', () => {
         ' AND entry.ts >= ?' +
         " AND CAST(JSON_EXTRACT(entry.fields_json, '$.status') AS REAL) > CAST(? AS REAL)",
     );
-    expect(built.params).toEqual([
-      'error',
-      's-1',
-      'billing',
-      1000,
-      '499',
-    ]);
+    expect(built.params).toEqual(['error', 's-1', 'billing', 1000, '499']);
   });
 });
 
@@ -220,10 +211,10 @@ describe('orderByForFilter', () => {
     expect(order).not.toContain('entry.ts');
   });
 
-  it('single source, no file filter → physical (one source\'s walk order)', () => {
-    expect(
-      orderByForFilter(f({ sources: ['s-1' as SourceId] })),
-    ).toBe(ORDER_BY_PHYSICAL);
+  it("single source, no file filter → physical (one source's walk order)", () => {
+    expect(orderByForFilter(f({ sources: ['s-1' as SourceId] }))).toBe(
+      ORDER_BY_PHYSICAL,
+    );
   });
 
   it('single source narrowed to one file → physical (line-by-line)', () => {
@@ -244,9 +235,7 @@ describe('orderByForFilter', () => {
 
   it('multiple sources → time', () => {
     expect(
-      orderByForFilter(
-        f({ sources: ['s-1' as SourceId, 's-2' as SourceId] }),
-      ),
+      orderByForFilter(f({ sources: ['s-1' as SourceId, 's-2' as SourceId] })),
     ).toBe(ORDER_BY_TIME);
   });
 
@@ -319,9 +308,9 @@ describe('sortBySql', () => {
   });
 
   it('@source.name reports needsSourceJoin', () => {
-    expect(
-      sortBySql({ key: '@source.name', dir: 'asc' }).needsSourceJoin,
-    ).toBe(true);
+    expect(sortBySql({ key: '@source.name', dir: 'asc' }).needsSourceJoin).toBe(
+      true,
+    );
     expect(sortByNeedsSourceJoin({ key: '@source.name', dir: 'asc' })).toBe(
       true,
     );

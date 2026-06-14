@@ -4,7 +4,10 @@ import type {
   LogLevel,
   LogicalFieldsCtx,
 } from '../../core/types/index.ts';
-import { fieldKeyToSql, type FieldKeySql } from '../../core/filter/field-key.ts';
+import {
+  fieldKeyToSql,
+  type FieldKeySql,
+} from '../../core/filter/field-key.ts';
 
 export const ALL_LEVELS: ReadonlyArray<LogLevel> = [
   'trace',

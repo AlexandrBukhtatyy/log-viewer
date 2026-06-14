@@ -18,7 +18,9 @@ const isTextSource = (s: LogSource): s is TextLogSource => s.kind === 'text';
  */
 export const createTextAdapter: LogSourceAdapterFactory = (source) => {
   if (!isTextSource(source)) {
-    throw new Error(`createTextAdapter: expected source.kind='text', got '${source.kind}'`);
+    throw new Error(
+      `createTextAdapter: expected source.kind='text', got '${source.kind}'`,
+    );
   }
 
   const adapter: LogSourceAdapter = {

@@ -8,6 +8,7 @@
 [ADR-0016](0016-offset-pointer-index-lazy-body.md) ввёл lazy-resolve: индексер хранит только указатели `(file_path, byte_start, byte_end)`, а тело строки читается из исходного файла при отображении. В Consequences того ADR в качестве митигации указан «batched read по группе pointer'ов из одного файла», но в коде это реализовано не было: [lazy-resolver.ts](../../src/workers/coordinator/read/lazy-resolver.ts) вызывал `reader.read(...)` для **каждой** записи отдельным `Promise.all(map(...))`.
 
 Симптом, который это создаёт: при прокрутке UI-окна (~500 записей: `OVERSCAN=200` + visible) делается ~500 операций
+
 - `getFile()`/`getFileHandle` (для OPFS — ещё `getDirectoryHandle('lv-spool')` + `getDirectoryHandle(sourceId)` на каждую запись);
 - `Blob.slice(start, end).text()` — отдельный декод UTF-8 на каждый range;
 - для directory-источника — `resolveFileHandleByPath` по дереву директорий на каждый range, даже когда все строки в одном файле.
@@ -43,7 +44,10 @@ export interface SourceBlobReader {
    * possible. Result is index-parallel to `ranges`. Caller groups ranges
    * by `(sourceId, filePath)`.
    */
-  readBatch(filePath: string, ranges: ReadonlyArray<ByteRange>): Promise<ReadonlyArray<string>>;
+  readBatch(
+    filePath: string,
+    ranges: ReadonlyArray<ByteRange>,
+  ): Promise<ReadonlyArray<string>>;
 }
 ```
 
@@ -60,6 +64,7 @@ export interface SourceBlobReader {
 ### Группировка в `lazy-resolver`
 
 Сейчас группа — `sourceId`. Меняется на `(sourceId, filePath)`:
+
 - Парсер-RPC по-прежнему один на `sourceId` (батч-парс сохраняется).
 - Reader-RPC — один на `(sourceId, filePath)`. Для directory-источника, где окно может включать несколько файлов, каждый файл читается отдельно — это правильно, потому что их `byteStart/byteEnd` живут в собственных адресных пространствах.
 

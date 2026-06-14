@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
 import { walkDirectory } from '../core/sources/walk-directory.ts';
-import type {
-  SourceId,
-  SourceRecord,
-} from '../core/types/index.ts';
+import type { SourceId, SourceRecord } from '../core/types/index.ts';
 import type {
   LvFileNode,
   LvFolderNode,
@@ -20,7 +17,8 @@ import type {
  * see LvAppContainer §filter useMemo.
  */
 const SEP = '::';
-const idForFile = (sourceId: SourceId, relPath: string) => `${sourceId}${SEP}${relPath}`;
+const idForFile = (sourceId: SourceId, relPath: string) =>
+  `${sourceId}${SEP}${relPath}`;
 const idForFolder = (sourceId: SourceId, relPath: string) =>
   `${sourceId}${SEP}${relPath}/`;
 

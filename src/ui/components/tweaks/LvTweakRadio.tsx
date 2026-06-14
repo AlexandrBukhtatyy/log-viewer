@@ -77,7 +77,12 @@ export const LvTweakRadio = <T extends string>({
           }}
         />
         {opts.map((o) => (
-          <button key={o.value} type="button" role="radio" aria-checked={o.value === value}>
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={o.value === value}
+          >
             {o.label}
           </button>
         ))}

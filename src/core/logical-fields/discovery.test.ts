@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { LogicalField } from '../types/index.ts';
 import { findSuggestedLogicalFields } from './discovery.ts';
 
-const template = (
-  id: string,
-  paths: string[],
-): LogicalField => ({
+const template = (id: string, paths: string[]): LogicalField => ({
   id,
   type: 'string',
   label: id,

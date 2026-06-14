@@ -101,7 +101,14 @@ export const LvAppContainer = () => {
   const sourceCtrl = useSourceController();
 
   // Windowed entry stream.
-  const { totalCount, filteredCount, getRow, setVisibleRange, isLoading, hasLoadedEntries } = useLogWindow();
+  const {
+    totalCount,
+    filteredCount,
+    getRow,
+    setVisibleRange,
+    isLoading,
+    hasLoadedEntries,
+  } = useLogWindow();
 
   // Workspace — tabs, selection, filter, group-by, live-tail (ADR-NNNN).
   // Persisted to `localStorage['lv:workspace']` so the user's working
@@ -177,7 +184,10 @@ export const LvAppContainer = () => {
   //   - plain SourceId → only that source (single-file view).
   //   - compound `<sourceId>::<relPath>` (nested file inside a walked
   //     directory) → that source restricted to the one file path.
-  const tabSelection = useCallback((): { sourcesArr: SourceId[]; filePaths: string[] } => {
+  const tabSelection = useCallback((): {
+    sourcesArr: SourceId[];
+    filePaths: string[];
+  } => {
     if (activeTabId === '__all__') {
       const { sources: s, filePaths } = splitSelection(selectedIds, null);
       return { sourcesArr: s, filePaths };
@@ -304,9 +314,7 @@ export const LvAppContainer = () => {
   // `__all__` aggregate tab gets its own row in `openTabs` so it
   // can carry its own sort too.
   const onSortByChange = useCallback(
-    (
-      next: { readonly key: string; readonly dir: 'asc' | 'desc' } | null,
-    ) => {
+    (next: { readonly key: string; readonly dir: 'asc' | 'desc' } | null) => {
       const id = useWorkspaceStore.getState().activeTabId;
       setOpenTabs((prev) =>
         prev.map((t) =>
@@ -553,7 +561,12 @@ export const LvAppContainer = () => {
       // walked directory the id is compound (`<sourceId>::<relPath>`); we
       // walk the catalog to find the actual node so the tab inherits the
       // nested file's own `name`/`path`/`kind`, not its parent source.
-      type FileLike = { id: string; name: string; path?: string; kind: LvLogKind };
+      type FileLike = {
+        id: string;
+        name: string;
+        path?: string;
+        kind: LvLogKind;
+      };
       let file: FileLike | null = filesById[rawId] ?? null;
       if (file === null) {
         const walk = (nodes: ReadonlyArray<LvNode>): FileLike | null => {
@@ -712,7 +725,6 @@ export const LvAppContainer = () => {
     [viewStore, reloadAvailableParsers],
   );
 
-
   // Tabs render order:
   //   1. `__all__` aggregate tab — pinned, always present, always first.
   //      Reflects the sidebar checkboxes (multi-select); when nothing is
@@ -848,7 +860,10 @@ export const LvAppContainer = () => {
         return;
       }
       const ff: FieldFilter = { key: field, op: '=', value: bucket.value };
-      setFilter((f) => ({ ...f, fieldFilters: [...(f.fieldFilters ?? []), ff] }));
+      setFilter((f) => ({
+        ...f,
+        fieldFilters: [...(f.fieldFilters ?? []), ff],
+      }));
       setGroupBy([]);
     },
     [setFilter, setGroupBy],
@@ -961,7 +976,10 @@ export const LvAppContainer = () => {
             break;
           }
           case 'bus': {
-            const broker = promptOrEmpty('Broker URL:', 'kafka://broker-1:9092');
+            const broker = promptOrEmpty(
+              'Broker URL:',
+              'kafka://broker-1:9092',
+            );
             const topic = promptOrEmpty('Topic:', 'events');
             if (!broker || !topic) return;
             await sourceCtrl.addBus({ broker, topic });

@@ -10,7 +10,13 @@
   "levelStrategy": "http-status",
   "levelField": "status",
   "messageTemplate": "${method} ${request_uri} → ${status}",
-  "defaultColumns": ["method", "request_uri", "status", "bytes_sent", "remote_addr"],
+  "defaultColumns": [
+    "method",
+    "request_uri",
+    "status",
+    "bytes_sent",
+    "remote_addr"
+  ],
   "version": 1,
   "createdAt": 0,
   "updatedAt": 0

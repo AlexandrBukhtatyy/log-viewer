@@ -60,7 +60,7 @@ parser-pipeline. Нужно выбрать формат и библиотеку.
    - Не валидирует checksum (быстрее на 5-10 % при минимальной потере
      отлова corruption — fflate-decoded bytes уже валидированы gzip-CRC).
 4. **Whitelist расширений** для текстовых файлов: `.log .txt .json .jsonl
-   .ndjson .out .err .yaml .yml .conf .csv .tsv`. macOS-мусор
+.ndjson .out .err .yaml .yml .conf .csv .tsv`. macOS-мусор
    (`__MACOSX/`, `._*`, `.DS_Store`) явно скипается.
 5. **Стрим строк**: каждый whitelist'нутый файл декодируется как UTF-8
    и enqueue'ится в `ReadableStream<string>`, добавляя `\n` если файл

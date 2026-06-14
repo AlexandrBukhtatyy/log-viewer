@@ -42,7 +42,10 @@ describe('compileCustomParser — regex kind', () => {
     });
     expect(parser).not.toBeNull();
     const res = parser!.parseLine('[auth] login ok', makeCtx());
-    expect(res.entry?.fields).toMatchObject({ service: 'auth', msg: 'login ok' });
+    expect(res.entry?.fields).toMatchObject({
+      service: 'auth',
+      msg: 'login ok',
+    });
   });
 
   it('returns null on invalid regex', () => {
@@ -65,7 +68,10 @@ describe('compileCustomParser — grok kind', () => {
     });
     expect(parser).not.toBeNull();
     const res = parser!.parseLine('10.0.0.1 200', makeCtx());
-    expect(res.entry?.fields).toMatchObject({ client: '10.0.0.1', status: 200 });
+    expect(res.entry?.fields).toMatchObject({
+      client: '10.0.0.1',
+      status: 200,
+    });
   });
 
   it('resolves timestampField name → numeric ts', () => {

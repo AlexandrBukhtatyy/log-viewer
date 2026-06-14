@@ -90,7 +90,10 @@ export interface HistogramResponse {
 export interface CoordinatorApi {
   ping: () => Promise<string>;
 
-  addSource: (source: LogSourceInput, options?: CallOptions) => Promise<SourceId>;
+  addSource: (
+    source: LogSourceInput,
+    options?: CallOptions,
+  ) => Promise<SourceId>;
   removeSource: (id: SourceId) => Promise<void>;
   reIndex: (id: SourceId, options?: CallOptions) => Promise<void>;
 
@@ -145,7 +148,9 @@ export interface CoordinatorApi {
    * Used by the column / group-by / filter pickers to enumerate keys
    * and surface usage stats (occurrences, presenceRate, top values).
    */
-  getFieldSchema: (filter: LogFilter) => Promise<ReadonlyArray<FieldDescriptor>>;
+  getFieldSchema: (
+    filter: LogFilter,
+  ) => Promise<ReadonlyArray<FieldDescriptor>>;
 
   /**
    * Push the active logical-field definitions (ADR-0030, `~`-namespace)

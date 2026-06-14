@@ -28,9 +28,9 @@ docs/backlog/
 ```markdown
 ---
 title: <one-line summary>
-status: proposed        # proposed | planned | in-progress | done | dropped
-area: <freeform tag>    # e.g. perf, ui, parsing, storage, dx — опционально
-priority: med           # low | med | high — опционально
+status: proposed # proposed | planned | in-progress | done | dropped
+area: <freeform tag> # e.g. perf, ui, parsing, storage, dx — опционально
+priority: med # low | med | high — опционально
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 issue: <github-issue-url или пусто>
@@ -39,13 +39,16 @@ issue: <github-issue-url или пусто>
 # NNNN. <Title>
 
 ## Context
+
 Зачем это. Что сейчас неудобно/невозможно. 2–5 строк, не пиши историю мира.
 
 ## Outcome
+
 Что считается «сделано». Чек-листом или нарративом. Чем конкретнее — тем
 проще потом перейти из proposed в planned без переобсуждения.
 
 ## Notes
+
 Ссылки на ADR, plans, related backlog, обсуждения в чате (важные цитаты),
 PR'ы, причины дроп'а — всё, что не вписалось в Context/Outcome.
 ```
@@ -54,13 +57,13 @@ PR'ы, причины дроп'а — всё, что не вписалось в 
 
 ### Lifecycle
 
-| Status | Когда | Что обновляется |
-|---|---|---|
-| `proposed` | Файл только что создан (через `/wish` или вручную) | `status: proposed`, `created`, `updated` |
-| `planned` | Решено делать; обычно совпадает с заведением GitHub Issue | `status: planned`, `issue: <url>`, `updated` |
+| Status        | Когда                                                          | Что обновляется                                               |
+| ------------- | -------------------------------------------------------------- | ------------------------------------------------------------- |
+| `proposed`    | Файл только что создан (через `/wish` или вручную)             | `status: proposed`, `created`, `updated`                      |
+| `planned`     | Решено делать; обычно совпадает с заведением GitHub Issue      | `status: planned`, `issue: <url>`, `updated`                  |
 | `in-progress` | Работа реально пошла (открыт PR / создан Plan в `docs/plans/`) | `status: in-progress`, `updated`, в Notes — ссылка на PR/plan |
-| `done` | Поставлено, PR merged | `status: done`, `updated`, в Notes — ссылка на merged PR |
-| `dropped` | Решили не делать | `status: dropped`, `updated`, в Notes — короткое «почему» |
+| `done`        | Поставлено, PR merged                                          | `status: done`, `updated`, в Notes — ссылка на merged PR      |
+| `dropped`     | Решили не делать                                               | `status: dropped`, `updated`, в Notes — короткое «почему»     |
 
 Файлы со статусами `done` / `dropped` **остаются в `docs/backlog/`** — это история решений, искать «делали ли мы X» проще одним grep'ом по одной папке, чем перебором архивов.
 
@@ -70,18 +73,23 @@ PR'ы, причины дроп'а — всё, что не вписалось в 
 
 ```markdown
 ## In progress
+
 - [NNNN. Title](NNNN-slug.md) — area, prio · [issue](https://github.com/…)
 
 ## Planned
+
 - …
 
 ## Proposed
+
 - …
 
 ## Done
+
 - …
 
 ## Dropped
+
 - …
 ```
 
@@ -127,24 +135,29 @@ description: Создать новую запись в docs/backlog/ из кон
 ## Critical files
 
 Переименование (первый шаг реализации):
+
 - `docs/plans/binary-baking-clover.md` → `docs/plans/feature-backlog-workflow.md` (`git mv`, чтобы сохранить историю).
 
 Новые:
+
 - `docs/backlog/0000-template.md` — шаблон записи (frontmatter + Context/Outcome/Notes).
 - `docs/backlog/README.md` — INDEX с пятью секциями по статусу + краткий how-to сверху.
 - `.claude/commands/wish.md` — slash-команда, скопирована по структуре с [.claude/commands/adr.md](../../.claude/commands/adr.md).
 
 Изменяемые:
+
 - [CLAUDE.md](../../CLAUDE.md) — добавить раздел `## Feature backlog` (короткий, абзац-два, по образцу раздела `## Architecture Decision Records`).
 - [docs/README.md](../README.md) — расширить `## Разделы` пунктом про backlog.
 
 Опционально (не делаем в этом PR):
+
 - `docs/adr/0024-feature-backlog-workflow.md` — задокументировать сам процесс как ADR. Полезно, потому что это явное архитектурное решение про process. Но не критично — если решим, добавим отдельно.
 - `.github/ISSUE_TEMPLATE/wish.yml` — позже.
 
 ## Reuse / зеркало конвенций
 
 Принципы заимствованы у уже работающей системы ADR ([docs/adr/README.md](../adr/README.md), [.claude/commands/adr.md](../../.claude/commands/adr.md)):
+
 - 4-значная монотонная нумерация, никогда не переиспользуется.
 - 0000-template.md как образец.
 - README.md как INDEX, поддерживается руками (или slash-командой при создании).
@@ -161,9 +174,11 @@ description: Создать новую запись в docs/backlog/ из кон
    - Ответ Claude'а содержит markdown-ссылку на созданный файл.
 
 2. **Поиск по статусу.**
+
    ```bash
    grep -lE '^status: in-progress' docs/backlog/*.md
    ```
+
    возвращает только активные идеи.
 
 3. **Полный жизненный цикл вручную.** Берём свежий файл, меняем `status: proposed → planned`, вписываем `issue: https://github.com/…/issues/42`, переносим строку в README.md из `## Proposed` в `## Planned`. Затем `planned → in-progress` (Notes ← ссылка на PR), `in-progress → done` (Notes ← ссылка на merged PR). Файл остаётся; вся история — в diff'ах.

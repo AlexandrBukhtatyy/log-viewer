@@ -11,6 +11,7 @@
 2. **«Data columns»** — массив `LvColumnPref[]` с произвольным `widthPx`, ячейки рисовались через `cellValueOf` и обобщённый renderer.
 
 Это вытекало в:
+
 - Хедер был `<span>×4` + `.map(...)` вместо одного цикла — невозможно унифицированно переставлять или скрывать колонки.
 - Picker не показывал built-in атрибуты как обычные поля, хотя они уже есть в `BUILT_IN_FIELD_DESCRIPTORS` ([src/core/filter/field-descriptor.ts](../../src/core/filter/field-descriptor.ts)) и в `getEntryFieldValue` ([src/core/filter/field-key.ts](../../src/core/filter/field-key.ts)) умеют резолвиться (`@ts`, `@level`, `@source.name`, `@file`).
 - При попытке сделать «по умолчанию = только LN + message» появилась четвёрка boolean toggles в `LvTweaks` — патч поверх асимметрии, который усугублял проблему вместо её решения.

@@ -95,7 +95,9 @@ class MockFileHandle {
   async getFile(): Promise<MockFile> {
     return new MockFile(this.node.bytes);
   }
-  async createWritable(opts?: { keepExistingData?: boolean }): Promise<MockWritable> {
+  async createWritable(opts?: {
+    keepExistingData?: boolean;
+  }): Promise<MockWritable> {
     return new MockWritable(this.node, !!opts?.keepExistingData);
   }
 }
@@ -116,12 +118,18 @@ class MockDirHandle {
     let entry = this.node.children.get(name);
     if (entry === undefined) {
       if (!opts?.create) {
-        throw new DOMException(`directory '${name}' not found`, 'NotFoundError');
+        throw new DOMException(
+          `directory '${name}' not found`,
+          'NotFoundError',
+        );
       }
       entry = { kind: 'directory', children: new Map() };
       this.node.children.set(name, entry);
     } else if (entry.kind !== 'directory') {
-      throw new DOMException(`'${name}' is not a directory`, 'TypeMismatchError');
+      throw new DOMException(
+        `'${name}' is not a directory`,
+        'TypeMismatchError',
+      );
     }
     return new MockDirHandle(name, entry);
   }
@@ -151,7 +159,11 @@ class MockDirHandle {
     if (entry === undefined) {
       throw new DOMException(`'${name}' not found`, 'NotFoundError');
     }
-    if (entry.kind === 'directory' && entry.children.size > 0 && !opts?.recursive) {
+    if (
+      entry.kind === 'directory' &&
+      entry.children.size > 0 &&
+      !opts?.recursive
+    ) {
       throw new DOMException(`'${name}' not empty`, 'InvalidModificationError');
     }
     this.node.children.delete(name);

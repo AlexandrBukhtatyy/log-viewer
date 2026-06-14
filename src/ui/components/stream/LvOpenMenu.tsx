@@ -19,12 +19,21 @@ interface MenuItem {
   readonly icon?: string;
 }
 
-export const LvOpenMenu = ({ path, line, anchor, onOpenInApp, onClose }: LvOpenMenuProps) => {
+export const LvOpenMenu = ({
+  path,
+  line,
+  anchor,
+  onOpenInApp,
+  onClose,
+}: LvOpenMenuProps) => {
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!(e.target as HTMLElement).closest?.('.lv-open-menu')) onClose();
     };
-    const t = setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+    const t = setTimeout(
+      () => document.addEventListener('mousedown', onDoc),
+      0,
+    );
     return () => {
       clearTimeout(t);
       document.removeEventListener('mousedown', onDoc);
@@ -60,11 +69,41 @@ export const LvOpenMenu = ({ path, line, anchor, onOpenInApp, onClose }: LvOpenM
       icon: 'eye',
     },
     { sep: true },
-    { id: 'vscode', label: 'Open in VS Code', hint: `vscode://…:${line}`, href: href('vscode'), icon: 'vscode' },
-    { id: 'cursor', label: 'Open in Cursor', hint: `cursor://…:${line}`, href: href('cursor'), icon: 'cursor' },
-    { id: 'jetbrains', label: 'Open in JetBrains IDE', hint: 'IDEA/WebStorm/PyCharm', href: href('jetbrains'), icon: 'jb' },
-    { id: 'sublime', label: 'Open in Sublime Text', hint: `subl://…&line=${line}`, href: href('sublime'), icon: 'sublime' },
-    { id: 'zed', label: 'Open in Zed', hint: `zed://…:${line}`, href: href('zed'), icon: 'zed' },
+    {
+      id: 'vscode',
+      label: 'Open in VS Code',
+      hint: `vscode://…:${line}`,
+      href: href('vscode'),
+      icon: 'vscode',
+    },
+    {
+      id: 'cursor',
+      label: 'Open in Cursor',
+      hint: `cursor://…:${line}`,
+      href: href('cursor'),
+      icon: 'cursor',
+    },
+    {
+      id: 'jetbrains',
+      label: 'Open in JetBrains IDE',
+      hint: 'IDEA/WebStorm/PyCharm',
+      href: href('jetbrains'),
+      icon: 'jb',
+    },
+    {
+      id: 'sublime',
+      label: 'Open in Sublime Text',
+      hint: `subl://…&line=${line}`,
+      href: href('sublime'),
+      icon: 'sublime',
+    },
+    {
+      id: 'zed',
+      label: 'Open in Zed',
+      hint: `zed://…:${line}`,
+      href: href('zed'),
+      icon: 'zed',
+    },
     { sep: true },
     {
       id: 'copy-path',
@@ -88,13 +127,23 @@ export const LvOpenMenu = ({ path, line, anchor, onOpenInApp, onClose }: LvOpenM
         it.sep ? (
           <div key={i} className="lv-open-sep" />
         ) : it.href ? (
-          <a key={it.id ?? i} className="lv-open-item" href={it.href} onClick={onClose}>
+          <a
+            key={it.id ?? i}
+            className="lv-open-item"
+            href={it.href}
+            onClick={onClose}
+          >
             {it.icon && <LvEditorIcon icon={it.icon} />}
             <span className="lv-open-lbl">{it.label}</span>
             <span className="lv-open-hint">{it.hint}</span>
           </a>
         ) : (
-          <button key={it.id ?? i} type="button" className="lv-open-item" onClick={it.action}>
+          <button
+            key={it.id ?? i}
+            type="button"
+            className="lv-open-item"
+            onClick={it.action}
+          >
             {it.icon && <LvEditorIcon icon={it.icon} />}
             <span className="lv-open-lbl">{it.label}</span>
             <span className="lv-open-hint">{it.hint}</span>

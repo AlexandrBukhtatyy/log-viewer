@@ -19,7 +19,11 @@ const isBuiltIn = (key: string): boolean => key.startsWith('@');
  * datalist. The value input pulls suggestions from `topValues` of
  * the currently selected descriptor.
  */
-export const LvAddFieldFilter = ({ descriptors, onAdd, activeSources }: LvAddFieldFilterProps) => {
+export const LvAddFieldFilter = ({
+  descriptors,
+  onAdd,
+  activeSources,
+}: LvAddFieldFilterProps) => {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState<string>('');
   const [op, setOp] = useState<FieldFilterOp>('=');
@@ -107,7 +111,11 @@ export const LvAddFieldFilter = ({ descriptors, onAdd, activeSources }: LvAddFie
               <option value="~">contains</option>
             </select>
             <input
-              list={selected?.topValues && selected.topValues.length > 0 ? 'lv-field-vals' : undefined}
+              list={
+                selected?.topValues && selected.topValues.length > 0
+                  ? 'lv-field-vals'
+                  : undefined
+              }
               className="lv-field-input lv-field-val"
               placeholder="value"
               value={value}
@@ -124,10 +132,18 @@ export const LvAddFieldFilter = ({ descriptors, onAdd, activeSources }: LvAddFie
                 ))}
               </datalist>
             )}
-            <button type="button" className="lv-btn lv-btn-primary" onClick={commit}>
+            <button
+              type="button"
+              className="lv-btn lv-btn-primary"
+              onClick={commit}
+            >
               Add
             </button>
-            <button type="button" className="lv-btn" onClick={() => setOpen(false)}>
+            <button
+              type="button"
+              className="lv-btn"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </button>
           </div>
@@ -181,9 +197,12 @@ export const LvAddFieldFilter = ({ descriptors, onAdd, activeSources }: LvAddFie
                 })}
               </>
             )}
-            {sortedDescriptors.dynamic.length === 0 && sortedDescriptors.builtin.length === 0 && (
-              <span className="lv-field-hints-lbl">No fields yet — pick a source.</span>
-            )}
+            {sortedDescriptors.dynamic.length === 0 &&
+              sortedDescriptors.builtin.length === 0 && (
+                <span className="lv-field-hints-lbl">
+                  No fields yet — pick a source.
+                </span>
+              )}
           </div>
         </div>
       )}

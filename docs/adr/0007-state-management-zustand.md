@@ -6,12 +6,14 @@
 ## Context and Problem Statement
 
 Главному потоку нужно состояние:
+
 - Активный фильтр (`LogFilter`).
 - Выбранная запись (`selectedId`).
 - Список источников и их статусы (получаемые подписками от coordinator'а).
 - **Viewport-кэш** для виртуализированного списка — окно индексов → `LogEntry`, фоновый prefetch соседних диапазонов.
 
 Фоновая нагрузка специфична:
+
 - Канонический хранитель entries — **не main thread**, а indexer worker (см. [ADR-0003](0003-worker-centric-topology.md), [ADR-0005](0005-sqlite-fts5-opfs-index.md)). Главный поток держит лишь viewport-окно.
 - Streaming-источники приводят к частым apply-able событиям «новые записи добавлены» → нужна effective subscribe-модель без re-render всего дерева.
 - На частоту keystroke'ов в FilterBar нельзя пересчитывать всё.

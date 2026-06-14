@@ -32,7 +32,15 @@ const weighted = (rng, pairs) => {
   return pairs[pairs.length - 1][0];
 };
 
-const SERVICES = ['api-gateway', 'auth', 'billing', 'orders', 'shipping', 'search', 'notifications'];
+const SERVICES = [
+  'api-gateway',
+  'auth',
+  'billing',
+  'orders',
+  'shipping',
+  'search',
+  'notifications',
+];
 const HOSTS = ['app-01', 'app-02', 'app-03', 'worker-01', 'worker-02'];
 const USERS = ['alice', 'bob', 'carol', 'dave', 'erin', 'frank'];
 const ROUTES = [
@@ -46,7 +54,9 @@ const ROUTES = [
   '/metrics',
 ];
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE'];
-const STATUSES = [200, 200, 200, 200, 201, 204, 301, 304, 400, 401, 403, 404, 500, 502, 503];
+const STATUSES = [
+  200, 200, 200, 200, 201, 204, 301, 304, 400, 401, 403, 404, 500, 502, 503,
+];
 const UAS = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
@@ -85,7 +95,20 @@ const fmtIso = (ts) => new Date(ts).toISOString();
 // Apache common log time: 02/May/2026:14:23:11 +0000
 const fmtClf = (ts) => {
   const d = new Date(ts);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   return (
     `${padStart(d.getUTCDate(), 2)}/${months[d.getUTCMonth()]}/${d.getUTCFullYear()}:` +
     `${padStart(d.getUTCHours(), 2)}:${padStart(d.getUTCMinutes(), 2)}:${padStart(d.getUTCSeconds(), 2)} +0000`
@@ -118,15 +141,19 @@ const genPino = (lines, seed) => {
   for (let i = 0; i < lines; i++) {
     const ts = start + i * (1000 + Math.floor(rng() * 4000));
     const level = weighted(rng, [
-      [10, 1],   // trace
-      [20, 6],   // debug
-      [30, 60],  // info
-      [40, 12],  // warn
-      [50, 4],   // error
+      [10, 1], // trace
+      [20, 6], // debug
+      [30, 60], // info
+      [40, 12], // warn
+      [50, 4], // error
       [60, 0.2], // fatal
     ]);
     const msg =
-      level >= 50 ? pick(rng, MESSAGES_ERROR) : level >= 40 ? pick(rng, MESSAGES_WARN) : pick(rng, MESSAGES_INFO);
+      level >= 50
+        ? pick(rng, MESSAGES_ERROR)
+        : level >= 40
+          ? pick(rng, MESSAGES_WARN)
+          : pick(rng, MESSAGES_INFO);
     const obj = {
       level,
       time: ts,
@@ -140,7 +167,12 @@ const genPino = (lines, seed) => {
     };
     if (level >= 50) {
       obj.err = {
-        type: pick(rng, ['ConnectionError', 'TimeoutError', 'ValidationError', 'AuthError']),
+        type: pick(rng, [
+          'ConnectionError',
+          'TimeoutError',
+          'ValidationError',
+          'AuthError',
+        ]),
         code: pick(rng, ['ECONNREFUSED', 'ETIMEDOUT', 'EAUTH', 'EBADREQ']),
       };
     }
@@ -171,7 +203,11 @@ const genBunyan = (lines, seed) => {
       logger: `com.acme.${pick(rng, SERVICES)}.${pick(rng, ['Controller', 'Service', 'Repository'])}`,
       thread: `pool-${1 + Math.floor(rng() * 8)}-thread-${1 + Math.floor(rng() * 4)}`,
       message:
-        lvl === 'ERROR' ? pick(rng, MESSAGES_ERROR) : lvl === 'WARN' ? pick(rng, MESSAGES_WARN) : pick(rng, MESSAGES_INFO),
+        lvl === 'ERROR'
+          ? pick(rng, MESSAGES_ERROR)
+          : lvl === 'WARN'
+            ? pick(rng, MESSAGES_WARN)
+            : pick(rng, MESSAGES_INFO),
       traceId: `${padStart(Math.floor(rng() * 0xffffffff).toString(16), 8)}${padStart(
         Math.floor(rng() * 0xffffffff).toString(16),
         8,
@@ -201,11 +237,12 @@ const genPlainApp = (lines, seed) => {
       ['FATAL', 1],
     ]);
     const svc = pick(rng, SERVICES);
-    const msg = lvl === 'ERROR' || lvl === 'FATAL'
-      ? pick(rng, MESSAGES_ERROR)
-      : lvl === 'WARN'
-        ? pick(rng, MESSAGES_WARN)
-        : pick(rng, MESSAGES_INFO);
+    const msg =
+      lvl === 'ERROR' || lvl === 'FATAL'
+        ? pick(rng, MESSAGES_ERROR)
+        : lvl === 'WARN'
+          ? pick(rng, MESSAGES_WARN)
+          : pick(rng, MESSAGES_INFO);
     out.push(
       `[${fmtIso(ts)}] ${lvl.padEnd(5)} [${svc}] ${msg} reqId=req_${padStart(i, 6)} latency=${Math.floor(rng() * 1000)}ms`,
     );
@@ -230,7 +267,9 @@ const genMixed = (lines, seed) => {
         }),
       );
     } else {
-      out.push(`${fmtIso(ts)} INFO  ${pick(rng, SERVICES)}: ${pick(rng, MESSAGES_INFO)}`);
+      out.push(
+        `${fmtIso(ts)} INFO  ${pick(rng, SERVICES)}: ${pick(rng, MESSAGES_INFO)}`,
+      );
     }
   }
   return out.join('\n') + '\n';
@@ -249,7 +288,9 @@ const genNginxAccess = (lines, seed) => {
     const status = pick(rng, STATUSES);
     const bytes = 80 + Math.floor(rng() * 40000);
     const ua = pick(rng, UAS);
-    out.push(`${ip} - - [${fmtClf(ts)}] "${method} ${route} HTTP/1.1" ${status} ${bytes} "-" "${ua}"`);
+    out.push(
+      `${ip} - - [${fmtClf(ts)}] "${method} ${route} HTTP/1.1" ${status} ${bytes} "-" "${ua}"`,
+    );
   }
   return out.join('\n') + '\n';
 };
@@ -266,23 +307,39 @@ const genStackTraces = (events, seed) => {
       ['WARN', 25],
       ['ERROR', 25],
     ]);
-    out.push(`[${fmtIso(ts)}] ${lvl.padEnd(5)} request ${i} from ${pick(rng, USERS)}`);
+    out.push(
+      `[${fmtIso(ts)}] ${lvl.padEnd(5)} request ${i} from ${pick(rng, USERS)}`,
+    );
     if (lvl === 'ERROR') {
       if (rng() < 0.5) {
         // Java-стиль
-        out.push(`[${fmtIso(ts + 1)}] ERROR java.lang.RuntimeException: Failed to process request ${i}`);
-        out.push(`\tat com.acme.${pick(rng, SERVICES)}.handler.RequestHandler.handle(RequestHandler.java:${50 + Math.floor(rng() * 200)})`);
-        out.push(`\tat com.acme.framework.dispatch.Dispatcher.dispatch(Dispatcher.java:${100 + Math.floor(rng() * 100)})`);
-        out.push(`\tat io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:379)`);
+        out.push(
+          `[${fmtIso(ts + 1)}] ERROR java.lang.RuntimeException: Failed to process request ${i}`,
+        );
+        out.push(
+          `\tat com.acme.${pick(rng, SERVICES)}.handler.RequestHandler.handle(RequestHandler.java:${50 + Math.floor(rng() * 200)})`,
+        );
+        out.push(
+          `\tat com.acme.framework.dispatch.Dispatcher.dispatch(Dispatcher.java:${100 + Math.floor(rng() * 100)})`,
+        );
+        out.push(
+          `\tat io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:379)`,
+        );
         out.push(`Caused by: java.sql.SQLException: Connection refused`);
         out.push(`\tat org.postgresql.Driver.connect(Driver.java:280)`);
         out.push(`\t... ${3 + Math.floor(rng() * 8)} more`);
       } else {
         // Python-стиль
-        out.push(`[${fmtIso(ts + 1)}] ERROR Traceback (most recent call last):`);
-        out.push(`  File "/app/handlers.py", line ${50 + Math.floor(rng() * 200)}, in handle_request`);
+        out.push(
+          `[${fmtIso(ts + 1)}] ERROR Traceback (most recent call last):`,
+        );
+        out.push(
+          `  File "/app/handlers.py", line ${50 + Math.floor(rng() * 200)}, in handle_request`,
+        );
         out.push(`    result = process(payload)`);
-        out.push(`  File "/app/processor.py", line ${10 + Math.floor(rng() * 100)}, in process`);
+        out.push(
+          `  File "/app/processor.py", line ${10 + Math.floor(rng() * 100)}, in process`,
+        );
         out.push(`    return db.execute(query)`);
         out.push(`  File "/app/db.py", line 88, in execute`);
         out.push(`    raise ConnectionError("upstream timeout")`);
@@ -352,7 +409,11 @@ const genMixedDir = (totalLines, seed) => {
         [50, 8],
       ]);
       const msg =
-        level >= 50 ? pick(rng, MESSAGES_ERROR) : level >= 40 ? pick(rng, MESSAGES_WARN) : pick(rng, MESSAGES_INFO);
+        level >= 50
+          ? pick(rng, MESSAGES_ERROR)
+          : level >= 40
+            ? pick(rng, MESSAGES_WARN)
+            : pick(rng, MESSAGES_INFO);
       jsonl.push(
         JSON.stringify({
           level,
@@ -372,11 +433,12 @@ const genMixedDir = (totalLines, seed) => {
         ['ERROR', 7],
       ]);
       const svc = pick(rng, SERVICES);
-      const msg = lvl === 'ERROR'
-        ? pick(rng, MESSAGES_ERROR)
-        : lvl === 'WARN'
-          ? pick(rng, MESSAGES_WARN)
-          : pick(rng, MESSAGES_INFO);
+      const msg =
+        lvl === 'ERROR'
+          ? pick(rng, MESSAGES_ERROR)
+          : lvl === 'WARN'
+            ? pick(rng, MESSAGES_WARN)
+            : pick(rng, MESSAGES_INFO);
       app.push(
         `[${fmtIso(ts)}] ${lvl.padEnd(5)} [${svc}] ${msg} reqId=req_${padStart(i, 6)} latency=${Math.floor(rng() * 800)}ms`,
       );
@@ -421,7 +483,12 @@ const genLargeJsonl = (lines, seed) => {
         service: pick(rng, SERVICES),
         host: pick(rng, HOSTS),
         reqId: `req_${padStart(i, 7)}`,
-        msg: level >= 50 ? pick(rng, MESSAGES_ERROR) : level >= 40 ? pick(rng, MESSAGES_WARN) : pick(rng, MESSAGES_INFO),
+        msg:
+          level >= 50
+            ? pick(rng, MESSAGES_ERROR)
+            : level >= 40
+              ? pick(rng, MESSAGES_WARN)
+              : pick(rng, MESSAGES_INFO),
         latencyMs: Math.floor(rng() * 1500),
       }),
     );
@@ -433,13 +500,13 @@ const genLargeJsonl = (lines, seed) => {
 // ---------- Run ----------
 
 const fixtures = [
-  { file: 'pino.jsonl',        gen: () => genPino(800, 0xC0FFEE) },
-  { file: 'bunyan.jsonl',      gen: () => genBunyan(600, 0xBADCAFE) },
-  { file: 'app.log',           gen: () => genPlainApp(700, 0xFEEDFACE) },
-  { file: 'mixed.log',         gen: () => genMixed(400, 0xDEADBEEF) },
-  { file: 'nginx-access.log',  gen: () => genNginxAccess(1000, 0xABCDEF01) },
-  { file: 'stack-traces.log',  gen: () => genStackTraces(120, 0x1234ABCD) },
-  { file: 'large.jsonl',       gen: () => genLargeJsonl(50_000, 0x7E57DA7A) },
+  { file: 'pino.jsonl', gen: () => genPino(800, 0xc0ffee) },
+  { file: 'bunyan.jsonl', gen: () => genBunyan(600, 0xbadcafe) },
+  { file: 'app.log', gen: () => genPlainApp(700, 0xfeedface) },
+  { file: 'mixed.log', gen: () => genMixed(400, 0xdeadbeef) },
+  { file: 'nginx-access.log', gen: () => genNginxAccess(1000, 0xabcdef01) },
+  { file: 'stack-traces.log', gen: () => genStackTraces(120, 0x1234abcd) },
+  { file: 'large.jsonl', gen: () => genLargeJsonl(50_000, 0x7e57da7a) },
 ];
 
 console.log(`Writing fixtures into ${OUT_DIR}`);
@@ -456,15 +523,21 @@ for (const { file, gen } of fixtures) {
 // своём же хронологическом порядке.
 const mixedDir = resolve(OUT_DIR, 'demo_logs', 'mixed');
 mkdirSync(mixedDir, { recursive: true });
-const mixedFiles = genMixedDir(900, 0x5EEDED5);
+const mixedFiles = genMixedDir(900, 0x5eeded5);
 for (const [name, body] of Object.entries(mixedFiles)) {
   const p = resolve(mixedDir, name);
   writeFileSync(p, body);
-  results.push({ name: `demo_logs/mixed/${name}`, path: p, size: statSync(p).size });
+  results.push({
+    name: `demo_logs/mixed/${name}`,
+    path: p,
+    size: statSync(p).size,
+  });
 }
 
 const namePad = Math.max(...results.map((r) => r.name.length));
 for (const r of results) {
   console.log(`  ${r.name.padEnd(namePad)}  ${fmtSize(r.size)}`);
 }
-console.log(`\nDone. ${results.length} files, total ${fmtSize(results.reduce((s, r) => s + r.size, 0))}.`);
+console.log(
+  `\nDone. ${results.length} files, total ${fmtSize(results.reduce((s, r) => s + r.size, 0))}.`,
+);

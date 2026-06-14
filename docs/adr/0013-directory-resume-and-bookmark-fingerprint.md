@@ -107,7 +107,7 @@ healthcheck-запись, и пользователь не различил бы
 [LvAppContainer](../../src/app/containers/LvAppContainer.tsx) теперь:
 
 - `bookmarkKeyOf = entryFingerprint` пробрасывается через `LvApp →
-  LvViewer → LvRow`.
+LvViewer → LvRow`.
 - `LvRow.bookmarked` = `bookmarks.has(bookmarkKeyOf(entry))`.
 - `LvRow.onBookmark` фолдит `bookmarkKeyOf(entry)` перед вызовом.
 - `bookmarkEntries` lookup'ит `LogEntry`-резолверы по fingerprint, не

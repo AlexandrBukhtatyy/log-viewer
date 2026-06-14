@@ -15,19 +15,20 @@
 2. **Per-file tab** — drill-down вкладка по одному источнику/файлу, открывается по клику. Формат гомогенен → можно показать format-aware колонки.
 
 Желаемое поведение для каждого формата:
+
 - Structured (JSON и regex-based) — viewer сам может предложить набор колонок из полей.
 - Unstructured — дефолт = `LN + текст лога`, плюс конструктор колонок (regex/template), чтобы пользователь сам мог извлекать поля.
 
 ## Популярные форматы логов (что встречается в дикой природе)
 
-| Класс | Примеры | Как с ним работать |
-|------|---------|--------------------|
-| **JSON Lines** | pino, bunyan, generic `{...}\n` | `fields` доступны как key-value; колонки = key из payload'а. У нас закрыто [json-lines-parser.ts](../../src/core/parsers/json-lines-parser.ts) |
-| **logfmt** | `level=info msg="..." key=value` | Парс как key-value, колонки = key. У нас **нет** парсера; можно добавить позже. |
+| Класс                                 | Примеры                                                                        | Как с ним работать                                                                                                                                                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **JSON Lines**                        | pino, bunyan, generic `{...}\n`                                                | `fields` доступны как key-value; колонки = key из payload'а. У нас закрыто [json-lines-parser.ts](../../src/core/parsers/json-lines-parser.ts)                                                                                         |
+| **logfmt**                            | `level=info msg="..." key=value`                                               | Парс как key-value, колонки = key. У нас **нет** парсера; можно добавить позже.                                                                                                                                                        |
 | **Regex-extracted (semi-structured)** | nginx combined, Apache, syslog 3164/5424, app-text `[ISO] LEVEL [svc] msg k=v` | Named groups → fields. У нас [nginx-combined-parser.ts](../../src/core/parsers/nginx-combined-parser.ts), [syslog-parser.ts](../../src/core/parsers/syslog-parser.ts), [app-text-parser.ts](../../src/core/parsers/app-text-parser.ts) |
-| **CSV/TSV-style** | docker container logs (`ts svc msg`), какие-то custom | Делиметер фиксированный, поля — позиционные. Решается user-defined parser (Phase 2.C). |
-| **Unstructured** | произвольный `console.log`, `stderr`, output CLI-утилит | Нет полей. У нас [plain-text-parser.ts](../../src/core/parsers/plain-text-parser.ts) — catch-all. |
-| **Multiline** | Java/Python stack traces, многострочные ошибки | Склейка на ingest через `continuationRegex` (см. [log-parser.ts:32](../../src/core/types/log-parser.ts)). После склейки — обычная запись с `fields.exception_type` и др. |
+| **CSV/TSV-style**                     | docker container logs (`ts svc msg`), какие-то custom                          | Делиметер фиксированный, поля — позиционные. Решается user-defined parser (Phase 2.C).                                                                                                                                                 |
+| **Unstructured**                      | произвольный `console.log`, `stderr`, output CLI-утилит                        | Нет полей. У нас [plain-text-parser.ts](../../src/core/parsers/plain-text-parser.ts) — catch-all.                                                                                                                                      |
+| **Multiline**                         | Java/Python stack traces, многострочные ошибки                                 | Склейка на ingest через `continuationRegex` (см. [log-parser.ts:32](../../src/core/types/log-parser.ts)). После склейки — обычная запись с `fields.exception_type` и др.                                                               |
 
 ## Чужие подходы (краткая выжимка)
 
@@ -40,6 +41,7 @@
 5. **Multiline — это ingest problem, не UI problem** — все инструменты склеивают multiline до показа. У нас тот же подход.
 
 Конкретно интересные для нас:
+
 - **lnav** — schema-driven, каждый format = JSON-описание с regex + value-полями. Близко к идее `parser.defaultColumns`.
 - **Datadog** — одна Message колонка + side-panel с Content/JSON tab'ами. Близко к идее universal compact view для All-Logs.
 - **Splunk** — Selected/Interesting fields в сайдбаре, и команда `| table foo bar` для жёсткой таблицы. Гибрид auto + manual.
@@ -102,18 +104,19 @@
 
 ### Сравнение по сценариям
 
-| Сценарий | A | B | C | D |
-|----------|---|---|---|---|
-| Открыл pino-файл — сразу видит `traceId/userId` | ✅ defaultColumns | ✅ defaultColumns | ✅ в per-file | ⚠️ pin'нуть руками первый раз |
-| Открыл nginx-файл — сразу видит `status/url` | ✅ | ✅ | ✅ | ⚠️ |
-| Открыл plain-text — не пустая таблица | ⚪ только LN+msg | ⚪ только LN+msg | ⚪ только LN+msg | ✅ regex builder |
-| All-Logs tab — смешанные источники | ⚪ minimal | ✅ smart fields | ✅ compact + chips | ⚪ minimal |
-| Никаких сюрпризов в column set | ✅ | ❌ "прыгает" | ✅ | ✅ |
-| Объём работы | S | M | L (rewrite строки) | XL (builder UI) |
+| Сценарий                                        | A                 | B                 | C                  | D                             |
+| ----------------------------------------------- | ----------------- | ----------------- | ------------------ | ----------------------------- |
+| Открыл pino-файл — сразу видит `traceId/userId` | ✅ defaultColumns | ✅ defaultColumns | ✅ в per-file      | ⚠️ pin'нуть руками первый раз |
+| Открыл nginx-файл — сразу видит `status/url`    | ✅                | ✅                | ✅                 | ⚠️                            |
+| Открыл plain-text — не пустая таблица           | ⚪ только LN+msg  | ⚪ только LN+msg  | ⚪ только LN+msg   | ✅ regex builder              |
+| All-Logs tab — смешанные источники              | ⚪ minimal        | ✅ smart fields   | ✅ compact + chips | ⚪ minimal                    |
+| Никаких сюрпризов в column set                  | ✅                | ❌ "прыгает"      | ✅                 | ✅                            |
+| Объём работы                                    | S                 | M                 | L (rewrite строки) | XL (builder UI)               |
 
 ## Рекомендация для обсуждения
 
 **Базовый каркас — Вариант A**, на нём строим всё остальное:
+
 - использует `parser.defaultColumns`, которое уже задекларировано но не использовано;
 - даёт format-aware Per-file tab малой кровью;
 - per-tab persist'енс колонок — отдельный, понятный кусок работы.
@@ -134,6 +137,7 @@
 ## Критические файлы (для следующей итерации, не сейчас)
 
 Когда определимся с направлением, ключевые точки касания:
+
 - [src/core/types/log-parser.ts](../../src/core/types/log-parser.ts) — поле `defaultColumns` уже есть, но требует прокидывания в UI.
 - [src/hooks/use-ui-prefs.ts](../../src/hooks/use-ui-prefs.ts) — расширение модели `LvTweaks.columns` (per-tab profile или presets).
 - [src/ui/components/stream/LvViewer.tsx](../../src/ui/components/stream/LvViewer.tsx) — рендер столбцов; источник `columns` нужно менять с глобального на tab-aware.

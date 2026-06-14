@@ -155,8 +155,7 @@ const buildFieldFilterClause = (
 export const ORDER_BY_TIME =
   'ORDER BY entry.ts IS NULL, entry.ts ASC, entry.source_id ASC, entry.seq ASC';
 
-export const ORDER_BY_PHYSICAL =
-  'ORDER BY entry.source_id ASC, entry.seq ASC';
+export const ORDER_BY_PHYSICAL = 'ORDER BY entry.source_id ASC, entry.seq ASC';
 
 /**
  * Severity-ordered ranking of `@level` values. Lexicographic ASC
@@ -165,7 +164,7 @@ export const ORDER_BY_PHYSICAL =
  * a numeric rank and fall back to a high bucket for anything else.
  */
 const LEVEL_CASE_SQL =
-  "CASE entry.level " +
+  'CASE entry.level ' +
   "WHEN 'trace' THEN 0 " +
   "WHEN 'debug' THEN 1 " +
   "WHEN 'info' THEN 2 " +

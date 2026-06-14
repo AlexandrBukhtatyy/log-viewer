@@ -24,7 +24,9 @@ export interface WorkerClientProviderProps {
  * to fully re-mount the subtree (subscriptions, refs, source/entry ids).
  * See ADR-0027.
  */
-export const WorkerClientProvider = ({ children }: WorkerClientProviderProps) => {
+export const WorkerClientProvider = ({
+  children,
+}: WorkerClientProviderProps) => {
   const [store, setStore] = useState<ViewStore>(() => getOrCreateViewStore());
   const [epoch, setEpoch] = useState(0);
 

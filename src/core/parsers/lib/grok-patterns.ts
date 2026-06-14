@@ -42,18 +42,19 @@ export const BUILTIN_GROK_PATTERNS: Readonly<Record<string, string>> = {
   URIPROTO: '[A-Za-z]+(?:\\+[A-Za-z+]+)?',
   URIHOST: '%{IPORHOST}(?::%{POSINT})?',
   URIPATH: "(?:/[A-Za-z0-9$.+!*'(){},~:;=@#%&_\\-]*)+",
-  URIPARAM: '\\?[A-Za-z0-9$.+!*|\'(){},~@#%&/=:;_?\\-\\[\\]<>]*',
+  URIPARAM: "\\?[A-Za-z0-9$.+!*|'(){},~@#%&/=:;_?\\-\\[\\]<>]*",
   URIPATHPARAM: '%{URIPATH}(?:\\?[^\\s]*)?',
   URI: '%{URIPROTO}://(?:%{USER}(?::[^@]*)?@)?(?:%{URIHOST})?(?:%{URIPATHPARAM})?',
 
   // Users
   USER: '[a-zA-Z0-9._-]+',
   USERNAME: '[a-zA-Z0-9._-]+',
-  EMAILLOCALPART: '[a-zA-Z0-9!#$%&\'*+\\-/=?^_`{|}~]+',
+  EMAILLOCALPART: "[a-zA-Z0-9!#$%&'*+\\-/=?^_`{|}~]+",
   EMAILADDRESS: '%{EMAILLOCALPART}@%{HOSTNAME}',
 
   // Dates / times
-  MONTH: '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)',
+  MONTH:
+    '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)',
   MONTHNUM: '(?:0?[1-9]|1[0-2])',
   MONTHDAY: '(?:[0-3]?[0-9])',
   DAY: '(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)',
@@ -82,7 +83,9 @@ export const BUILTIN_GROK_PATTERNS: Readonly<Record<string, string>> = {
  * string. The map is purposely small: only tokens where the typed
  * interpretation is unambiguous.
  */
-export const TOKEN_DEFAULT_TYPE: Readonly<Record<string, 'int' | 'long' | 'float' | 'number'>> = {
+export const TOKEN_DEFAULT_TYPE: Readonly<
+  Record<string, 'int' | 'long' | 'float' | 'number'>
+> = {
   INT: 'int',
   LONG: 'long',
   NUMBER: 'number',

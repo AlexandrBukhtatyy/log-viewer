@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createLineSplitter } from './line-splitter.ts';
 
-const collect = async (
-  inputs: ReadonlyArray<string>,
-): Promise<string[]> => {
+const collect = async (inputs: ReadonlyArray<string>): Promise<string[]> => {
   const splitter = createLineSplitter();
   const writer = splitter.writable.getWriter();
   const reader = splitter.readable.getReader();

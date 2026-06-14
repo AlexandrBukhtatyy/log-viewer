@@ -18,7 +18,10 @@ export interface LvTreeNodeProps {
    * tristate UX convention: indeterminate ('some') click selects everything,
    * 'all' click clears everything.
    */
-  toggleFolderSelect: (fileIds: ReadonlyArray<string>, shouldSelect: boolean) => void;
+  toggleFolderSelect: (
+    fileIds: ReadonlyArray<string>,
+    shouldSelect: boolean,
+  ) => void;
   /**
    * Open the file as a pinned tab. Fires on row click; the checkbox
    * column on the right edge handles selection independently. Folders
@@ -88,7 +91,14 @@ export const LvTreeNode = ({
     folderFileIds = collectAllFileIds([node]);
     const total = folderFileIds.length;
     const picked = folderFileIds.filter((id) => selectedIds.has(id)).length;
-    folderState = total === 0 ? 'none' : picked === 0 ? 'none' : picked === total ? 'all' : 'some';
+    folderState =
+      total === 0
+        ? 'none'
+        : picked === 0
+          ? 'none'
+          : picked === total
+            ? 'all'
+            : 'some';
   }
 
   return (

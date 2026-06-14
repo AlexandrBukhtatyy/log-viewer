@@ -63,9 +63,7 @@ describe('parseLogicalFieldsConfig', () => {
   });
 
   it('rejects non-array activeIds', () => {
-    expect(parseLogicalFieldsConfig('{"activeIds": "x"}')).toMatch(
-      /activeIds/,
-    );
+    expect(parseLogicalFieldsConfig('{"activeIds": "x"}')).toMatch(/activeIds/);
   });
 
   it('rejects a custom field with a built-in id', () => {

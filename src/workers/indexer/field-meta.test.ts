@@ -81,7 +81,9 @@ describe('mergeFieldType', () => {
     expect(mergeFieldType('string', new Set(['number']))).toBe('mixed');
   });
   it('multiple incoming types → mixed even if existing matches one', () => {
-    expect(mergeFieldType('string', new Set(['string', 'number']))).toBe('mixed');
+    expect(mergeFieldType('string', new Set(['string', 'number']))).toBe(
+      'mixed',
+    );
   });
   it('mixed sticks once it lands', () => {
     expect(mergeFieldType('mixed', new Set(['string']))).toBe('mixed');
@@ -97,7 +99,11 @@ describe('mergeFieldType', () => {
 
 describe('mergeTopValues', () => {
   it('returns sorted top entries from incoming when no existing blob', () => {
-    const incoming = new Map([['a', 1], ['b', 5], ['c', 3]]);
+    const incoming = new Map([
+      ['a', 1],
+      ['b', 5],
+      ['c', 3],
+    ]);
     const out = mergeTopValues(null, incoming);
     expect(out).toEqual([
       { value: 'b', count: 5 },
@@ -111,7 +117,10 @@ describe('mergeTopValues', () => {
       { value: 'b', count: 10 },
       { value: 'a', count: 1 },
     ]);
-    const incoming = new Map([['b', 2], ['c', 1]]);
+    const incoming = new Map([
+      ['b', 2],
+      ['c', 1],
+    ]);
     const out = mergeTopValues(existing, incoming);
     // Ties on count fall back to insertion order: existing keys come first.
     expect(out).toEqual([
@@ -230,8 +239,18 @@ describe('aggregateFieldDescriptors', () => {
 
   it('builds perSource breakdown when same key appears in multiple sources', () => {
     const out = aggregateFieldDescriptors([
-      row({ source_id: 's1', key: 'req_id', occurrences: 500, total_seen: 500 }),
-      row({ source_id: 's2', key: 'req_id', occurrences: 100, total_seen: 800 }),
+      row({
+        source_id: 's1',
+        key: 'req_id',
+        occurrences: 500,
+        total_seen: 500,
+      }),
+      row({
+        source_id: 's2',
+        key: 'req_id',
+        occurrences: 100,
+        total_seen: 800,
+      }),
     ]);
     expect(out[0]?.perSource).toEqual([
       { sourceId: 's1', occurrences: 500, presenceRate: 1 },
@@ -306,7 +325,12 @@ describe('aggregateFieldDescriptors', () => {
   it('skips empty key and tolerates corrupt top_values_json', () => {
     const out = aggregateFieldDescriptors([
       row({ key: '', occurrences: 1, total_seen: 1 }),
-      row({ key: 'k', occurrences: 1, total_seen: 1, top_values_json: 'not json' }),
+      row({
+        key: 'k',
+        occurrences: 1,
+        total_seen: 1,
+        top_values_json: 'not json',
+      }),
     ]);
     expect(out).toHaveLength(1);
     expect(out[0]?.topValues).toBeUndefined();

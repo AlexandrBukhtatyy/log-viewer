@@ -27,14 +27,22 @@ importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
               return `data:text/javascript;charset=utf-8,${encodeURIComponent(script)}`;
             },
           };
-          window.require(['vs/editor/editor.main'], () => {
-            try {
-              defineThemes(window.monaco);
-              registerLogLanguage(window.monaco);
-              resolve(window.monaco);
-            } catch (e) { reject(e); }
-          }, reject);
-        } catch (e) { reject(e); }
+          window.require(
+            ['vs/editor/editor.main'],
+            () => {
+              try {
+                defineThemes(window.monaco);
+                registerLogLanguage(window.monaco);
+                resolve(window.monaco);
+              } catch (e) {
+                reject(e);
+              }
+            },
+            reject,
+          );
+        } catch (e) {
+          reject(e);
+        }
       };
       document.head.appendChild(s);
     });
@@ -137,7 +145,10 @@ importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
           [/\b(?:DEBUG|DBG)\b/, 'log.debug'],
           [/\b(?:TRACE|TRC)\b/, 'log.trace'],
           // file paths like src/app/main.ts:42
-          [/[\w./-]+\.(?:ts|tsx|js|jsx|py|go|rs|java|kt|rb|cpp|cc|c|h)(?::\d+)?/, 'log.path'],
+          [
+            /[\w./-]+\.(?:ts|tsx|js|jsx|py|go|rs|java|kt|rb|cpp|cc|c|h)(?::\d+)?/,
+            'log.path',
+          ],
           // key=value
           [/[a-zA-Z_][\w.]*(?==)/, 'log.key'],
           // quoted strings
@@ -153,7 +164,15 @@ importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
   // React wrapper
   const { useEffect, useRef, useState } = React;
 
-  function LvMonaco({ value, language = 'plaintext', theme = 'lv-dark', wordWrap = true, height = 220, readOnly = true, onMount }) {
+  function LvMonaco({
+    value,
+    language = 'plaintext',
+    theme = 'lv-dark',
+    wordWrap = true,
+    height = 220,
+    readOnly = true,
+    onMount,
+  }) {
     const hostRef = useRef(null);
     const editorRef = useRef(null);
     const [ready, setReady] = useState(!!window.monaco);
@@ -162,9 +181,16 @@ importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
     // boot Monaco
     useEffect(() => {
       let cancelled = false;
-      ensureLoader().then(() => { if (!cancelled) setReady(true); })
-        .catch((e) => { if (!cancelled) setErr(e.message || String(e)); });
-      return () => { cancelled = true; };
+      ensureLoader()
+        .then(() => {
+          if (!cancelled) setReady(true);
+        })
+        .catch((e) => {
+          if (!cancelled) setErr(e.message || String(e));
+        });
+      return () => {
+        cancelled = true;
+      };
     }, []);
 
     // create editor
@@ -179,7 +205,8 @@ importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         renderLineHighlight: 'none',
-        fontFamily: 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontFamily:
+          'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: 12,
         lineHeight: 18,
         lineNumbers: 'on',
@@ -188,7 +215,11 @@ importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
         folding: language === 'json',
         padding: { top: 6, bottom: 6 },
         wordWrap: wordWrap ? 'on' : 'off',
-        scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false },
+        scrollbar: {
+          verticalScrollbarSize: 8,
+          horizontalScrollbarSize: 8,
+          useShadows: false,
+        },
         contextmenu: false,
         overviewRulerLanes: 0,
         hideCursorInOverviewRuler: true,
@@ -200,7 +231,10 @@ importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
       });
       editorRef.current = ed;
       if (onMount) onMount(ed);
-      return () => { ed.dispose(); editorRef.current = null; };
+      return () => {
+        ed.dispose();
+        editorRef.current = null;
+      };
     }, [ready]);
 
     // push updates
@@ -215,14 +249,17 @@ importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
     }, [value, language]);
 
     useEffect(() => {
-      if (window.monaco && editorRef.current) window.monaco.editor.setTheme(theme);
+      if (window.monaco && editorRef.current)
+        window.monaco.editor.setTheme(theme);
     }, [theme]);
 
     useEffect(() => {
-      if (editorRef.current) editorRef.current.updateOptions({ wordWrap: wordWrap ? 'on' : 'off' });
+      if (editorRef.current)
+        editorRef.current.updateOptions({ wordWrap: wordWrap ? 'on' : 'off' });
     }, [wordWrap]);
 
-    if (err) return <div className="lv-mon-err">Monaco failed to load: {err}</div>;
+    if (err)
+      return <div className="lv-mon-err">Monaco failed to load: {err}</div>;
 
     return (
       <div
@@ -232,10 +269,10 @@ importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
       >
         {!ready && (
           <div className="lv-mon-skel">
-            <div className="lv-mon-skel-bar" style={{ width: '60%' }}/>
-            <div className="lv-mon-skel-bar" style={{ width: '80%' }}/>
-            <div className="lv-mon-skel-bar" style={{ width: '45%' }}/>
-            <div className="lv-mon-skel-bar" style={{ width: '72%' }}/>
+            <div className="lv-mon-skel-bar" style={{ width: '60%' }} />
+            <div className="lv-mon-skel-bar" style={{ width: '80%' }} />
+            <div className="lv-mon-skel-bar" style={{ width: '45%' }} />
+            <div className="lv-mon-skel-bar" style={{ width: '72%' }} />
           </div>
         )}
       </div>

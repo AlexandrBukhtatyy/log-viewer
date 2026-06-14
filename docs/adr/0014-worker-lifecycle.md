@@ -49,12 +49,12 @@
 
 Lifecycle инварианты:
 
-| Сущность | Жизненный цикл | Где |
-| --- | --- | --- |
-| **ViewStore** | Module-level singleton. Создаётся при первом `getOrCreateViewStore()`, не destroy'ится. | [src/worker-client/log-client.ts](../../src/worker-client/log-client.ts) `getOrCreateViewStore` |
-| **Coordinator worker** | Singleton **per ViewStore**. Spawn — при первом `api()` (т.е. первом RPC из main thread). Не убивается. | log-client.ts `api()` getter |
-| **Indexer worker** | Singleton **per coordinator**. Spawn — при первом `getIndexer()` внутри координатор-воркера. Не убивается. | [src/workers/coordinator/index.ts](../../src/workers/coordinator/index.ts) `getIndexer` |
-| **HandleStore (IDB)** | Singleton, открывается через `HandleStore.open()` на init coordinator-воркера. Не закрывается явно. | coordinator/index.ts |
+| Сущность               | Жизненный цикл                                                                                                                                                                                           | Где                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **ViewStore**          | Module-level singleton. Создаётся при первом `getOrCreateViewStore()`, не destroy'ится.                                                                                                                  | [src/worker-client/log-client.ts](../../src/worker-client/log-client.ts) `getOrCreateViewStore`  |
+| **Coordinator worker** | Singleton **per ViewStore**. Spawn — при первом `api()` (т.е. первом RPC из main thread). Не убивается.                                                                                                  | log-client.ts `api()` getter                                                                     |
+| **Indexer worker**     | Singleton **per coordinator**. Spawn — при первом `getIndexer()` внутри координатор-воркера. Не убивается.                                                                                               | [src/workers/coordinator/index.ts](../../src/workers/coordinator/index.ts) `getIndexer`          |
+| **HandleStore (IDB)**  | Singleton, открывается через `HandleStore.open()` на init coordinator-воркера. Не закрывается явно.                                                                                                      | coordinator/index.ts                                                                             |
 | **Parser-pool worker** | **Динамический.** Spawn — при `acquire()` если все занятые и pool < cap. Despawn — после `idleTtlMs` (30 s по умолчанию) простоя. Min size 0. Cap = `recommendedPoolSize()` (1–4 в зависимости от ядер). | [src/workers/coordinator/pool/parser-pool.ts](../../src/workers/coordinator/pool/parser-pool.ts) |
 
 Почему так:
@@ -75,6 +75,7 @@ Lifecycle инварианты:
 ### Реализация
 
 **Lazy ViewStore singleton** ([log-client.ts](../../src/worker-client/log-client.ts)):
+
 ```ts
 let singletonStore: ViewStore | null = null;
 export const getOrCreateViewStore = (): ViewStore => {
@@ -83,28 +84,35 @@ export const getOrCreateViewStore = (): ViewStore => {
   return singletonStore;
 };
 ```
+
 [WorkerClientProvider](../../src/app/providers/WorkerClientProvider.tsx)
 вызывает `getOrCreateViewStore()` через `useState`-initializer и **не**
 делает destroy на unmount — иначе StrictMode unmount/remount уничтожит
 worker pool до возвращения второго mount.
 
 **Lazy coordinator worker** (внутри `createLogClient`):
+
 ```ts
 let coordinatorApi: Comlink.Remote<CoordinatorApi> | null = null;
 const api = (): Comlink.Remote<CoordinatorApi> => {
   if (coordinatorApi === null) {
-    coordinatorWorker = new Worker(new URL('...coordinator/index.ts', import.meta.url), { type: 'module' });
+    coordinatorWorker = new Worker(
+      new URL('...coordinator/index.ts', import.meta.url),
+      { type: 'module' },
+    );
     coordinatorApi = Comlink.wrap<CoordinatorApi>(coordinatorWorker);
     armSubscriptions(coordinatorApi); // subscribeStatus + subscribeChanges + resumePersistedSources
   }
   return coordinatorApi;
 };
 ```
+
 Все ViewStore-actions используют `api()` вместо ранее-инлайн-построенного
 `api`. Подписки и `resumePersistedSources` поднимаются в `armSubscriptions()`
 exactly-once при первом RPC.
 
 **Lazy indexer worker** ([coordinator/index.ts](../../src/workers/coordinator/index.ts)):
+
 ```ts
 let indexerProxy: Comlink.Remote<IndexerApi> | null = null;
 let indexerOpeningPromise: Promise<OpenReport> | null = null;
@@ -117,12 +125,14 @@ const getIndexer = () => {
   return { proxy: indexerProxy, opening: indexerOpeningPromise! };
 };
 ```
+
 Передаётся в [CoordinatorDeps.getIndexer](../../src/workers/coordinator/coordinator.ts)
 вместо двух отдельных полей `indexer` + `indexerOpening`. Все 30+
 обращений в coordinator.ts мигрировали на `deps.getIndexer().proxy.X` /
 `.opening`.
 
 **Dynamic parser pool** ([parser-pool.ts](../../src/workers/coordinator/pool/parser-pool.ts)):
+
 - `withWorker(fn)` — единственный способ получить proxy. acquire+release
   через try/finally.
 - Slots: `{worker, proxy, busy, lastUsedAt, reapTimer}`. Очередь FIFO для
@@ -136,6 +146,7 @@ const getIndexer = () => {
 ### Tests
 
 [parser-pool.test.ts](../../src/workers/coordinator/pool/parser-pool.test.ts) — 6 кейсов с моком Comlink:
+
 - Pool starts empty (no spawn on construction).
 - First acquire spawns; second reuses idle slot.
 - Concurrent acquires spawn до cap'а; busy-counter точен.

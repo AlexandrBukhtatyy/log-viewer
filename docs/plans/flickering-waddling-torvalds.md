@@ -20,20 +20,24 @@
 ## 3. Файлы — модификации
 
 ### Core / SQL
+
 - [src/core/types/log-filter.ts](../../src/core/types/log-filter.ts) — добавить `LogFilterSort` type + поле `sortBy?: LogFilterSort` в `LogFilter`. Расширить `filtersEqual` и `EMPTY_FILTER` (нет default sortBy).
 - [src/core/filter/query.ts](../../src/core/filter/query.ts) — переписать `orderByForFilter(filter, ctx?)` принимать `LogicalFieldsCtx`, ранее всех условий проверять `filter.sortBy`. Извлечь helper `sortBySql(sort, ctx)` который рендерит `<expr> ASC|DESC, source_id ASC, seq ASC` + special-case для `@level` (CASE WHEN). Существующие `ORDER_BY_TIME`/`ORDER_BY_PHYSICAL` оставить как fallback для auto-infer.
 - [src/core/filter/query.test.ts](../../src/core/filter/query.test.ts) — добавить кейсы: sortBy по `@ts`, `@level` (CASE order), dynamic key, `~`-key, ASC/DESC, sortBy выигрывает у `orderBy: 'physical'`.
 
 ### Worker — нет changes
+
 `buildClause` и `orderByForFilter` уже вызываются worker'ом из тех же мест ([indexer-api.ts](../../src/workers/indexer/indexer-api.ts) методы `search`, `exportFiltered`). Передача filter через RPC не меняется — `sortBy` сериализуется как часть filter. Расширения contract не нужно.
 
 ### UI
+
 - [src/ui/contracts/lv-types.ts](../../src/ui/contracts/lv-types.ts) — поле `sortBy?: { readonly key: string; readonly dir: 'asc' | 'desc' }` в `LvTab`. Symmetрично существующим per-tab полям (`columns`).
 - [src/ui/components/stream/LvViewer.tsx](../../src/ui/components/stream/LvViewer.tsx) — converter header `<span>` → `<button type="button">` (для accessibility), onClick → cycle. Visual: indicator `↑`/`↓` рядом с label через `<span>` с CSS-class. Опциональный prop `sortBy` (текущий) + `onSortByChange(next | null)`. Header chrome для `line`, `caret`, `message`, `act` — не sortable (без button-обёртки).
 - [src/ui/components/layout/LvApp.tsx](../../src/ui/components/layout/LvApp.tsx) — прокинуть `sortBy` + `onSortByChange` props сквозь до LvViewer.
 - [src/app/containers/LvAppContainer.tsx](../../src/app/containers/LvAppContainer.tsx) — взять `sortBy` из активного `LvTab`, при изменении писать обратно в openTabs. При формировании filter (там где собирается `coreFilter`/active filter): включить `sortBy` если не `null`.
 
 ### Hooks / workspace
+
 - [src/hooks/use-workspace.ts](../../src/hooks/use-workspace.ts) — миграция `version` ↑1: legacy табы без `sortBy` остаются как есть (optional). Никаких структурных изменений.
 
 ## 4. UX-детали
@@ -60,6 +64,7 @@ ORDER BY
 ```
 
 Generic case (`@ts`, dynamic, `~`-logical):
+
 ```sql
 ORDER BY <fieldKeyToSql(key).sql> ASC|DESC,
   entry.source_id ASC, entry.seq ASC

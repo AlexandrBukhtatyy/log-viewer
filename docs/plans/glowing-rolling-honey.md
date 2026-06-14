@@ -24,9 +24,9 @@
 interface WorkspacePersistedV1 {
   readonly version: 1;
   readonly openTabs: ReadonlyArray<LvTab>;
-  readonly activeTabId: string;          // '__all__' если ничего/невалидно
+  readonly activeTabId: string; // '__all__' если ничего/невалидно
   readonly selectedIds: ReadonlyArray<string>;
-  readonly coreFilter: LogFilter;        // sources/filePaths всегда null (derived)
+  readonly coreFilter: LogFilter; // sources/filePaths всегда null (derived)
   readonly groupBy: ReadonlyArray<LvGroupBy>;
   readonly liveTail: boolean;
 }
@@ -42,9 +42,11 @@ export interface UseWorkspace {
    *  табы/selection до того, как восстановится state из localStorage. */
   readonly hydrated: boolean;
 
-  setOpenTabs(updater: (prev: ReadonlyArray<LvTab>) => ReadonlyArray<LvTab>): void;
+  setOpenTabs(
+    updater: (prev: ReadonlyArray<LvTab>) => ReadonlyArray<LvTab>,
+  ): void;
   setActiveTabId(id: string): void;
-  setSelectedIds(updater: (prev: Set<string>) => Set<string>): void;   // сигнатура совместима с LvAppContainer.tsx:103
+  setSelectedIds(updater: (prev: Set<string>) => Set<string>): void; // сигнатура совместима с LvAppContainer.tsx:103
   setCoreFilter(updater: (prev: LogFilter) => LogFilter): void;
   setGroupBy(next: ReadonlyArray<LvGroupBy>): void;
   setLiveTail(v: boolean): void;
@@ -81,12 +83,17 @@ persist(creator, {
       openTabs: p.openTabs ?? [],
       activeTabId: p.activeTabId ?? '__all__',
       selectedIds: new Set(p.selectedIds ?? []),
-      coreFilter: { ...EMPTY_FILTER, ...p.coreFilter, sources: null, filePaths: null },
+      coreFilter: {
+        ...EMPTY_FILTER,
+        ...p.coreFilter,
+        sources: null,
+        filePaths: null,
+      },
       groupBy: p.groupBy ?? [],
       liveTail: p.liveTail ?? false,
     };
   },
-  migrate: (state) => state,  // stub под будущие миграции
+  migrate: (state) => state, // stub под будущие миграции
 });
 ```
 
@@ -132,22 +139,25 @@ useEffect(() => {
 Сейчас [LvAppContainer.tsx:719-738](src/app/containers/LvAppContainer.tsx#L719-L738) сам вычищает `selectedIds` префиксом при удалении источника. После миграции это становится `ws.removeSource(rootId)` — store знает про оба места (`selectedIds` + `openTabs`) и заодно роняет `activeTabId` на `'__all__'`, если активный таб ушёл:
 
 ```ts
-const onRemoveRoot = useCallback((rootId: string) => {
-  void sourceCtrl.removeSource(rootId as SourceId);
-  ws.removeSource(rootId);
-}, [sourceCtrl, ws]);
+const onRemoveRoot = useCallback(
+  (rootId: string) => {
+    void sourceCtrl.removeSource(rootId as SourceId);
+    ws.removeSource(rootId);
+  },
+  [sourceCtrl, ws],
+);
 ```
 
 ## Файлы
 
-| Файл | Что |
-|---|---|
-| [src/hooks/use-workspace.ts](src/hooks/use-workspace.ts) | NEW. Store + `useWorkspace` hook. Использовать паттерн set-from-store как в [use-bookmarks.ts](src/hooks/use-bookmarks.ts). |
-| [src/hooks/index.ts](src/hooks/index.ts) | Re-export `useWorkspace`, тип `UseWorkspace`. |
-| [src/app/containers/LvAppContainer.tsx](src/app/containers/LvAppContainer.tsx) | Удалить шесть `useState` ([:78,93,99,100,101](src/app/containers/LvAppContainer.tsx#L78)). Удалить локальный `setSelectedIds` useCallback ([:103-108](src/app/containers/LvAppContainer.tsx#L103-L108)) — теперь setter из store. Гейтить `tabs` useMemo и reset `activeTabId` через `canPrune`. Добавить prune-effect. `onRemoveRoot` свести к `ws.removeSource(...)`. |
-| [src/app/clear-app-data.ts](src/app/clear-app-data.ts) | Дописать `'lv:workspace'` в `UI_STATE_LOCAL_STORAGE_KEYS` ([:20-26](src/app/clear-app-data.ts#L20)). |
-| [src/hooks/__tests__/use-workspace.test.ts](src/hooks/__tests__/use-workspace.test.ts) | NEW. Юнит-тесты на сериализацию/гидрацию/prune (см. ниже). |
-| [docs/adr/NNNN-persist-ui-workspace.md](docs/adr/) | NEW. ADR через `/adr` — фиксирует выбор localStorage, `Set→Array` сериализация, hydration-gating и контракт `removeSource`/`pruneMissingSources`. |
+| Файл                                                                                   | Что                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [src/hooks/use-workspace.ts](src/hooks/use-workspace.ts)                               | NEW. Store + `useWorkspace` hook. Использовать паттерн set-from-store как в [use-bookmarks.ts](src/hooks/use-bookmarks.ts).                                                                                                                                                                                                                                             |
+| [src/hooks/index.ts](src/hooks/index.ts)                                               | Re-export `useWorkspace`, тип `UseWorkspace`.                                                                                                                                                                                                                                                                                                                           |
+| [src/app/containers/LvAppContainer.tsx](src/app/containers/LvAppContainer.tsx)         | Удалить шесть `useState` ([:78,93,99,100,101](src/app/containers/LvAppContainer.tsx#L78)). Удалить локальный `setSelectedIds` useCallback ([:103-108](src/app/containers/LvAppContainer.tsx#L103-L108)) — теперь setter из store. Гейтить `tabs` useMemo и reset `activeTabId` через `canPrune`. Добавить prune-effect. `onRemoveRoot` свести к `ws.removeSource(...)`. |
+| [src/app/clear-app-data.ts](src/app/clear-app-data.ts)                                 | Дописать `'lv:workspace'` в `UI_STATE_LOCAL_STORAGE_KEYS` ([:20-26](src/app/clear-app-data.ts#L20)).                                                                                                                                                                                                                                                                    |
+| [src/hooks/**tests**/use-workspace.test.ts](src/hooks/__tests__/use-workspace.test.ts) | NEW. Юнит-тесты на сериализацию/гидрацию/prune (см. ниже).                                                                                                                                                                                                                                                                                                              |
+| [docs/adr/NNNN-persist-ui-workspace.md](docs/adr/)                                     | NEW. ADR через `/adr` — фиксирует выбор localStorage, `Set→Array` сериализация, hydration-gating и контракт `removeSource`/`pruneMissingSources`.                                                                                                                                                                                                                       |
 
 Никаких изменений в воркерах, контрактах RPC, индексере и сорс-адаптерах: всё чисто UI-side.
 
@@ -162,6 +172,7 @@ const onRemoveRoot = useCallback((rootId: string) => {
 ## Verification
 
 **Unit (`use-workspace.test.ts`, через `pnpm test --run`):**
+
 - `partialize` стрипит `sources`/`filePaths` в `null`, конвертит Set→массив (сортированно для детерминизма теста).
 - `merge` восстанавливает Set, дозаполняет дефолтами при отсутствующих полях (forward-compat).
 - `merge` поверх битого/пустого localStorage не кидает, отдаёт initial defaults.
@@ -170,6 +181,7 @@ const onRemoveRoot = useCallback((rootId: string) => {
 - `setCoreFilter(prev => ...)` отдаёт updater'у текущий фильтр, записывает обратно с `sources/filePaths: null`.
 
 **End-to-end (Playwright, `pnpm dev` уже запущен на 5183):**
+
 1. Загрузить два source'а через `pnpm gen:fixtures` → `pino.jsonl` + `bunyan.jsonl` (или OPFS-папку из существующего теста).
 2. Открыть `pino.jsonl` как таб, выставить чекбоксы на обоих, ввести `query="error"`, поднять level filter, переключить group-by на `level`, включить live-tail.
 3. Снапшот `localStorage['lv:workspace']` через `browser_evaluate` — проверить структуру (`Set` → массив, фильтр без `sources`).

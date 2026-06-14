@@ -1,30 +1,30 @@
-import { readFileSync, renameSync, rmSync, existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { execSync } from 'node:child_process'
-import { defineConfig, type PluginOption } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import { VitePWA } from 'vite-plugin-pwa'
+import { readFileSync, renameSync, rmSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { execSync } from 'node:child_process';
+import { defineConfig, type PluginOption } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 const pkg = JSON.parse(
   readFileSync(resolve(__dirname, 'package.json'), 'utf8'),
-) as { version: string }
-const APP_VERSION = pkg.version
+) as { version: string };
+const APP_VERSION = pkg.version;
 const APP_BUILD_HASH = (() => {
   try {
     return execSync('git rev-parse --short HEAD', {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
       .toString()
-      .trim()
+      .trim();
   } catch {
-    return 'dev'
+    return 'dev';
   }
-})()
+})();
 
 // Build target: 'pages' (default, GitHub Pages with /log-viewer/ base + landing)
 // or 'onprem' (npm-package + Docker, root base, app only).
-const isOnprem = process.env.BUILD_TARGET === 'onprem'
+const isOnprem = process.env.BUILD_TARGET === 'onprem';
 
 // Replace `<!--APP_VERSION-->...<!--/APP_VERSION-->` markers in any HTML
 // entry (the landing's footer uses this). The placeholder keeps a valid
@@ -36,9 +36,9 @@ const versionInjector = (): PluginOption => ({
     return html.replace(
       /<!--APP_VERSION-->[\s\S]*?<!--\/APP_VERSION-->/g,
       APP_VERSION,
-    )
+    );
   },
-})
+});
 
 // On-prem post-build cleanup:
 //   - move `dist/app/index.html` → `dist/index.html` so the bundled CLI
@@ -50,21 +50,21 @@ const onpremPostBuild = (): PluginOption => ({
   apply: 'build',
   enforce: 'post',
   closeBundle() {
-    if (!isOnprem) return
-    const distRoot = resolve(__dirname, 'dist')
-    const appIndex = resolve(distRoot, 'app', 'index.html')
-    const rootIndex = resolve(distRoot, 'index.html')
+    if (!isOnprem) return;
+    const distRoot = resolve(__dirname, 'dist');
+    const appIndex = resolve(distRoot, 'app', 'index.html');
+    const rootIndex = resolve(distRoot, 'index.html');
     if (existsSync(appIndex)) {
-      renameSync(appIndex, rootIndex)
-      rmSync(resolve(distRoot, 'app'), { recursive: true, force: true })
+      renameSync(appIndex, rootIndex);
+      rmSync(resolve(distRoot, 'app'), { recursive: true, force: true });
     }
     // Landing-only assets copied from public/ — not used by the app.
     for (const f of ['landing-hero.png']) {
-      const p = resolve(distRoot, f)
-      if (existsSync(p)) rmSync(p, { force: true })
+      const p = resolve(distRoot, f);
+      if (existsSync(p)) rmSync(p, { force: true });
     }
   },
-})
+});
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -147,4 +147,4 @@ export default defineConfig({
       },
     }),
   ],
-})
+});

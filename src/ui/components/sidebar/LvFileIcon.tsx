@@ -16,7 +16,10 @@ export interface LvFileIconProps {
 export const LvFileIcon = ({ kind }: LvFileIconProps) => {
   const m = MAP[kind] ?? { label: 'LOG', color: 'var(--lv-muted)' };
   return (
-    <span className="lv-file-ico" style={{ color: m.color, borderColor: 'currentColor' }}>
+    <span
+      className="lv-file-ico"
+      style={{ color: m.color, borderColor: 'currentColor' }}
+    >
       {m.label}
     </span>
   );

@@ -68,7 +68,12 @@ const ExtractorRow = ({
 }: ExtractorRowProps) => (
   <div
     className="lv-colpick-row is-on"
-    style={{ flexDirection: 'column', alignItems: 'stretch', padding: 8, gap: 4 }}
+    style={{
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      padding: 8,
+      gap: 4,
+    }}
   >
     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
       <span className="lv-colpick-meta">#{index + 1}</span>

@@ -1,5 +1,8 @@
 import * as Comlink from 'comlink';
-import type { IndexerApi, OpenReport } from '../../core/rpc/indexer.contract.ts';
+import type {
+  IndexerApi,
+  OpenReport,
+} from '../../core/rpc/indexer.contract.ts';
 import { defaultAdapterFactories } from '../../core/sources/index.ts';
 import { createCoordinatorApi } from './coordinator.ts';
 import { CustomParserStore } from './custom-parsers/store.ts';
@@ -16,7 +19,9 @@ const parserPool = new ParserPool({
   maxSize: recommendedPoolSize(),
   idleTtlMs: DEFAULT_POOL_IDLE_TTL_MS,
   createWorker: () =>
-    new Worker(new URL('../parser/index.ts', import.meta.url), { type: 'module' }),
+    new Worker(new URL('../parser/index.ts', import.meta.url), {
+      type: 'module',
+    }),
 });
 
 // Lazy indexer: the worker + SQLite/OPFS pool are not started until a
@@ -36,10 +41,9 @@ const getIndexer = (): {
   opening: Promise<OpenReport>;
 } => {
   if (indexerProxy === null) {
-    const worker = new Worker(
-      new URL('../indexer/index.ts', import.meta.url),
-      { type: 'module' },
-    );
+    const worker = new Worker(new URL('../indexer/index.ts', import.meta.url), {
+      type: 'module',
+    });
     const proxy = Comlink.wrap<IndexerApi>(worker);
     const opening = proxy.open();
     opening.catch(() => {

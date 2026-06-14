@@ -15,14 +15,19 @@ export interface LvTabsProps {
 
 const isPreview = (t: LvTab): boolean => t.id !== '__all__' && !t.isPinned;
 
-export const LvTabs = ({ tabs, activeId, onActivate, onClose, onPin }: LvTabsProps) => {
+export const LvTabs = ({
+  tabs,
+  activeId,
+  onActivate,
+  onClose,
+  onPin,
+}: LvTabsProps) => {
   if (!tabs.length) return null;
   return (
     <div className="lv-tabs">
       {tabs.map((t) => {
         const preview = isPreview(t);
-        const className =
-          `lv-tab${t.id === activeId ? ' is-active' : ''}${preview ? ' is-preview' : ''}`;
+        const className = `lv-tab${t.id === activeId ? ' is-active' : ''}${preview ? ' is-preview' : ''}`;
         return (
           <div
             key={t.id}
@@ -36,10 +41,42 @@ export const LvTabs = ({ tabs, activeId, onActivate, onClose, onPin }: LvTabsPro
             {t.id === '__all__' ? (
               <span className="lv-tab-all">
                 <svg viewBox="0 0 10 10" width="10" height="10">
-                  <rect x="1" y="1" width="3" height="3" fill="none" stroke="currentColor" strokeWidth="1" />
-                  <rect x="6" y="1" width="3" height="3" fill="none" stroke="currentColor" strokeWidth="1" />
-                  <rect x="1" y="6" width="3" height="3" fill="none" stroke="currentColor" strokeWidth="1" />
-                  <rect x="6" y="6" width="3" height="3" fill="none" stroke="currentColor" strokeWidth="1" />
+                  <rect
+                    x="1"
+                    y="1"
+                    width="3"
+                    height="3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1"
+                  />
+                  <rect
+                    x="6"
+                    y="1"
+                    width="3"
+                    height="3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1"
+                  />
+                  <rect
+                    x="1"
+                    y="6"
+                    width="3"
+                    height="3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1"
+                  />
+                  <rect
+                    x="6"
+                    y="6"
+                    width="3"
+                    height="3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1"
+                  />
                 </svg>
               </span>
             ) : (

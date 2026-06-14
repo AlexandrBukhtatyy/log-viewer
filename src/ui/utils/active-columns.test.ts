@@ -15,14 +15,16 @@ const tab = (id: string, columns?: ReadonlyArray<LvColumnPref>): LvTab => ({
 describe('resolveActiveColumns', () => {
   it('returns the global columns for the __all__ tab', () => {
     const global = [col('@level'), col('msg')];
-    expect(resolveActiveColumns('__all__', [tab('src1', [col('status')])], global)).toBe(
-      global,
-    );
+    expect(
+      resolveActiveColumns('__all__', [tab('src1', [col('status')])], global),
+    ).toBe(global);
   });
 
   it('returns tab.columns when the active tab has them', () => {
     const global = [col('@level')];
-    const tabs = [tab('nginx', [col('method'), col('status'), col('request_uri')])];
+    const tabs = [
+      tab('nginx', [col('method'), col('status'), col('request_uri')]),
+    ];
     expect(resolveActiveColumns('nginx', tabs, global)).toEqual([
       col('method'),
       col('status'),
@@ -38,9 +40,9 @@ describe('resolveActiveColumns', () => {
 
   it('falls back when the activeTabId is unknown (no matching tab)', () => {
     const global = [col('@level')];
-    expect(resolveActiveColumns('ghost', [tab('other', [col('x')])], global)).toBe(
-      global,
-    );
+    expect(
+      resolveActiveColumns('ghost', [tab('other', [col('x')])], global),
+    ).toBe(global);
   });
 
   it('returns an empty array when tab.columns is explicitly empty', () => {

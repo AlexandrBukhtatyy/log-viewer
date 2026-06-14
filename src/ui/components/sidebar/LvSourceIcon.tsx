@@ -22,8 +22,26 @@ export const LvSourceIcon = ({ source }: LvSourceIconProps) => {
     case 'remote-ssh':
       return (
         <svg viewBox="0 0 14 12" width="14" height="12">
-          <rect x="1.5" y="2" width="11" height="3" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.1" />
-          <rect x="1.5" y="7" width="11" height="3" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.1" />
+          <rect
+            x="1.5"
+            y="2"
+            width="11"
+            height="3"
+            rx="0.6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+          />
+          <rect
+            x="1.5"
+            y="7"
+            width="11"
+            height="3"
+            rx="0.6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+          />
           <circle cx="3.6" cy="3.5" r="0.6" fill="currentColor" />
           <circle cx="3.6" cy="8.5" r="0.6" fill="currentColor" />
         </svg>
@@ -63,36 +81,95 @@ export const LvSourceIcon = ({ source }: LvSourceIconProps) => {
             strokeWidth="1.1"
             strokeLinejoin="round"
           />
-          <circle cx="7" cy="6.3" r="1.6" fill="none" stroke="currentColor" strokeWidth="1" />
+          <circle
+            cx="7"
+            cy="6.3"
+            r="1.6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1"
+          />
         </svg>
       );
     case 'bus':
       return (
         <svg viewBox="0 0 14 12" width="14" height="12">
-          <circle cx="3" cy="6" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.1" />
-          <circle cx="11" cy="3" r="1.4" fill="none" stroke="currentColor" strokeWidth="1.1" />
-          <circle cx="11" cy="9" r="1.4" fill="none" stroke="currentColor" strokeWidth="1.1" />
-          <path d="M4.4 5.4 L9.6 3.4 M4.4 6.6 L9.6 8.6" stroke="currentColor" strokeWidth="1" />
+          <circle
+            cx="3"
+            cy="6"
+            r="1.6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+          />
+          <circle
+            cx="11"
+            cy="3"
+            r="1.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+          />
+          <circle
+            cx="11"
+            cy="9"
+            r="1.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+          />
+          <path
+            d="M4.4 5.4 L9.6 3.4 M4.4 6.6 L9.6 8.6"
+            stroke="currentColor"
+            strokeWidth="1"
+          />
         </svg>
       );
     case 'snapshot':
       return (
         <svg viewBox="0 0 14 12" width="14" height="12">
-          <rect x="1.5" y="2" width="11" height="2.4" rx="0.4" fill="none" stroke="currentColor" strokeWidth="1.1" />
+          <rect
+            x="1.5"
+            y="2"
+            width="11"
+            height="2.4"
+            rx="0.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+          />
           <path
             d="M2.5 4.4 V10 A0.5 0.5 0 0 0 3 10.5 H11 A0.5 0.5 0 0 0 11.5 10 V4.4"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.1"
           />
-          <path d="M5.5 6.5 H8.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+          <path
+            d="M5.5 6.5 H8.5"
+            stroke="currentColor"
+            strokeWidth="1.1"
+            strokeLinecap="round"
+          />
         </svg>
       );
     case 'db':
       return (
         <svg viewBox="0 0 14 12" width="14" height="12">
-          <ellipse cx="7" cy="3" rx="4.5" ry="1.4" fill="none" stroke="currentColor" strokeWidth="1.1" />
-          <path d="M2.5 3 V9 A4.5 1.4 0 0 0 11.5 9 V3" fill="none" stroke="currentColor" strokeWidth="1.1" />
+          <ellipse
+            cx="7"
+            cy="3"
+            rx="4.5"
+            ry="1.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+          />
+          <path
+            d="M2.5 3 V9 A4.5 1.4 0 0 0 11.5 9 V3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+          />
           <path
             d="M2.5 6 A4.5 1.4 0 0 0 11.5 6"
             fill="none"

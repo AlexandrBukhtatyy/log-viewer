@@ -58,9 +58,7 @@ describe('useLogicalFields — activation', () => {
     const { activate } = useLogicalFields.getState();
     activate('trace_id');
     activate('trace_id');
-    expect(useLogicalFields.getState().config.activeIds).toEqual([
-      'trace_id',
-    ]);
+    expect(useLogicalFields.getState().config.activeIds).toEqual(['trace_id']);
   });
 
   it('deactivate removes the id', () => {
@@ -68,17 +66,13 @@ describe('useLogicalFields — activation', () => {
     activate('trace_id');
     activate('user_id');
     deactivate('trace_id');
-    expect(useLogicalFields.getState().config.activeIds).toEqual([
-      'user_id',
-    ]);
+    expect(useLogicalFields.getState().config.activeIds).toEqual(['user_id']);
   });
 
   it('toggle flips presence', () => {
     const { toggle } = useLogicalFields.getState();
     toggle('trace_id');
-    expect(useLogicalFields.getState().config.activeIds).toEqual([
-      'trace_id',
-    ]);
+    expect(useLogicalFields.getState().config.activeIds).toEqual(['trace_id']);
     toggle('trace_id');
     expect(useLogicalFields.getState().config.activeIds).toEqual([]);
   });
@@ -116,9 +110,7 @@ describe('useLogicalFields — custom fields', () => {
   it('rejects duplicate custom ids', () => {
     const { addCustom } = useLogicalFields.getState();
     addCustom(customField('audit_id'));
-    expect(() => addCustom(customField('audit_id'))).toThrow(
-      /already exists/i,
-    );
+    expect(() => addCustom(customField('audit_id'))).toThrow(/already exists/i);
   });
 
   it('updateCustom replaces in place', () => {

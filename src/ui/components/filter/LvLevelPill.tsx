@@ -7,7 +7,12 @@ export interface LvLevelPillProps {
   onToggle: () => void;
 }
 
-export const LvLevelPill = ({ level, active, count, onToggle }: LvLevelPillProps) => (
+export const LvLevelPill = ({
+  level,
+  active,
+  count,
+  onToggle,
+}: LvLevelPillProps) => (
   <button
     type="button"
     className={`lv-lvl lv-lvl-${level}${active ? ' is-on' : ' is-off'}`}

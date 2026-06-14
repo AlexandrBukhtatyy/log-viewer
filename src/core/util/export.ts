@@ -22,9 +22,7 @@ const CSV_HEADER: ReadonlyArray<string> = [
  * per line, terminated by `\n`. Empty input yields an empty string (no
  * trailing newline) so downstream Blobs don't emit a stray byte.
  */
-export const buildJsonl = (
-  entries: ReadonlyArray<LogEntry>,
-): string => {
+export const buildJsonl = (entries: ReadonlyArray<LogEntry>): string => {
   if (entries.length === 0) return '';
   const lines: string[] = [];
   for (const e of entries) lines.push(JSON.stringify(e));
@@ -44,7 +42,9 @@ export const buildCsv = (entries: ReadonlyArray<LogEntry>): string => {
   const lines = [CSV_HEADER.join(',')];
   for (const e of entries) {
     const row = [
-      csvEscape(e.timestamp === null ? '' : new Date(e.timestamp).toISOString()),
+      csvEscape(
+        e.timestamp === null ? '' : new Date(e.timestamp).toISOString(),
+      ),
       csvEscape(e.level),
       csvEscape(e.sourceId),
       csvEscape(String(e.seq)),

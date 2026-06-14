@@ -64,9 +64,15 @@ export class OpfsSingleSpoolWriter {
     rootProvider: OpfsRootProvider = defaultOpfsRoot,
   ): Promise<OpfsSingleSpoolWriter> {
     const root = await rootProvider.getRoot();
-    const spoolDir = await root.getDirectoryHandle(SPOOL_ROOT, { create: true });
-    const sourceDir = await spoolDir.getDirectoryHandle(sourceId, { create: true });
-    const fh = await sourceDir.getFileHandle(SINGLE_SPOOL_FILE, { create: true });
+    const spoolDir = await root.getDirectoryHandle(SPOOL_ROOT, {
+      create: true,
+    });
+    const sourceDir = await spoolDir.getDirectoryHandle(sourceId, {
+      create: true,
+    });
+    const fh = await sourceDir.getFileHandle(SINGLE_SPOOL_FILE, {
+      create: true,
+    });
     const writer = new OpfsSingleSpoolWriter(sourceId);
     writer.writable = await fh.createWritable({ keepExistingData: false });
     return writer;
@@ -124,8 +130,12 @@ export class OpfsChunkedSpoolWriter {
     rootProvider: OpfsRootProvider = defaultOpfsRoot,
   ): Promise<OpfsChunkedSpoolWriter> {
     const root = await rootProvider.getRoot();
-    const spoolDir = await root.getDirectoryHandle(SPOOL_ROOT, { create: true });
-    const sourceDir = await spoolDir.getDirectoryHandle(sourceId, { create: true });
+    const spoolDir = await root.getDirectoryHandle(SPOOL_ROOT, {
+      create: true,
+    });
+    const sourceDir = await spoolDir.getDirectoryHandle(sourceId, {
+      create: true,
+    });
     return new OpfsChunkedSpoolWriter(sourceId, sourceDir);
   }
 
@@ -141,10 +151,14 @@ export class OpfsChunkedSpoolWriter {
     bytes: Uint8Array,
   ): Promise<{ chunkSeq: number; byteSize: number }> {
     if (bytes.byteLength === 0) {
-      throw new Error('OpfsChunkedSpoolWriter: refusing to push an empty chunk');
+      throw new Error(
+        'OpfsChunkedSpoolWriter: refusing to push an empty chunk',
+      );
     }
     const seq = this.chunkSeq++;
-    const fh = await this.sourceDir.getFileHandle(`${seq}.bin`, { create: true });
+    const fh = await this.sourceDir.getFileHandle(`${seq}.bin`, {
+      create: true,
+    });
     const writable = await fh.createWritable({ keepExistingData: false });
     await writable.write(bytes as Uint8Array<ArrayBuffer>);
     await writable.close();
@@ -181,7 +195,9 @@ export const writeSpoolFile = async (
 ): Promise<void> => {
   const root = await rootProvider.getRoot();
   const spoolDir = await root.getDirectoryHandle(SPOOL_ROOT, { create: true });
-  const sourceDir = await spoolDir.getDirectoryHandle(sourceId, { create: true });
+  const sourceDir = await spoolDir.getDirectoryHandle(sourceId, {
+    create: true,
+  });
   const fh = await sourceDir.getFileHandle(fileName, { create: true });
   const writable = await fh.createWritable({ keepExistingData: false });
   if (bytes.byteLength > 0) {

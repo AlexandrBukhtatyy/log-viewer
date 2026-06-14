@@ -47,16 +47,19 @@
 Реализация по двум волнам:
 
 **Волна 1 — обязательный минимум.** Заводим в `.github/`:
+
 - `ISSUE_TEMPLATE/bug_report.yml`
 - `ISSUE_TEMPLATE/feature_request.yml`
 - `pull_request_template.md`
 
 Расширяем `CONTRIBUTING.md`:
+
 - Секция «Code review checklist».
 - Секция «RFC process for big changes» со ссылкой на `docs/plans/`.
 - Примеры хороших / плохих commit-сообщений.
 
 **Волна 2 — после первого внешнего контрибутора.**
+
 - `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1).
 - `CHANGELOG.md` (формат и автоматизация).
 - Возможно label-разметка issue/PR (auto через `.github/labeler.yml`).
@@ -64,6 +67,7 @@
 ## Critical files (предварительно)
 
 Новые:
+
 - `.github/ISSUE_TEMPLATE/bug_report.yml`
 - `.github/ISSUE_TEMPLATE/feature_request.yml`
 - `.github/pull_request_template.md`
@@ -71,6 +75,7 @@
 - `CHANGELOG.md` (волна 2)
 
 Изменяются:
+
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) — добавить секции «Code review checklist», «RFC process», «Branch naming», ссылки на новые templates.
 - [docs/ROADMAP.md](../ROADMAP.md) — после волны 2 указать «Open-source readiness» как завершённый пункт.
 

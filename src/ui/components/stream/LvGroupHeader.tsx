@@ -1,7 +1,15 @@
 import type { GroupBucket } from '../../../core/rpc/coordinator.contract.ts';
 import type { LogLevel } from '../../../core/types/index.ts';
 
-const LEVELS: LogLevel[] = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'unknown'];
+const LEVELS: LogLevel[] = [
+  'fatal',
+  'error',
+  'warn',
+  'info',
+  'debug',
+  'trace',
+  'unknown',
+];
 
 export interface LvGroupHeaderProps {
   readonly bucket: GroupBucket;
@@ -81,7 +89,12 @@ export const LvGroupHeader = ({
         )}
       </span>
       <span className="lv-grp-actions" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="lv-row-open" onClick={onFocus} title="Focus this group only">
+        <button
+          type="button"
+          className="lv-row-open"
+          onClick={onFocus}
+          title="Focus this group only"
+        >
           <svg viewBox="0 0 12 12" width="12" height="12">
             <path
               d="M3 3 H9 V9 H3 Z M5 5 H7 V7 H5 Z"
@@ -92,10 +105,29 @@ export const LvGroupHeader = ({
             />
           </svg>
         </button>
-        <button type="button" className="lv-row-open" onClick={onCopy} title="Copy key">
+        <button
+          type="button"
+          className="lv-row-open"
+          onClick={onCopy}
+          title="Copy key"
+        >
           <svg viewBox="0 0 12 12" width="12" height="12">
-            <rect x="2" y="3" width="6" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.1" />
-            <path d="M4 2 H9 A1 1 0 0 1 10 3 V8" fill="none" stroke="currentColor" strokeWidth="1.1" />
+            <rect
+              x="2"
+              y="3"
+              width="6"
+              height="7"
+              rx="1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.1"
+            />
+            <path
+              d="M4 2 H9 A1 1 0 0 1 10 3 V8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.1"
+            />
           </svg>
         </button>
       </span>

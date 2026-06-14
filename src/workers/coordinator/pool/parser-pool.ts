@@ -73,9 +73,7 @@ export class ParserPool {
   async loadCustomParsers(defs: ReadonlyArray<CustomParserDef>): Promise<void> {
     this.customParsers = defs;
     if (this.slots.length === 0) return;
-    await Promise.all(
-      this.slots.map((s) => s.proxy.loadCustomParsers(defs)),
-    );
+    await Promise.all(this.slots.map((s) => s.proxy.loadCustomParsers(defs)));
   }
 
   /** Number of currently-spawned workers (busy + idle). Dynamic over time. */
@@ -231,7 +229,8 @@ export class ParserPool {
 }
 
 export const recommendedPoolSize = (): number => {
-  const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
+  const cores =
+    (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
   return Math.min(Math.max(cores - 1, 1), 8);
 };
 

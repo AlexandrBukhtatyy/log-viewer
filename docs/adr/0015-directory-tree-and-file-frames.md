@@ -83,6 +83,7 @@ readonly filePaths: ReadonlyArray<string> | null;
 ```
 
 [buildClause](../../src/core/filter/query.ts):
+
 ```sql
 JSON_EXTRACT(fields_json, '$.file_path') IN (?, ?, ...)
 ```
@@ -111,6 +112,7 @@ Source-level флаги (`live`, `count`, `needsPermission`, `errorMessage`)
 
 [LvAppContainer](../../src/app/containers/LvAppContainer.tsx) парсит
 `selectedIds` по разделителю `::`:
+
 - non-compound id → `filter.sources`.
 - compound id → `filter.sources` (часть до `::`) **плюс**
   `filter.filePaths` (часть после, если это файл — не folder и не пусто).

@@ -68,7 +68,10 @@ export const LvTableSettings = ({
     };
   }, [open]);
 
-  const selectedKeys = useMemo(() => new Set(columns.map((c) => c.key)), [columns]);
+  const selectedKeys = useMemo(
+    () => new Set(columns.map((c) => c.key)),
+    [columns],
+  );
 
   // Dynamic descriptors are filtered down to the active sources so a
   // single-file tab doesn't list keys from other files (`bytes_sent`
@@ -125,7 +128,11 @@ export const LvTableSettings = ({
     return (
       <div key={d.key} className={`lv-colpick-row${checked ? ' is-on' : ''}`}>
         <label className="lv-colpick-label">
-          <input type="checkbox" checked={checked} onChange={() => toggle(d.key)} />
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={() => toggle(d.key)}
+          />
           <span className="lv-colpick-key">{d.label || d.key}</span>
           {compatLabel !== null && (
             <span
@@ -293,7 +300,8 @@ export const LvTableSettings = ({
             <div className="lv-tset-sec-title">Presets</div>
             {tweaks.presets.length === 0 && !presetFormOpen && (
               <div className="lv-tset-hint">
-                Save the current columns as a named preset to apply on other tabs.
+                Save the current columns as a named preset to apply on other
+                tabs.
               </div>
             )}
             {tweaks.presets.map((p) => (

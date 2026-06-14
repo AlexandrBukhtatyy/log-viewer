@@ -135,15 +135,15 @@ export interface ViewActions {
     from: number,
     to: number,
   ) => Promise<ReadonlyArray<LogEntry>>;
-  getFieldSchema: (filter: LogFilter) => Promise<ReadonlyArray<FieldDescriptor>>;
+  getFieldSchema: (
+    filter: LogFilter,
+  ) => Promise<ReadonlyArray<FieldDescriptor>>;
   setLogicalFields: (
     fields: ReadonlyArray<import('../core/types/index.ts').LogicalField>,
   ) => Promise<void>;
   getLogicalFieldCoverage: (
     field: import('../core/types/index.ts').LogicalField,
-  ) => Promise<
-    import('../core/rpc/indexer.contract.ts').LogicalFieldCoverage
-  >;
+  ) => Promise<import('../core/rpc/indexer.contract.ts').LogicalFieldCoverage>;
   listParsers: () => Promise<ReadonlyArray<ParserInfo>>;
   listCustomParsers: () => Promise<ReadonlyArray<CustomParserDef>>;
   upsertCustomParser: (def: CustomParserDef) => Promise<void>;
@@ -530,7 +530,8 @@ export const createLogClient = (): ViewStore => {
       },
       resumePersistedSources: async () => api().resumePersistedSources(),
       grantPermission: async (id) => api().grantPermission(id),
-      exportFiltered: async (format) => api().exportFiltered(get().filter, format),
+      exportFiltered: async (format) =>
+        api().exportFiltered(get().filter, format),
       cancelSource: async (id) => api().cancel(id as string),
       setFocus: async ({ sources, filePaths }) =>
         api().setFocus({ sources, filePaths }),
@@ -549,7 +550,8 @@ export const createLogClient = (): ViewStore => {
       listCustomParsers: async () => api().listCustomParsers(),
       upsertCustomParser: async (def) => api().upsertCustomParser(def),
       removeCustomParser: async (id) => api().removeCustomParser(id),
-      setSourceParser: async (id, parserId) => api().setSourceParser(id, parserId),
+      setSourceParser: async (id, parserId) =>
+        api().setSourceParser(id, parserId),
       refresh,
       destroy: async () => {
         statusUnsubPromise
@@ -571,7 +573,10 @@ export const createLogClient = (): ViewStore => {
           try {
             await coordinatorApi.shutdownIndexer();
           } catch (err) {
-            console.warn('[log-client] shutdownIndexer failed during destroy', err);
+            console.warn(
+              '[log-client] shutdownIndexer failed during destroy',
+              err,
+            );
           }
         }
         coordinatorWorker?.terminate();

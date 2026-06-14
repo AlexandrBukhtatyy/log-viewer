@@ -42,7 +42,9 @@ import { resolvePointersToEntries } from './read/lazy-resolver.ts';
 const WORKER_ID = crypto.randomUUID();
 
 const notImplemented = (name: string): never => {
-  throw new Error(`coordinator.${name}: not implemented yet (worker ${WORKER_ID})`);
+  throw new Error(
+    `coordinator.${name}: not implemented yet (worker ${WORKER_ID})`,
+  );
 };
 
 interface SourceEntry {
@@ -277,7 +279,9 @@ export interface CoordinatorDeps {
    * the next `getIndexer()` call respawns from scratch.
    */
   readonly shutdownIndexer: () => Promise<void>;
-  readonly adapterFactories: Partial<Record<LogSourceKind, LogSourceAdapterFactory>>;
+  readonly adapterFactories: Partial<
+    Record<LogSourceKind, LogSourceAdapterFactory>
+  >;
   /** Awaited inside methods that touch handles; keeps Comlink.expose synchronous. */
   readonly handleStoreOpening: Promise<HandleStore>;
   /** Per-workspace user-defined parser store (Phase 2.C). */
@@ -289,7 +293,9 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   /** Sources that are persisted but not currently live (after reload, until removeSource). */
   const persistedRecords = new Map<SourceId, SourceRecord>();
   let persistedHydrationPromise: Promise<void> | null = null;
-  const statusListeners = new Set<(records: ReadonlyArray<SourceRecord>) => void>();
+  const statusListeners = new Set<
+    (records: ReadonlyArray<SourceRecord>) => void
+  >();
   const changeListeners = new Set<(notice: ChangesNotice) => void>();
 
   /**
@@ -470,7 +476,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   const hasActiveIngest = (): boolean => {
     for (const entry of sources.values()) {
       const kind = entry.status.kind;
-      if (kind === 'indexing' || kind === 'streaming' || kind === 'loading') return true;
+      if (kind === 'indexing' || kind === 'streaming' || kind === 'loading')
+        return true;
     }
     return false;
   };
@@ -513,11 +520,9 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     const matches: LogEntry[] = [];
     let offset = 0;
     while (true) {
-      const pointers = await deps.getIndexer().proxy.search(
-        filter,
-        offset,
-        offset + FREE_TEXT_BATCH,
-      );
+      const pointers = await deps
+        .getIndexer()
+        .proxy.search(filter, offset, offset + FREE_TEXT_BATCH);
       if (pointers.length === 0) break;
       const resolved = await resolvePointersToEntries(
         pointers,
@@ -575,8 +580,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     source: LogSource,
     rec: SourceRecord | undefined,
   ): boolean => {
-    const entryCount =
-      rec?.status.kind === 'done' ? rec.status.entryCount : 0;
+    const entryCount = rec?.status.kind === 'done' ? rec.status.entryCount : 0;
     if (entryCount <= 0) return false;
     sources.set(source.id, {
       source,
@@ -602,7 +606,10 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         source,
         status: {
           kind: 'error',
-          error: { name: 'Error', message: `no adapter for kind '${source.kind}'` },
+          error: {
+            name: 'Error',
+            message: `no adapter for kind '${source.kind}'`,
+          },
         },
         aborter: null,
       });
@@ -630,7 +637,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       parserPool: deps.parserPool,
       indexer: deps.getIndexer().proxy,
       signal: aborter.signal,
-      getPriority: (filePath) => (isHot(source.id, filePath) ? 'hot' : 'normal'),
+      getPriority: (filePath) =>
+        isHot(source.id, filePath) ? 'hot' : 'normal',
       onStatus: (status) => {
         const entry = sources.get(source.id);
         if (!entry) return; // source already removed — drop stale status
@@ -655,21 +663,26 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         // a separate channel.
         emitStatus();
       },
-    }).catch((err: unknown) => {
-      // Aborts surface as AbortError-shaped throws; everything else is a
-      // real ingest failure. Swallow here so `removeSource`'s await
-      // never re-throws; ingestSource itself surfaces errors via
-      // onStatus({ kind: 'error', ... }) for the UI.
-      const name = err instanceof Error ? err.name : '';
-      if (name !== 'AbortError') {
-        console.warn(`[coordinator] ingest task for ${source.id} crashed`, err);
-      }
-    }).finally(() => {
-      // Drop the adapter reference so setFocus doesn't push hot-paths to a
-      // closed adapter. The SourceEntry itself may still exist (status='done').
-      const entry = sources.get(source.id);
-      if (entry) entry.adapter = undefined;
-    });
+    })
+      .catch((err: unknown) => {
+        // Aborts surface as AbortError-shaped throws; everything else is a
+        // real ingest failure. Swallow here so `removeSource`'s await
+        // never re-throws; ingestSource itself surfaces errors via
+        // onStatus({ kind: 'error', ... }) for the UI.
+        const name = err instanceof Error ? err.name : '';
+        if (name !== 'AbortError') {
+          console.warn(
+            `[coordinator] ingest task for ${source.id} crashed`,
+            err,
+          );
+        }
+      })
+      .finally(() => {
+        // Drop the adapter reference so setFocus doesn't push hot-paths to a
+        // closed adapter. The SourceEntry itself may still exist (status='done').
+        const entry = sources.get(source.id);
+        if (entry) entry.adapter = undefined;
+      });
     const entry = sources.get(source.id);
     if (entry) entry.ingest = ingestPromise;
   };
@@ -721,7 +734,10 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
    * that participate in parser-pool dispatch carry the field — stub
    * kinds are returned unchanged.
    */
-  const withParserId = (source: LogSource, parserId: string | undefined): LogSource => {
+  const withParserId = (
+    source: LogSource,
+    parserId: string | undefined,
+  ): LogSource => {
     switch (source.kind) {
       case 'file':
       case 'directory':
@@ -748,7 +764,8 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   ): Promise<void> => {
     const affected: LogSource[] = [];
     for (const entry of sources.values()) {
-      const sourceParser = 'parserId' in entry.source ? entry.source.parserId : undefined;
+      const sourceParser =
+        'parserId' in entry.source ? entry.source.parserId : undefined;
       if (sourceParser === affectedParserId) {
         affected.push(withParserId(entry.source, nextParserId));
       }
@@ -977,12 +994,12 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
             } catch (rollbackErr) {
               console.warn(
                 `[coordinator] addSource: rollback removeSource(${id}) failed; SQLite row will appear as an orphan after reload:`,
-                rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+                rollbackErr instanceof Error
+                  ? rollbackErr.message
+                  : rollbackErr,
               );
             }
-            throw err instanceof Error
-              ? err
-              : new Error(String(err));
+            throw err instanceof Error ? err : new Error(String(err));
           }
         }
       } catch (err) {
@@ -1072,11 +1089,9 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         const matches = await ensureFreeTextMatches(activeFilter, compiled);
         return matches.slice(from, to);
       }
-      const pointers = await deps.getIndexer().proxy.search(
-        activeFilter,
-        from,
-        to,
-      );
+      const pointers = await deps
+        .getIndexer()
+        .proxy.search(activeFilter, from, to);
       return resolvePointersToEntries(
         pointers,
         (id) => sources.get(id)?.source ?? null,
@@ -1136,9 +1151,10 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
     getFieldSchema: async (filter) => {
       await deps.getIndexer().opening;
       // `filter.sources === null` → caller wants every known source.
-      const sourceIds = filter.sources && filter.sources.length > 0
-        ? filter.sources
-        : [...sources.keys()];
+      const sourceIds =
+        filter.sources && filter.sources.length > 0
+          ? filter.sources
+          : [...sources.keys()];
       const dynamic = await deps.getIndexer().proxy.fieldMeta(sourceIds);
       // Built-ins are appended last — UI can re-sort by occurrences,
       // presenceRate, label, etc. without losing the @-set.
@@ -1398,13 +1414,22 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         // bulk path.
         removeAllSpool(),
       ]);
-      const backends = ['indexer', 'handleStore', 'customParserStore', 'opfs-spool'] as const;
+      const backends = [
+        'indexer',
+        'handleStore',
+        'customParserStore',
+        'opfs-spool',
+      ] as const;
       const failures: string[] = [];
       settled.forEach((result, i) => {
         if (result.status === 'rejected') {
           const reason = result.reason;
-          const message = reason instanceof Error ? reason.message : String(reason);
-          console.warn(`[coordinator] clearAll: ${backends[i]} failed:`, reason);
+          const message =
+            reason instanceof Error ? reason.message : String(reason);
+          console.warn(
+            `[coordinator] clearAll: ${backends[i]} failed:`,
+            reason,
+          );
           failures.push(`${backends[i]}: ${message}`);
         }
       });
@@ -1444,11 +1469,9 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       const chunks: string[] = [];
       let first = true;
       for (let from = 0; from < total; from += PAGE) {
-        const pointers = await deps.getIndexer().proxy.search(
-          filter,
-          from,
-          from + PAGE,
-        );
+        const pointers = await deps
+          .getIndexer()
+          .proxy.search(filter, from, from + PAGE);
         const resolved = await resolvePointersToEntries(
           pointers,
           (id) => sources.get(id)?.source ?? null,

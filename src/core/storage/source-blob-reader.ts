@@ -139,7 +139,7 @@ const resolveFileHandleByPath = async (
 ): Promise<FileSystemFileHandle> => {
   if (filePath === '') {
     throw new Error(
-      "FsHandleReader: empty filePath against a directory handle — caller should pass the relative path.",
+      'FsHandleReader: empty filePath against a directory handle — caller should pass the relative path.',
     );
   }
   const segments = filePath.split('/').filter((s) => s.length > 0);
@@ -289,7 +289,7 @@ export class OpfsArchiveSpoolReader implements SourceBlobReader {
     if (ranges.length === 0) return [];
     if (memberPath === '') {
       throw new Error(
-        "OpfsArchiveSpoolReader: empty memberPath — snapshot frames always carry a name.",
+        'OpfsArchiveSpoolReader: empty memberPath — snapshot frames always carry a name.',
       );
     }
     const fileName = flattenArchiveMemberName(memberPath);

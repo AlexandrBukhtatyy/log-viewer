@@ -71,7 +71,13 @@ describe('compatBadgeText', () => {
   it('renders nothing for shared', () => {
     expect(
       compatBadgeText(
-        { kind: 'shared', presentIn: 2, total: 2, presentSources: [], missingSources: [] },
+        {
+          kind: 'shared',
+          presentIn: 2,
+          total: 2,
+          presentSources: [],
+          missingSources: [],
+        },
         new Map(),
       ),
     ).toBeNull();

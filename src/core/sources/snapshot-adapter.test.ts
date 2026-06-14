@@ -101,13 +101,17 @@ describe('createSnapshotAdapter', () => {
     // Random non-archive bytes, name without zip/tar extension.
     const bytes = new Uint8Array([1, 2, 3, 4, 5]);
     const file = mkFile(bytes, 'mystery.bin');
-    await expect(collect(makeSource(file))).rejects.toThrow(/unsupported archive format/);
+    await expect(collect(makeSource(file))).rejects.toThrow(
+      /unsupported archive format/,
+    );
   });
 
   it('throws if archive has no readable text files', async () => {
     const zip = zipSync({ 'image.png': new Uint8Array([0, 1, 2]) });
     const file = mkFile(zip, 'binaries.zip');
-    await expect(collect(makeSource(file))).rejects.toThrow(/no readable text files/);
+    await expect(collect(makeSource(file))).rejects.toThrow(
+      /no readable text files/,
+    );
   });
 
   it('appends a trailing newline so adjacent files do not run together', async () => {
@@ -120,7 +124,14 @@ describe('createSnapshotAdapter', () => {
   });
 
   it('rejects non-snapshot sources at construction', () => {
-    const fakeSource = { kind: 'file', id: sid('s'), name: 'x', size: 0 } as unknown as LogSource;
-    expect(() => createSnapshotAdapter(fakeSource)).toThrow(/expected source.kind='snapshot'/);
+    const fakeSource = {
+      kind: 'file',
+      id: sid('s'),
+      name: 'x',
+      size: 0,
+    } as unknown as LogSource;
+    expect(() => createSnapshotAdapter(fakeSource)).toThrow(
+      /expected source.kind='snapshot'/,
+    );
   });
 });

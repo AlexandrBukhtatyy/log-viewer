@@ -109,7 +109,10 @@ interface IngestParams {
 
 - Новое состояние:
   ```ts
-  let currentFocus: { sources: Set<SourceId>; filePaths: Set<string> } = { sources: new Set(), filePaths: new Set() };
+  let currentFocus: { sources: Set<SourceId>; filePaths: Set<string> } = {
+    sources: new Set(),
+    filePaths: new Set(),
+  };
   ```
 - Реализовать `setFocus(input)`:
   - Обновить `currentFocus`.
@@ -142,6 +145,7 @@ const entries = await parserPool.withWorker(
 Текущая реализация: один `ReadableStream`, внутри которого `for await (const entry of walkDirectory(...))` — последовательное чтение алфавитно. Для preemption нужно отделить «план обхода» от «текущего чтения»:
 
 Новая модель:
+
 - На `open()` — собрать **полный список файлов** через `walkDirectory` сразу (это дёшево: только обход FS, без чтения содержимого). Получим `plan: FileTask[]` где `FileTask = { path, handle, byteOffset: 0, done: false }`.
 - Состояние в адаптере: `plan: FileTask[]`, `hotPaths: Set<string>`, `currentTask: FileTask | null`, `wakePreempt: () => void`.
 - Селектор следующего файла:
@@ -209,6 +213,7 @@ useEffect(() => {
 7. DevTools-проверка: `await api.listSources()` показывает рост `entriesIndexed` у горячего быстрее.
 
 Если поправляется юнит-тестами — добавить в `src/workers/coordinator/pool/parser-pool.test.ts` (создать) кейсы:
+
 - два hot-waiter'а на пуле из 2 → оба занимают слоты, но если приходит normal-waiter — последний hot ждёт пока освободится reserved-slot? Уточнить тестом семантику.
 - normal не запускается дальше hot если все слоты заняты hot — кроме случая, когда normal-waiter уже стоял первым.
 

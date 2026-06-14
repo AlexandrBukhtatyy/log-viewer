@@ -25,7 +25,8 @@ export const useFieldSchema = (): UseFieldSchema => {
   const filter = useStore(store, (s) => s.filter);
   const version = useStore(store, (s) => s.version);
 
-  const [descriptors, setDescriptors] = useState<ReadonlyArray<FieldDescriptor>>(INITIAL);
+  const [descriptors, setDescriptors] =
+    useState<ReadonlyArray<FieldDescriptor>>(INITIAL);
   const tokenRef = useRef(0);
 
   useEffect(() => {

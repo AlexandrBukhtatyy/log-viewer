@@ -21,10 +21,13 @@ const modules = import.meta.glob<RawTemplate>('/docs/parsers/*.json', {
   eager: true,
 });
 
-export const PARSER_TEMPLATES: ReadonlyArray<CustomParserDef> = Object.entries(modules)
+export const PARSER_TEMPLATES: ReadonlyArray<CustomParserDef> = Object.entries(
+  modules,
+)
   .map(([path, mod]) => {
-    const def = (mod as unknown as CustomParserDef & { default?: CustomParserDef })
-      .default ?? (mod as unknown as CustomParserDef);
+    const def =
+      (mod as unknown as CustomParserDef & { default?: CustomParserDef })
+        .default ?? (mod as unknown as CustomParserDef);
     if (!def || typeof def !== 'object' || typeof def.id !== 'string') {
       console.warn(`[parser-templates] ignoring malformed template at ${path}`);
       return null;

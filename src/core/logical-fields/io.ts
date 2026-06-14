@@ -34,7 +34,10 @@ const parseExtractor = (raw: unknown): LogicalExtractor | string => {
     return 'extractor must be an object';
   const obj = raw as Record<string, unknown>;
   const t = obj.type;
-  if (typeof t !== 'string' || !EXTRACTOR_TYPES.has(t as LogicalExtractor['type'])) {
+  if (
+    typeof t !== 'string' ||
+    !EXTRACTOR_TYPES.has(t as LogicalExtractor['type'])
+  ) {
     return `unknown extractor type: ${String(t)}`;
   }
   if (t === 'field') {
@@ -89,8 +92,7 @@ const parseField = (raw: unknown): LogicalField | string => {
   if (type !== 'string' && type !== 'number' && type !== 'bool')
     return `invalid type for ${id}: ${String(type)}`;
   const extractorsRaw = obj.extractors;
-  if (!Array.isArray(extractorsRaw))
-    return `${id}.extractors must be an array`;
+  if (!Array.isArray(extractorsRaw)) return `${id}.extractors must be an array`;
   const extractors: LogicalExtractor[] = [];
   for (let i = 0; i < extractorsRaw.length; i++) {
     const parsed = parseExtractor(extractorsRaw[i]);
@@ -101,7 +103,8 @@ const parseField = (raw: unknown): LogicalField | string => {
     id,
     type,
     label,
-    description: typeof obj.description === 'string' ? obj.description : undefined,
+    description:
+      typeof obj.description === 'string' ? obj.description : undefined,
     extractors,
     origin: 'user',
   };
@@ -128,14 +131,12 @@ export const parseLogicalFieldsConfig = (
   if (!Array.isArray(activeIds) || activeIds.some((x) => typeof x !== 'string'))
     return 'activeIds must be an array of strings.';
   const customFieldsRaw = obj.customFields ?? [];
-  if (!Array.isArray(customFieldsRaw))
-    return 'customFields must be an array.';
+  if (!Array.isArray(customFieldsRaw)) return 'customFields must be an array.';
   const customFields: LogicalField[] = [];
   const seenIds = new Set<string>();
   for (let i = 0; i < customFieldsRaw.length; i++) {
     const parsed = parseField(customFieldsRaw[i]);
-    if (typeof parsed === 'string')
-      return `customFields[${i}]: ${parsed}`;
+    if (typeof parsed === 'string') return `customFields[${i}]: ${parsed}`;
     if (seenIds.has(parsed.id))
       return `customFields[${i}]: duplicate id ${parsed.id}`;
     seenIds.add(parsed.id);

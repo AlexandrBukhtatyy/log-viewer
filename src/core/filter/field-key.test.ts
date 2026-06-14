@@ -15,16 +15,19 @@ import {
 
 describe('fieldKeyToSql', () => {
   it.each([
-    ['@ts',         'entry.ts',         false],
-    ['@level',      'entry.level',      false],
-    ['@seq',        'entry.seq',        false],
-    ['@file',       'entry.file_path',  false],
+    ['@ts', 'entry.ts', false],
+    ['@level', 'entry.level', false],
+    ['@seq', 'entry.seq', false],
+    ['@file', 'entry.file_path', false],
     ['@byte_start', 'entry.byte_start', false],
-    ['@byte_end',   'entry.byte_end',   false],
-    ['@source.id',  'entry.source_id',  false],
-  ] as const)('built-in %s → entry column (no source JOIN)', (key, sql, joinFlag) => {
-    expect(fieldKeyToSql(key)).toEqual({ sql, needsSourceJoin: joinFlag });
-  });
+    ['@byte_end', 'entry.byte_end', false],
+    ['@source.id', 'entry.source_id', false],
+  ] as const)(
+    'built-in %s → entry column (no source JOIN)',
+    (key, sql, joinFlag) => {
+      expect(fieldKeyToSql(key)).toEqual({ sql, needsSourceJoin: joinFlag });
+    },
+  );
 
   it.each([
     ['@source.name', 'source.name'],
@@ -109,20 +112,24 @@ describe('getEntryFieldValue', () => {
   };
 
   it.each([
-    ['@ts',         1234],
-    ['@level',      'warn'],
-    ['@seq',        7],
-    ['@file',       'a.log'],
+    ['@ts', 1234],
+    ['@level', 'warn'],
+    ['@seq', 7],
+    ['@file', 'a.log'],
     ['@byte_start', 100],
-    ['@byte_end',   150],
-    ['@source.id',  's1'],
+    ['@byte_end', 150],
+    ['@source.id', 's1'],
   ] as const)('built-in %s pulls from entry', (key, expected) => {
     expect(getEntryFieldValue(entry, key)).toBe(expected);
   });
 
   it('@source.name / @source.kind use the SourceRecord lookup', () => {
-    expect(getEntryFieldValue(entry, '@source.name', sourceRecord)).toBe('a.log');
-    expect(getEntryFieldValue(entry, '@source.kind', sourceRecord)).toBe('text');
+    expect(getEntryFieldValue(entry, '@source.name', sourceRecord)).toBe(
+      'a.log',
+    );
+    expect(getEntryFieldValue(entry, '@source.kind', sourceRecord)).toBe(
+      'text',
+    );
   });
 
   it('@source.* return null when no record is supplied', () => {
@@ -174,9 +181,10 @@ describe('fieldKeyToSql / ~-namespace (logical fields)', () => {
   });
 
   it('returns SQL NULL when the ~id is not active', () => {
-    expect(
-      fieldKeyToSql('~trace_id', { activeLogicalFields: [] }),
-    ).toEqual({ sql: 'NULL', needsSourceJoin: false });
+    expect(fieldKeyToSql('~trace_id', { activeLogicalFields: [] })).toEqual({
+      sql: 'NULL',
+      needsSourceJoin: false,
+    });
   });
 });
 

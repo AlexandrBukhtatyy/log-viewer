@@ -51,9 +51,13 @@ export const LvTimeline = ({
   const rangeFrom = range?.from ?? null;
   const rangeTo = range?.to ?? null;
   const selStart =
-    rangeFrom !== null && max !== min ? ((rangeFrom - min) / (max - min)) * w : null;
+    rangeFrom !== null && max !== min
+      ? ((rangeFrom - min) / (max - min)) * w
+      : null;
   const selEnd =
-    rangeTo !== null && max !== min ? ((rangeTo - min) / (max - min)) * w : null;
+    rangeTo !== null && max !== min
+      ? ((rangeTo - min) / (max - min)) * w
+      : null;
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!ref.current || max === min) return;
@@ -97,7 +101,11 @@ export const LvTimeline = ({
 
   return (
     <div className="lv-timeline" style={{ height }}>
-      <div className="lv-timeline-inner" ref={ref} onPointerDown={onPointerDown}>
+      <div
+        className="lv-timeline-inner"
+        ref={ref}
+        onPointerDown={onPointerDown}
+      >
         <svg
           className="lv-timeline-grid"
           viewBox={`0 0 ${w} ${height}`}
@@ -120,7 +128,11 @@ export const LvTimeline = ({
             <div
               key={i}
               className="lv-tl-col"
-              style={{ left: i * bucketW, width: Math.max(1, bucketW - 1), height: '100%' }}
+              style={{
+                left: i * bucketW,
+                width: Math.max(1, bucketW - 1),
+                height: '100%',
+              }}
             >
               {SEG_KEYS.map((k) => (
                 <div

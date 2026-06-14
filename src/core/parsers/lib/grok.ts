@@ -28,7 +28,9 @@ export interface GrokBinding {
 
 const TOKEN_RE = /%\{([A-Z][A-Z0-9_]*)(?::([^:}]+))?(?::([^}]+))?\}/g;
 
-const transformForGrokType = (gtype: string | undefined): TransformId | null => {
+const transformForGrokType = (
+  gtype: string | undefined,
+): TransformId | null => {
   if (gtype === undefined) return null;
   switch (gtype) {
     case 'int':
@@ -106,23 +108,24 @@ export const compileGrok = (
   // First pass: build the regex source by walking the outer-most
   // tokens. Anonymous tokens get `(?:...)`; named ones get `(...)`
   // and a binding entry.
-  const compiled = pattern.replace(TOKEN_RE, (_m, name: string, bind?: string, gtype?: string) => {
-    const body = customTokens[name] ?? BUILTIN_GROK_PATTERNS[name];
-    if (body === undefined) {
-      throw new Error(`grok: unknown token '${name}'`);
-    }
-    const expanded = expand(body, customTokens, new Set([name]));
-    if (bind === undefined) {
-      return `(?:${expanded})`;
-    }
-    groupIndex += 1;
-    const transform =
-      transformForGrokType(gtype) ??
-      transformForToken(name) ??
-      'as-is';
-    bindings.push({ name: bind, group: groupIndex, transform });
-    return `(${expanded})`;
-  });
+  const compiled = pattern.replace(
+    TOKEN_RE,
+    (_m, name: string, bind?: string, gtype?: string) => {
+      const body = customTokens[name] ?? BUILTIN_GROK_PATTERNS[name];
+      if (body === undefined) {
+        throw new Error(`grok: unknown token '${name}'`);
+      }
+      const expanded = expand(body, customTokens, new Set([name]));
+      if (bind === undefined) {
+        return `(?:${expanded})`;
+      }
+      groupIndex += 1;
+      const transform =
+        transformForGrokType(gtype) ?? transformForToken(name) ?? 'as-is';
+      bindings.push({ name: bind, group: groupIndex, transform });
+      return `(${expanded})`;
+    },
+  );
 
   let regex: RegExp;
   try {

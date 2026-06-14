@@ -32,8 +32,20 @@ export const LvTitlebar = ({
     </div>
     <button type="button" className="lv-tb-omni" onClick={onOpenCmd}>
       <svg viewBox="0 0 14 14" width="12" height="12">
-        <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.2" />
-        <path d="M9 9 L12 12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <circle
+          cx="6"
+          cy="6"
+          r="4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M9 9 L12 12"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
       </svg>
       <span>Search files, lines, or run a command…</span>
       <span className="lv-kbd">⌘K</span>

@@ -6,7 +6,10 @@ import type {
   LogSourceAdapter,
 } from '../../../core/sources/source-adapter.ts';
 import type { LogEntry } from '../../../core/types/log-entry.ts';
-import type { LogSource, SourceStatus } from '../../../core/types/log-source.ts';
+import type {
+  LogSource,
+  SourceStatus,
+} from '../../../core/types/log-source.ts';
 import type { ParserPool, ParserPriority } from '../pool/parser-pool.ts';
 
 export interface IngestParams {
@@ -24,9 +27,10 @@ export interface IngestParams {
    * `@parser.id` to the UI and trigger the format-specific column
    * preset in [LvAppContainer](../../../app/containers/LvAppContainer.tsx).
    */
-  readonly onParserDetected?: (
-    info: { readonly parserId: string; readonly defaultColumns: ReadonlyArray<string> },
-  ) => void;
+  readonly onParserDetected?: (info: {
+    readonly parserId: string;
+    readonly defaultColumns: ReadonlyArray<string>;
+  }) => void;
   /**
    * Priority hint for the parser-pool slot that handles each batch.
    * Called per-batch with the relative `filePath` (empty string for

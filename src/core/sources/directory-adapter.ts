@@ -63,9 +63,7 @@ export const createDirectoryAdapter: LogSourceAdapterFactory = (source) => {
   const maybePreempt = (): void => {
     if (!currentTask) return;
     if (hotPaths.has(currentTask.path)) return;
-    const anyHotPending = plan.some(
-      (t) => !t.done && hotPaths.has(t.path),
-    );
+    const anyHotPending = plan.some((t) => !t.done && hotPaths.has(t.path));
     if (anyHotPending) currentPreempt?.abort();
   };
 
@@ -178,7 +176,10 @@ export const createDirectoryAdapter: LogSourceAdapterFactory = (source) => {
               currentPreempt = preempt;
               const onLocalAbort = () => preempt.abort();
               if (localSignal.aborted) preempt.abort();
-              else localSignal.addEventListener('abort', onLocalAbort, { once: true });
+              else
+                localSignal.addEventListener('abort', onLocalAbort, {
+                  once: true,
+                });
               try {
                 await readTask(next, preempt.signal, controller);
               } finally {

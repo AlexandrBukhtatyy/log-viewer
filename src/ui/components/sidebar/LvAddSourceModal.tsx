@@ -94,7 +94,8 @@ export const LvAddSourceModal = ({
   }
 
   const trimmedName = name.trim();
-  const effectiveName = trimmedName.length > 0 ? trimmedName : (handle?.name ?? '');
+  const effectiveName =
+    trimmedName.length > 0 ? trimmedName : (handle?.name ?? '');
   const nameTaken = effectiveName.length > 0 && taken.has(effectiveName);
 
   useEffect(() => {
@@ -152,7 +153,12 @@ export const LvAddSourceModal = ({
       >
         <div className="lv-modal-hd">
           <span>Add log source</span>
-          <button type="button" className="lv-modal-x" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="lv-modal-x"
+            onClick={onClose}
+            aria-label="Close"
+          >
             ✕
           </button>
         </div>
@@ -249,7 +255,11 @@ export const LvAddSourceModal = ({
           </LvFormField>
         </div>
         <div className="lv-modal-ft lv-modal-ft-actions">
-          <button type="button" className="lv-btn lv-btn-secondary" onClick={onClose}>
+          <button
+            type="button"
+            className="lv-btn lv-btn-secondary"
+            onClick={onClose}
+          >
             Cancel
           </button>
           <button

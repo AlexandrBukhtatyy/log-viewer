@@ -76,7 +76,11 @@ export const LvTweaksPanel = ({
 
   if (!isOpen) return null;
   return (
-    <div ref={dragRef} className="twk-panel" style={{ right: offset.x, bottom: offset.y }}>
+    <div
+      ref={dragRef}
+      className="twk-panel"
+      style={{ right: offset.x, bottom: offset.y }}
+    >
       <div className="twk-hd" onMouseDown={onDragStart}>
         <b>{title}</b>
         <button

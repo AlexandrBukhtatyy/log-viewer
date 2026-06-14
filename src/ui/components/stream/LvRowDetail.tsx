@@ -198,7 +198,9 @@ export const LvRowDetail = ({
                     type="button"
                     className="lv-det-add"
                     title={`Filter where ${k} = ${text}`}
-                    onClick={() => onAddFieldFilter({ key: k, op: '=', value: text })}
+                    onClick={() =>
+                      onAddFieldFilter({ key: k, op: '=', value: text })
+                    }
                   >
                     ＋
                   </button>
@@ -216,7 +218,9 @@ export const LvRowDetail = ({
                   type="button"
                   className="lv-det-add"
                   title={`Filter where ${k} = ${v}`}
-                  onClick={() => onAddFieldFilter({ key: k, op: '=', value: v })}
+                  onClick={() =>
+                    onAddFieldFilter({ key: k, op: '=', value: v })
+                  }
                 >
                   ＋
                 </button>
@@ -230,7 +234,9 @@ export const LvRowDetail = ({
                   type="button"
                   className="lv-det-add"
                   title={`Filter where ${k} = ${v}`}
-                  onClick={() => onAddFieldFilter({ key: k, op: '=', value: v })}
+                  onClick={() =>
+                    onAddFieldFilter({ key: k, op: '=', value: v })
+                  }
                 >
                   ＋
                 </button>
@@ -245,10 +251,16 @@ export const LvRowDetail = ({
                 language: view === 'pretty' ? 'json' : 'lv-log',
                 theme: theme === 'light' ? 'lv-light' : 'lv-dark',
                 wordWrap: view === 'raw',
-                height: Math.min(260, Math.max(80, body.split('\n').length * 18 + 14)),
+                height: Math.min(
+                  260,
+                  Math.max(80, body.split('\n').length * 18 + 14),
+                ),
               })
             ) : (
-              <pre className="lv-det-fallback-pre" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              <pre
+                className="lv-det-fallback-pre"
+                style={{ margin: 0, whiteSpace: 'pre-wrap' }}
+              >
                 {body}
               </pre>
             )}

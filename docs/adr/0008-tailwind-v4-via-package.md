@@ -36,15 +36,17 @@ pnpm add -D tailwindcss @tailwindcss/vite
 ### vite.config.ts
 
 ```ts
-import tailwindcss from '@tailwindcss/vite'
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    VitePWA({ /* ... */ }),
+    VitePWA({
+      /* ... */
+    }),
   ],
-})
+});
 ```
 
 ### Точка входа CSS
@@ -52,7 +54,7 @@ export default defineConfig({
 `src/ui/styles/lv.css` — первой строкой:
 
 ```css
-@import "tailwindcss";
+@import 'tailwindcss';
 ```
 
 В Tailwind v4 content-detection автоматический: сканируются `.ts/.tsx/.html` без явного `content`-конфига.

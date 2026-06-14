@@ -48,8 +48,10 @@ export const useSelectedEntry = (): UseSelectedEntry => {
   // doesn't match the current selectedId.
   const resolved = useMemo<LogEntry | null>(() => {
     if (selectedId === null) return null;
-    if (cachedEntry !== null && cachedEntry.id === selectedId) return cachedEntry;
-    if (asyncResolved !== null && asyncResolved.id === selectedId) return asyncResolved;
+    if (cachedEntry !== null && cachedEntry.id === selectedId)
+      return cachedEntry;
+    if (asyncResolved !== null && asyncResolved.id === selectedId)
+      return asyncResolved;
     return null;
   }, [selectedId, cachedEntry, asyncResolved]);
 

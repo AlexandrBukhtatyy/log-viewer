@@ -7,7 +7,12 @@ export interface LvTweakRowProps {
   readonly children?: ReactNode;
 }
 
-export const LvTweakRow = ({ label, value, children, inline = false }: LvTweakRowProps) => (
+export const LvTweakRow = ({
+  label,
+  value,
+  children,
+  inline = false,
+}: LvTweakRowProps) => (
   <div className={inline ? 'twk-row twk-row-h' : 'twk-row'}>
     <div className="twk-lbl">
       <span>{label}</span>

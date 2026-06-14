@@ -25,8 +25,18 @@ const APACHE_TIME_RE =
   /^(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2}) ([+-]\d{4})$/;
 
 const MONTHS: Readonly<Record<string, number>> = {
-  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11,
 };
 
 /**
@@ -54,15 +64,17 @@ export const parseApacheTime = (raw: string): number | null => {
   return Number.isFinite(utc) ? utc - tzMin * 60_000 : null;
 };
 
-const SYSLOG_TIME_RE =
-  /^(\w{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})$/;
+const SYSLOG_TIME_RE = /^(\w{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})$/;
 
 /**
  * Parse RFC 3164 / BSD-syslog `Mon DD HH:MM:SS` (no year, no tz).
  * `nowYear` is used to pick the year — if the parsed date would be in
  * the future, we subtract one year (typical log-rotation case).
  */
-export const parseSyslogTime = (raw: string, nowMs: number = Date.now()): number | null => {
+export const parseSyslogTime = (
+  raw: string,
+  nowMs: number = Date.now(),
+): number | null => {
   const m = SYSLOG_TIME_RE.exec(raw.trim());
   if (m === null) return null;
   const [, mon, dd, hh, mm, ss] = m;
@@ -70,7 +82,14 @@ export const parseSyslogTime = (raw: string, nowMs: number = Date.now()): number
   if (month === undefined) return null;
   const now = new Date(nowMs);
   const year = now.getUTCFullYear();
-  const t = Date.UTC(year, month, Number(dd), Number(hh), Number(mm), Number(ss));
+  const t = Date.UTC(
+    year,
+    month,
+    Number(dd),
+    Number(hh),
+    Number(mm),
+    Number(ss),
+  );
   if (!Number.isFinite(t)) return null;
   // Future date → assume previous year (log line written in December,
   // viewed in January).

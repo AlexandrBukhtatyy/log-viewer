@@ -12,19 +12,19 @@
 
 ## Решения
 
-| Что | Решение | Почему |
-|---|---|---|
-| Имя пакета | `@log-viewer/app` | `log-viewer` занят; личный scope даёт зарезервированный namespace без org. |
-| Имя бинаря | `log-viewer` (`npx @log-viewer/app`) | Совпадает с интуицией; коллизий с существующим `log-viewer@1.x` (его bin = `tail-logs`) нет. |
-| HTTP-сервер | Встроенный `node:http`, без зависимостей | Минимум supply chain для закрытого контура. `sirv`/`fastify-static` подтягивают `mrmime`/`totalist` — лишнее. |
-| Сборка | Один `vite.config.ts` с env-флагом `BUILD_TARGET=onprem` | Один источник правды; alt — два конфига — даёт дрейф плагинов. |
-| Base path | `base: '/'` для on-prem (mount только в root) | VitePWA генерирует абсолютные URL в precache manifest и worker URLs; `'./'` ломает SW и `start_url`/`scope`. `--base-path` отложен до явного запроса. |
-| Содержимое | Только app, без лендинга | Решение пользователя. В on-prem лендинг бесполезен. |
-| Service Worker | Включён по умолчанию, флаг `--no-sw` для отключения | Дефолт даёт offline + instant load; `--no-sw` нужен для okружений без TLS, где SW не зарегистрируется. |
-| HTTP-headers | `X-Content-Type-Options: nosniff` + правильные MIME (особенно `.wasm`) | COOP/COEP **не нужны** — sqlite-wasm уже использует `OpfsAsyncProxy` через MessageChannel (см. `sqlite3-opfs-async-proxy-*.js` в текущем dist), SharedArrayBuffer не требуется. |
-| Registry | Публичный npmjs.org с `--provenance` | Закрытый контур ставит через своё зеркало. |
-| Docker | Только `Dockerfile` в репо, без push в GHCR | Решение пользователя. |
-| GitHub Pages билд | Без изменений (default `BUILD_TARGET=pages`) | `deploy.yml` не трогаем. |
+| Что               | Решение                                                                | Почему                                                                                                                                                                          |
+| ----------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Имя пакета        | `@log-viewer/app`                                                      | `log-viewer` занят; личный scope даёт зарезервированный namespace без org.                                                                                                      |
+| Имя бинаря        | `log-viewer` (`npx @log-viewer/app`)                                   | Совпадает с интуицией; коллизий с существующим `log-viewer@1.x` (его bin = `tail-logs`) нет.                                                                                    |
+| HTTP-сервер       | Встроенный `node:http`, без зависимостей                               | Минимум supply chain для закрытого контура. `sirv`/`fastify-static` подтягивают `mrmime`/`totalist` — лишнее.                                                                   |
+| Сборка            | Один `vite.config.ts` с env-флагом `BUILD_TARGET=onprem`               | Один источник правды; alt — два конфига — даёт дрейф плагинов.                                                                                                                  |
+| Base path         | `base: '/'` для on-prem (mount только в root)                          | VitePWA генерирует абсолютные URL в precache manifest и worker URLs; `'./'` ломает SW и `start_url`/`scope`. `--base-path` отложен до явного запроса.                           |
+| Содержимое        | Только app, без лендинга                                               | Решение пользователя. В on-prem лендинг бесполезен.                                                                                                                             |
+| Service Worker    | Включён по умолчанию, флаг `--no-sw` для отключения                    | Дефолт даёт offline + instant load; `--no-sw` нужен для okружений без TLS, где SW не зарегистрируется.                                                                          |
+| HTTP-headers      | `X-Content-Type-Options: nosniff` + правильные MIME (особенно `.wasm`) | COOP/COEP **не нужны** — sqlite-wasm уже использует `OpfsAsyncProxy` через MessageChannel (см. `sqlite3-opfs-async-proxy-*.js` в текущем dist), SharedArrayBuffer не требуется. |
+| Registry          | Публичный npmjs.org с `--provenance`                                   | Закрытый контур ставит через своё зеркало.                                                                                                                                      |
+| Docker            | Только `Dockerfile` в репо, без push в GHCR                            | Решение пользователя.                                                                                                                                                           |
+| GitHub Pages билд | Без изменений (default `BUILD_TARGET=pages`)                           | `deploy.yml` не трогаем.                                                                                                                                                        |
 
 ## Файлы
 
@@ -77,8 +77,8 @@ workbox: {
   "publishConfig": { "access": "public", "provenance": true },
   "scripts": {
     // ...
-    "build:onprem": "BUILD_TARGET=onprem vite build"
-  }
+    "build:onprem": "BUILD_TARGET=onprem vite build",
+  },
 }
 ```
 
@@ -87,6 +87,7 @@ workbox: {
 ### Создаём
 
 **`bin/cli.mjs`** — встроенный `node:http`-сервер с:
+
 - опциями `--port`/`PORT`, `--host`/`HOST`, `--no-sw`, `--healthcheck-path`/`HEALTHCHECK_PATH`, `--quiet`;
 - MIME-картой с `.wasm → application/wasm` и `.webmanifest → application/manifest+json`;
 - `Cache-Control: immutable` для `assets/*` и `no-cache` для `index.html`/`sw.js`/`manifest.webmanifest`;
@@ -131,6 +132,7 @@ CMD []
 ```
 
 Оба сценария установки:
+
 - из registry (с возможностью указать зеркало): `docker build --build-arg PKG_VERSION=0.2.0 --build-arg NPM_REGISTRY=https://nexus.internal/repository/npm-proxy/ .`
 - полный offline через tarball: `pnpm pack` → `docker build --build-arg PKG_TARBALL=./log-viewer-app-0.2.0.tgz .`
 

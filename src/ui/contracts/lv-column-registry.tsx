@@ -54,7 +54,8 @@ const basename = (path: string | undefined | null): string => {
 
 const serviceFor = (entry: LogEntry, fileMeta: LvFileNode | null): string => {
   const fromFields = (entry.fields as Record<string, unknown>).service;
-  if (typeof fromFields === 'string' && fromFields.length > 0) return fromFields;
+  if (typeof fromFields === 'string' && fromFields.length > 0)
+    return fromFields;
   return fileMeta?.service ?? '—';
 };
 

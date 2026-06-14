@@ -1,4 +1,8 @@
-import type { Database, PreparedStatement, SqlValue } from '@sqlite.org/sqlite-wasm';
+import type {
+  Database,
+  PreparedStatement,
+  SqlValue,
+} from '@sqlite.org/sqlite-wasm';
 import {
   buildClause,
   orderByForFilter,
@@ -29,7 +33,11 @@ import type {
   LogicalField,
   SourceId,
 } from '../../core/types/index.ts';
-import { collectLevelCounts, groupFieldExpr, levelBreakdownSql } from './aggregate.ts';
+import {
+  collectLevelCounts,
+  groupFieldExpr,
+  levelBreakdownSql,
+} from './aggregate.ts';
 import { extractorToSqlOrNull } from '../../core/logical-fields/sql.ts';
 import { openDb } from './db/open-db.ts';
 import {
@@ -50,7 +58,6 @@ interface State {
   upsertMinuteStmt: PreparedStatement;
   upsertFieldMetaStmt: PreparedStatement;
 }
-
 
 interface MinuteBucket {
   readonly sourceId: SourceId;
@@ -100,8 +107,9 @@ let state: State | null = null;
  * to SQL `NULL`, matching the read-path resolver behaviour.
  */
 let activeLogicalFields: ReadonlyArray<LogicalField> = [];
-const logicalCtx = (): { activeLogicalFields: ReadonlyArray<LogicalField> } =>
-  ({ activeLogicalFields });
+const logicalCtx = (): {
+  activeLogicalFields: ReadonlyArray<LogicalField>;
+} => ({ activeLogicalFields });
 
 const requireState = (): State => {
   if (state === null) {
@@ -143,8 +151,7 @@ const serializeSourceMeta = (source: LogSource): string => {
   const withParser = (
     payload: Record<string, unknown>,
     parserId?: string,
-  ): Record<string, unknown> =>
-    parserId ? { ...payload, parserId } : payload;
+  ): Record<string, unknown> => (parserId ? { ...payload, parserId } : payload);
   switch (source.kind) {
     case 'file':
       return JSON.stringify(withParser({ size: source.size }, source.parserId));
@@ -222,11 +229,17 @@ const rowToIndexedSource = (
   entryCount: Number(row.entry_count ?? 0),
 });
 
-const parseFields = (raw: SqlValue | null | undefined): Readonly<Record<string, unknown>> => {
+const parseFields = (
+  raw: SqlValue | null | undefined,
+): Readonly<Record<string, unknown>> => {
   if (typeof raw !== 'string' || raw === '') return {};
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      !Array.isArray(parsed)
+    ) {
       return parsed as Record<string, unknown>;
     }
   } catch {
@@ -364,7 +377,13 @@ export const indexerApi: IndexerApi = {
           meta_json  = excluded.meta_json,
           indexed_at = excluded.indexed_at
       `,
-      bind: [source.id, source.kind, source.name, serializeSourceMeta(source), Date.now()],
+      bind: [
+        source.id,
+        source.kind,
+        source.name,
+        serializeSourceMeta(source),
+        Date.now(),
+      ],
     });
   },
 
@@ -480,14 +499,21 @@ export const indexerApi: IndexerApi = {
       }
       const existingBySidKey = new Map<
         string,
-        { type: FieldType; occurrences: number; totalSeen: number; topValuesJson: string | null }
+        {
+          type: FieldType;
+          occurrences: number;
+          totalSeen: number;
+          topValuesJson: string | null;
+        }
       >();
       // Chunk pair lookups to stay under SQLITE_MAX_VARIABLE_NUMBER
       // (1000 pairs × 2 params = 2000, comfortably below the 32k cap).
       const PAIRS_PER_LOOKUP = 1000;
       for (let i = 0; i < allPairs.length; i += PAIRS_PER_LOOKUP) {
         const slice = allPairs.slice(i, i + PAIRS_PER_LOOKUP);
-        const conds = slice.map(() => '(source_id = ? AND key = ?)').join(' OR ');
+        const conds = slice
+          .map(() => '(source_id = ? AND key = ?)')
+          .join(' OR ');
         const params: SqlValue[] = [];
         for (const p of slice) {
           params.push(p.sourceId);
@@ -565,7 +591,11 @@ export const indexerApi: IndexerApi = {
   count: async (filter) => {
     const { db } = requireState();
     const { joinSql, whereSql, params } = buildClause(filter, logicalCtx());
-    const v = runScalar(db, `SELECT COUNT(*) FROM entry ${joinSql} ${whereSql}`, params);
+    const v = runScalar(
+      db,
+      `SELECT COUNT(*) FROM entry ${joinSql} ${whereSql}`,
+      params,
+    );
     return typeof v === 'number' ? v : Number(v ?? 0);
   },
 
@@ -579,14 +609,24 @@ export const indexerApi: IndexerApi = {
     return rows.length === 0 ? null : rowToEntry(rows[0]!);
   },
 
-  groupCounts: async (filter, field, limit): Promise<ReadonlyArray<GroupBucket>> => {
+  groupCounts: async (
+    filter,
+    field,
+    limit,
+  ): Promise<ReadonlyArray<GroupBucket>> => {
     const { db } = requireState();
-    const { joinSql: filterJoin, whereSql, params } = buildClause(filter, logicalCtx());
-    const { sql: expr, needsSourceJoin: groupNeedsJoin } = groupFieldExpr(field, logicalCtx());
+    const {
+      joinSql: filterJoin,
+      whereSql,
+      params,
+    } = buildClause(filter, logicalCtx());
+    const { sql: expr, needsSourceJoin: groupNeedsJoin } = groupFieldExpr(
+      field,
+      logicalCtx(),
+    );
     // SOURCE_JOIN_SQL is the only JOIN today; merge to avoid duplicating it.
-    const joinSql = (filterJoin === SOURCE_JOIN_SQL || groupNeedsJoin)
-      ? SOURCE_JOIN_SQL
-      : '';
+    const joinSql =
+      filterJoin === SOURCE_JOIN_SQL || groupNeedsJoin ? SOURCE_JOIN_SQL : '';
     const cap = Math.max(1, Math.min(10000, limit ?? 1000));
     const lvl = levelBreakdownSql();
     const sql =
@@ -623,7 +663,10 @@ export const indexerApi: IndexerApi = {
     const buckets = Math.max(1, Math.min(1000, Math.floor(bucketCount)));
     const { joinSql, whereSql, params } = buildClause(filter, logicalCtx());
 
-    const tsWhere = whereSql === '' ? 'WHERE entry.ts IS NOT NULL' : `${whereSql} AND entry.ts IS NOT NULL`;
+    const tsWhere =
+      whereSql === ''
+        ? 'WHERE entry.ts IS NOT NULL'
+        : `${whereSql} AND entry.ts IS NOT NULL`;
 
     const tr = filter.timeRange;
     let from: number | null = tr ? tr.from : null;
@@ -640,7 +683,10 @@ export const indexerApi: IndexerApi = {
       if (to === null) to = hi;
     }
     if (from === null || to === null || to <= from) {
-      return { buckets: [], range: from !== null && to !== null ? { from, to } : null };
+      return {
+        buckets: [],
+        range: from !== null && to !== null ? { from, to } : null,
+      };
     }
 
     const span = to - from;
@@ -703,14 +749,16 @@ export const indexerApi: IndexerApi = {
       sourceIds as ReadonlyArray<SqlValue>,
     );
     return aggregateFieldDescriptors(
-      rows.map((r): FieldMetaRow => ({
-        source_id: String(r.source_id ?? ''),
-        key: String(r.key ?? ''),
-        type: String(r.type ?? ''),
-        occurrences: r.occurrences as number | null,
-        total_seen: r.total_seen as number | null,
-        top_values_json: r.top_values_json as string | null,
-      })),
+      rows.map(
+        (r): FieldMetaRow => ({
+          source_id: String(r.source_id ?? ''),
+          key: String(r.key ?? ''),
+          type: String(r.type ?? ''),
+          occurrences: r.occurrences as number | null,
+          total_seen: r.total_seen as number | null,
+          top_values_json: r.top_values_json as string | null,
+        }),
+      ),
     );
   },
 
@@ -722,8 +770,7 @@ export const indexerApi: IndexerApi = {
       filter.sortBy !== undefined && sortByNeedsSourceJoin(filter.sortBy, ctx);
     const effectiveJoin =
       sortNeedsJoin && joinSql.length === 0 ? SOURCE_JOIN_SQL : joinSql;
-    const sql =
-      `SELECT ${ENTRY_COLS_SELECT} FROM entry ${effectiveJoin} ${whereSql} ${orderByForFilter(filter, ctx)}`;
+    const sql = `SELECT ${ENTRY_COLS_SELECT} FROM entry ${effectiveJoin} ${whereSql} ${orderByForFilter(filter, ctx)}`;
     const rows = runRows(db, sql, params);
     const entries = rows.map(rowToEntry);
     return format === 'csv' ? buildCsv(entries) : buildJsonl(entries);
@@ -763,20 +810,24 @@ export const indexerApi: IndexerApi = {
     });
 
     let regexExtractorsSkipped = 0;
-    for (const ex of field.extractors) if (ex.type === 'regex') regexExtractorsSkipped++;
+    for (const ex of field.extractors)
+      if (ex.type === 'regex') regexExtractorsSkipped++;
 
     const sources: LogicalFieldCoverageSource[] = [];
     const sourceIds = [...totals.keys()].sort();
     for (const sid of sourceIds) {
       const total = totals.get(sid) ?? 0;
-      const matched = fieldExtractors.length === 0
-        ? 0
-        : (runScalar(
-            db,
-            `SELECT COUNT(*) FROM entry WHERE source_id = ? AND COALESCE(${fieldExtractors.map((e) => e.sql).join(', ')}) IS NOT NULL`,
-            [sid],
-          ) as number | bigint | null) ?? 0;
-      const extractorHits: Array<number | null> = field.extractors.map(() => null);
+      const matched =
+        fieldExtractors.length === 0
+          ? 0
+          : ((runScalar(
+              db,
+              `SELECT COUNT(*) FROM entry WHERE source_id = ? AND COALESCE(${fieldExtractors.map((e) => e.sql).join(', ')}) IS NOT NULL`,
+              [sid],
+            ) as number | bigint | null) ?? 0);
+      const extractorHits: Array<number | null> = field.extractors.map(
+        () => null,
+      );
       for (const fe of fieldExtractors) {
         const hits = runScalar(
           db,

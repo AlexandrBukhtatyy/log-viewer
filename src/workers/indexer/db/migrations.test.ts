@@ -49,7 +49,17 @@ const insertEntry = (
     sql: `INSERT INTO entry (id, source_id, seq, ts, level,
                              file_path, byte_start, byte_end, fields_json)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    bind: [id, sourceId, seq, ts, level, filePath, byteStart, byteEnd, fieldsJson],
+    bind: [
+      id,
+      sourceId,
+      seq,
+      ts,
+      level,
+      filePath,
+      byteStart,
+      byteEnd,
+      fieldsJson,
+    ],
   });
 
 const readUserVersion = (db: Database): number => {

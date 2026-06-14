@@ -32,8 +32,7 @@ const extractorSummary = (field: LogicalField): string => {
   const parts: string[] = [];
   if (fieldCount > 0)
     parts.push(`${fieldCount} field${fieldCount === 1 ? '' : 's'}`);
-  if (regexOnJsonCount > 0)
-    parts.push(`${regexOnJsonCount} regex-on-json`);
+  if (regexOnJsonCount > 0) parts.push(`${regexOnJsonCount} regex-on-json`);
   if (regexCount > 0) parts.push(`${regexCount} regex`);
   return parts.join(' + ') || 'no extractors';
 };
@@ -69,10 +68,7 @@ const CoverageDrill = ({
   field: LogicalField;
   coverage: CoverageView;
 }) => (
-  <div
-    className="lv-form-help"
-    style={{ padding: '4px 0 0 0', marginTop: 4 }}
-  >
+  <div className="lv-form-help" style={{ padding: '4px 0 0 0', marginTop: 4 }}>
     {coverage.sources.length === 0 ? (
       <span>No sources indexed yet.</span>
     ) : (
@@ -350,7 +346,9 @@ export const LvLogicalFieldsPanel = ({
           disabled={edit.mode !== 'closed'}
           title="Create a custom logical field"
         >
-          <span className="lv-add-src-plus" aria-hidden="true">＋</span>
+          <span className="lv-add-src-plus" aria-hidden="true">
+            ＋
+          </span>
           <span>New field</span>
         </button>
         {exportConfig !== undefined && (
@@ -418,9 +416,7 @@ export const LvLogicalFieldsPanel = ({
         onClose={cancel}
       />
 
-      {active.length > 0 && (
-        <div className="lv-parsers-section-hd">Active</div>
-      )}
+      {active.length > 0 && <div className="lv-parsers-section-hd">Active</div>}
       <div className="lv-parsers-list">
         {active.map((f) => (
           <Row
@@ -505,9 +501,9 @@ export const LvLogicalFieldsPanel = ({
         style={{ padding: '8px 12px', marginTop: 8 }}
       >
         Field-type extractors work everywhere (column / filter / group-by).
-        Regex-type extractors run only when rendering cells — server-side
-        filter and group-by ignore them because the message / raw body is
-        not stored in the index.
+        Regex-type extractors run only when rendering cells — server-side filter
+        and group-by ignore them because the message / raw body is not stored in
+        the index.
       </div>
     </aside>
   );

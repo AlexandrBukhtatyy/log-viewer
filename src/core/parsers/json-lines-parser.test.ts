@@ -79,10 +79,7 @@ describe('jsonLinesParser', () => {
       const ctx = makeCtx();
       const r1 = jsonLinesParser.parseLine('{"msg":"x"}', ctx);
       expect(r1.entry?.level).toBe('unknown');
-      const r2 = jsonLinesParser.parseLine(
-        '{"level":"banana","msg":"x"}',
-        ctx,
-      );
+      const r2 = jsonLinesParser.parseLine('{"level":"banana","msg":"x"}', ctx);
       expect(r2.entry?.level).toBe('unknown');
     });
 

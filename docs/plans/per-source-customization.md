@@ -17,6 +17,7 @@
 5. **Pinned saved-searches** — отдельный список saved-searches, привязанный к источнику.
 
 Решения, которые надо принять до реализации:
+
 - Применяются ли overrides только когда источник активен **в одиночку** или всегда?
 - Что приоритетнее при конфликте: глобальные columns / source-overrides / последнее ручное действие?
 - Как мигрировать существующий `tweaks.columns` (UI-prefs)?
@@ -30,7 +31,7 @@
 
 ```ts
 interface LvSourcePrefs {
-  accent?: string;        // hex или CSS-color
+  accent?: string; // hex или CSS-color
   alias?: string;
   columns?: LvColumnPref[];
   filter?: Partial<LogFilter>;
@@ -38,6 +39,7 @@ interface LvSourcePrefs {
 ```
 
 UI-точки:
+
 - В контекст-меню источника в сайдбаре — пункт «Настройки этого источника…» → попап `<LvSourceSettingsModal>` с полями.
 - Цветовой маркер: тонкая полоска слева от `<LvTreeNode>` для root-нод (когда `accent` задан).
 - Когда активная вкладка — конкретный источник, применять source-overrides поверх глобальных.
@@ -45,11 +47,13 @@ UI-точки:
 ## Critical files (предварительно)
 
 Новые:
+
 - `src/hooks/use-source-prefs.ts` — zustand store + merge-helper.
 - `src/ui/components/sidebar/LvSourceSettingsModal.tsx` — попап.
 - `src/ui/styles/lv.css` — стили accent-полоски.
 
 Изменяются:
+
 - `src/ui/components/sidebar/LvTreeNode.tsx` — отображение accent + alias, context-menu пункт.
 - `src/app/containers/LvAppContainer.tsx` — merge source-prefs с глобальными tweaks/filter при смене активной вкладки.
 - `src/ui/contracts/lv-types.ts` — поля `accent?`/`alias?` на `LvCatalogRoot` (если решим читать из catalog'а).

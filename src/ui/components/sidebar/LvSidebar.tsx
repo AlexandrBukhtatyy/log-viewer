@@ -92,7 +92,9 @@ export const LvSidebar = ({
     if (!filter.trim()) return [...catalog];
     let test: (name: string) => boolean;
     try {
-      let pattern = filterRegex ? filter : filter.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+      let pattern = filterRegex
+        ? filter
+        : filter.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
       if (filterWord) pattern = `\\b(?:${pattern})\\b`;
       const re = new RegExp(pattern, filterCase ? '' : 'i');
       test = (name) => re.test(name);
@@ -108,7 +110,10 @@ export const LvSidebar = ({
     };
     return catalog
       .map((r) => walk(r))
-      .filter((x): x is LvNode => x !== null && (x.type === 'folder' || x.type === 'file'))
+      .filter(
+        (x): x is LvNode =>
+          x !== null && (x.type === 'folder' || x.type === 'file'),
+      )
       .filter((x): x is LvCatalogRoot => !!(x as LvCatalogRoot).root)
       .map((x) => x as LvCatalogRoot);
   }, [filter, filterCase, filterWord, filterRegex, catalog]);
@@ -126,7 +131,9 @@ export const LvSidebar = ({
           onClick={() => onAddRoot('local-static')}
           title="Add log source"
         >
-          <span className="lv-add-src-plus" aria-hidden="true">＋</span>
+          <span className="lv-add-src-plus" aria-hidden="true">
+            ＋
+          </span>
           <span>Add source</span>
         </button>
       </div>
@@ -176,19 +183,28 @@ export const LvSidebar = ({
           const folderNames = items
             .filter((it) => {
               if (it.kind !== 'file') return false;
-              const entry = (it as DataTransferItem & {
-                webkitGetAsEntry?: () => { isDirectory?: boolean; name?: string } | null;
-              }).webkitGetAsEntry?.();
+              const entry = (
+                it as DataTransferItem & {
+                  webkitGetAsEntry?: () => {
+                    isDirectory?: boolean;
+                    name?: string;
+                  } | null;
+                }
+              ).webkitGetAsEntry?.();
               return !!entry?.isDirectory;
             })
             .map((it) => {
-              const entry = (it as DataTransferItem & {
-                webkitGetAsEntry?: () => { name?: string } | null;
-              }).webkitGetAsEntry?.();
+              const entry = (
+                it as DataTransferItem & {
+                  webkitGetAsEntry?: () => { name?: string } | null;
+                }
+              ).webkitGetAsEntry?.();
               return entry?.name ?? '';
             })
             .filter(Boolean);
-          const names = folderNames.length ? folderNames : files.map((f) => f.name).slice(0, 1);
+          const names = folderNames.length
+            ? folderNames
+            : files.map((f) => f.name).slice(0, 1);
           onDropFolders?.(names);
         }}
       >
@@ -221,7 +237,9 @@ export const LvSidebar = ({
           ))
         )}
         {dropActive && (
-          <div className="lv-tree-drop-hint">Drop folder to add to workspace</div>
+          <div className="lv-tree-drop-hint">
+            Drop folder to add to workspace
+          </div>
         )}
       </div>
     </aside>

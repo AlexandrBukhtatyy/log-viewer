@@ -32,7 +32,9 @@ export const LvBookmarksPanel = ({
       {list.length === 0 ? (
         <div className="lv-bm-empty">
           <div className="lv-bm-empty-title">No bookmarks yet.</div>
-          <div className="lv-bm-empty-sub">Click the flag on any log line to pin it here.</div>
+          <div className="lv-bm-empty-sub">
+            Click the flag on any log line to pin it here.
+          </div>
         </div>
       ) : (
         <div className="lv-bm-list">

@@ -208,9 +208,7 @@ export const filesByIdFromSources = (
  *   - folder-row tristate checkbox: which descendant files to flip
  *     on click.
  */
-export const collectAllFileIds = (
-  nodes: ReadonlyArray<LvNode>,
-): string[] => {
+export const collectAllFileIds = (nodes: ReadonlyArray<LvNode>): string[] => {
   const out: string[] = [];
   const walk = (n: LvNode): void => {
     if (n.type === 'file') out.push(n.id);

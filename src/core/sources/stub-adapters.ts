@@ -13,7 +13,10 @@ import type {
   LogSource,
   RemoteSshLogSource,
 } from '../types/log-source.ts';
-import type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
+import type {
+  LogSourceAdapter,
+  LogSourceAdapterFactory,
+} from './source-adapter.ts';
 
 const stubAdapter = (
   expected: LogSource['kind'],

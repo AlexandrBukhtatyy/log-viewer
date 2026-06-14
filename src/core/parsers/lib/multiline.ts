@@ -38,7 +38,9 @@ export interface MultilineParserSpec {
   readonly defaultColumns?: ReadonlyArray<string>;
 }
 
-export const defineMultilineParser = (spec: MultilineParserSpec): LogParser => ({
+export const defineMultilineParser = (
+  spec: MultilineParserSpec,
+): LogParser => ({
   id: spec.id,
   canParse: (line) => spec.isOpen(line),
   parseLine: (line, ctx) => {

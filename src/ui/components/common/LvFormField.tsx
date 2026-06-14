@@ -17,7 +17,7 @@ export interface LvFormFieldProps {
    * `'row'` (default) puts the label left of the control — the standard
    * for modal dialogs. `'column'` stacks the label above, for narrow side
    * panels where a fixed label gutter would crush the input.
-   * See docs/ui-conventions.md → Forms.
+   * See docs/conventions/ui-conventions.md → Forms.
    */
   readonly orientation?: 'row' | 'column';
   /**
@@ -34,7 +34,7 @@ export interface LvFormFieldProps {
  * Canonical form-field layout: a label paired with a single control, with
  * optional help/error text on their own line beneath it. The one
  * sanctioned way to lay out a labelled field — keeps every form visually
- * consistent (see docs/ui-conventions.md → Forms). Used in:
+ * consistent (see docs/conventions/ui-conventions.md → Forms). Used in:
  *   - LvAddSourceModal (modal, row)
  *   - LvLogicalFieldEditorModal (modal, row)
  *   - LvParsersPanel (narrow panel, column)

@@ -62,17 +62,18 @@ exception во весь worker.
 ### Server-side group counts
 
 [CoordinatorApi.getGroupCounts(filter, field, limit?)](../../src/core/rpc/coordinator.contract.ts)
-+ [IndexerApi.groupCounts](../../src/core/rpc/indexer.contract.ts):
 
-- `field` — whitelist `^[A-Za-z_][A-Za-z0-9_]*$` (см.
+- [IndexerApi.groupCounts](../../src/core/rpc/indexer.contract.ts):
+
+* `field` — whitelist `^[A-Za-z_][A-Za-z0-9_]*$` (см.
   [aggregate.ts](../../src/workers/indexer/aggregate.ts) `groupFieldExpr`).
   `level` / `source_id` мапятся на колонки entry, остальное — на
   `JSON_EXTRACT(entry.fields_json, '$.<key>')`. Whitelist ставит решётку
   против SQL-инъекции в interpolated SQL.
-- Возвращает `GroupBucket[]` — `{ value, count, tsMin, tsMax, levelCounts }`,
+* Возвращает `GroupBucket[]` — `{ value, count, tsMin, tsMax, levelCounts }`,
   где `value === null` означает entries без этого поля. Sort по
   `count DESC, value ASC`, лимит по умолчанию 1000.
-- Per-level breakdown через шаблон
+* Per-level breakdown через шаблон
   `SUM(CASE WHEN level=? THEN 1 ELSE 0 END) AS lc_<level>` — один проход
   по таблице, никаких дополнительных подзапросов.
 
@@ -86,15 +87,16 @@ UI: при `groupBy.length > 0` контейнер вызывает [`useGroupCo
 ### Server-side histogram
 
 [CoordinatorApi.getHistogram(filter, bucketCount)](../../src/core/rpc/coordinator.contract.ts)
-+ [IndexerApi.histogram](../../src/core/rpc/indexer.contract.ts):
 
-- Range берётся из `filter.timeRange` (если оба бордера заданы) либо из
+- [IndexerApi.histogram](../../src/core/rpc/indexer.contract.ts):
+
+* Range берётся из `filter.timeRange` (если оба бордера заданы) либо из
   `MIN/MAX(ts)` отфильтрованных entries. `null`-ts entries исключены.
-- `bucketCount` clamp'ается в `[1, 1000]`, `bucketSize = (to - from) / bucketCount`.
-- Bucket index = `MIN(bucketCount-1, FLOOR((ts - from) / bucketSize))` —
+* `bucketCount` clamp'ается в `[1, 1000]`, `bucketSize = (to - from) / bucketCount`.
+* Bucket index = `MIN(bucketCount-1, FLOOR((ts - from) / bucketSize))` —
   clamp правого края в последний bucket, чтобы entry с `ts === to` не
   выпала на bucketCount.
-- Empty bucket'ы (count=0) добавляются JS-постпроцессом для стабильной
+* Empty bucket'ы (count=0) добавляются JS-постпроцессом для стабильной
   X-оси.
 
 UI: [`useHistogram(80)`](../../src/hooks/use-histogram.ts) запрашивается

@@ -4,7 +4,9 @@ import { compileGrok } from './grok.ts';
 describe('compileGrok', () => {
   it('compiles a single named token', () => {
     const { pattern, bindings } = compileGrok('%{IP:client}');
-    expect(bindings).toEqual([{ name: 'client', group: 1, transform: 'as-is' }]);
+    expect(bindings).toEqual([
+      { name: 'client', group: 1, transform: 'as-is' },
+    ]);
     expect(pattern.exec('192.168.1.1')?.[1]).toBe('192.168.1.1');
   });
 
@@ -60,9 +62,9 @@ describe('compileGrok', () => {
   });
 
   it('throws on cyclic custom tokens', () => {
-    expect(() =>
-      compileGrok('%{A:x}', { A: '%{B}', B: '%{A}' }),
-    ).toThrowError(/cyclic reference/);
+    expect(() => compileGrok('%{A:x}', { A: '%{B}', B: '%{A}' })).toThrowError(
+      /cyclic reference/,
+    );
   });
 
   it('accepts user-defined custom tokens that reference built-ins', () => {

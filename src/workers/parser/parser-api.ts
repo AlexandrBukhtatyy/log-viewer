@@ -108,12 +108,16 @@ export const parserApi: ParserApi = {
       if (frame.line === '') continue;
       const { entry } = primary.parseLine(frame.line, parseCtx);
       if (entry !== null) {
-        result.push(enrich(entry, frame.byteStart, frame.byteEnd, frame.lineNumber));
+        result.push(
+          enrich(entry, frame.byteStart, frame.byteEnd, frame.lineNumber),
+        );
         continue;
       }
       const fallback = registry.parseAny(frame.line, parseCtx);
       if (fallback !== null) {
-        result.push(enrich(fallback, frame.byteStart, frame.byteEnd, frame.lineNumber));
+        result.push(
+          enrich(fallback, frame.byteStart, frame.byteEnd, frame.lineNumber),
+        );
       }
     }
     return result;

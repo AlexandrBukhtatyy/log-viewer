@@ -10,6 +10,7 @@
 ## Запуск локально
 
 Нужны:
+
 - **pnpm** (требуется, см. [CLAUDE.md](CLAUDE.md)). Если нет: `corepack enable pnpm`.
 - **Node 20+** (тестировалось на 24).
 
@@ -43,6 +44,7 @@ pnpm gen:fixtures             # сгенерировать .tmp/demo_logs c samp
 Любое нетривиальное архитектурное решение (выбор библиотеки, схема хранения, контракт между модулями) фиксируется как **ADR** в [docs/adr/](docs/adr/). Полная политика — [docs/adr/README.md](docs/adr/README.md).
 
 Как создать:
+
 - Скопируй [docs/adr/0000-template.md](docs/adr/0000-template.md), назови `NNNN-<kebab-slug>.md`, дополни запись в `## Index` файла `docs/adr/README.md`.
 - Используй `proposed` как статус по умолчанию.
 

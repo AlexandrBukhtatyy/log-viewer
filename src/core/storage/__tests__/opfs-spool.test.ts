@@ -23,7 +23,9 @@ describe('OpfsSingleSpoolWriter', () => {
     await writer.close();
 
     // The spool file actually contains the concatenation we wrote.
-    const spool = await (await provider.getRoot()).getDirectoryHandle(SPOOL_ROOT);
+    const spool = await (
+      await provider.getRoot()
+    ).getDirectoryHandle(SPOOL_ROOT);
     const sourceDir = await spool.getDirectoryHandle('s1');
     const fh = await sourceDir.getFileHandle(SINGLE_SPOOL_FILE);
     const file = await fh.getFile();
@@ -56,7 +58,9 @@ describe('OpfsChunkedSpoolWriter', () => {
     expect(c1).toEqual({ chunkSeq: 0, byteSize: 8 });
     expect(c2).toEqual({ chunkSeq: 1, byteSize: 15 });
 
-    const spool = await (await provider.getRoot()).getDirectoryHandle(SPOOL_ROOT);
+    const spool = await (
+      await provider.getRoot()
+    ).getDirectoryHandle(SPOOL_ROOT);
     const sourceDir = await spool.getDirectoryHandle('s1');
     const f0 = await (await sourceDir.getFileHandle('0.bin')).getFile();
     const f1 = await (await sourceDir.getFileHandle('1.bin')).getFile();
@@ -67,7 +71,9 @@ describe('OpfsChunkedSpoolWriter', () => {
   it('refuses empty chunks', async () => {
     const provider = createMockOpfsRoot();
     const writer = await OpfsChunkedSpoolWriter.open(sid('s1'), provider);
-    await expect(writer.pushChunk(new Uint8Array(0))).rejects.toThrow(/empty chunk/);
+    await expect(writer.pushChunk(new Uint8Array(0))).rejects.toThrow(
+      /empty chunk/,
+    );
   });
 
   it('setNextChunkSeq lets resumed writers continue numbering', async () => {
@@ -87,7 +93,9 @@ describe('removeSpool', () => {
     await writer.close();
 
     await removeSpool(sid('s1'), provider);
-    const spool = await (await provider.getRoot()).getDirectoryHandle(SPOOL_ROOT);
+    const spool = await (
+      await provider.getRoot()
+    ).getDirectoryHandle(SPOOL_ROOT);
     await expect(spool.getDirectoryHandle('s1')).rejects.toThrow();
   });
 
@@ -98,7 +106,9 @@ describe('removeSpool', () => {
     await writer.pushChunk(utf8.encode('b'));
 
     await removeSpool(sid('s1'), provider);
-    const spool = await (await provider.getRoot()).getDirectoryHandle(SPOOL_ROOT);
+    const spool = await (
+      await provider.getRoot()
+    ).getDirectoryHandle(SPOOL_ROOT);
     await expect(spool.getDirectoryHandle('s1')).rejects.toThrow();
   });
 

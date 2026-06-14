@@ -32,19 +32,20 @@ export interface FieldKeySql {
 }
 
 const BUILT_IN: Readonly<Record<string, FieldKeySql>> = {
-  '@ts':         { sql: 'entry.ts',         needsSourceJoin: false },
-  '@level':      { sql: 'entry.level',      needsSourceJoin: false },
-  '@seq':        { sql: 'entry.seq',        needsSourceJoin: false },
-  '@file':       { sql: 'entry.file_path',  needsSourceJoin: false },
+  '@ts': { sql: 'entry.ts', needsSourceJoin: false },
+  '@level': { sql: 'entry.level', needsSourceJoin: false },
+  '@seq': { sql: 'entry.seq', needsSourceJoin: false },
+  '@file': { sql: 'entry.file_path', needsSourceJoin: false },
   '@byte_start': { sql: 'entry.byte_start', needsSourceJoin: false },
-  '@byte_end':   { sql: 'entry.byte_end',   needsSourceJoin: false },
-  '@source.id':  { sql: 'entry.source_id',  needsSourceJoin: false },
-  '@source.name':{ sql: 'source.name',      needsSourceJoin: true  },
-  '@source.kind':{ sql: 'source.kind',      needsSourceJoin: true  },
+  '@byte_end': { sql: 'entry.byte_end', needsSourceJoin: false },
+  '@source.id': { sql: 'entry.source_id', needsSourceJoin: false },
+  '@source.name': { sql: 'source.name', needsSourceJoin: true },
+  '@source.kind': { sql: 'source.kind', needsSourceJoin: true },
 };
 
 /** Built-in `@`-keys exposed by the translator. */
-export const BUILT_IN_FIELD_KEYS: ReadonlyArray<FieldKey> = Object.keys(BUILT_IN);
+export const BUILT_IN_FIELD_KEYS: ReadonlyArray<FieldKey> =
+  Object.keys(BUILT_IN);
 
 // Dynamic JSON field keys. `[A-Za-z_][A-Za-z0-9_]*` is the standard
 // identifier shape that interpolates into `$.<key>` JSONPath safely.
@@ -118,15 +119,24 @@ export const getEntryFieldValue = (
     return resolveLogicalField(entry, field);
   }
   switch (key) {
-    case '@ts':         return entry.timestamp;
-    case '@level':      return entry.level;
-    case '@seq':        return entry.seq;
-    case '@file':       return entry.filePath;
-    case '@byte_start': return entry.byteStart;
-    case '@byte_end':   return entry.byteEnd;
-    case '@source.id':  return entry.sourceId;
-    case '@source.name': return sourceRecord?.source.name ?? null;
-    case '@source.kind': return sourceRecord?.source.kind ?? null;
+    case '@ts':
+      return entry.timestamp;
+    case '@level':
+      return entry.level;
+    case '@seq':
+      return entry.seq;
+    case '@file':
+      return entry.filePath;
+    case '@byte_start':
+      return entry.byteStart;
+    case '@byte_end':
+      return entry.byteEnd;
+    case '@source.id':
+      return entry.sourceId;
+    case '@source.name':
+      return sourceRecord?.source.name ?? null;
+    case '@source.kind':
+      return sourceRecord?.source.kind ?? null;
     default:
       if (key.startsWith('@')) return null;
       return (entry.fields as Record<string, unknown>)[key];

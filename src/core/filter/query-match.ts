@@ -16,7 +16,11 @@ import type { LogEntry, LogFilter, QueryMode } from '../types/index.ts';
 const escapeRegex = (s: string): string =>
   s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
 
-const compileSubstring = (q: string, caseSensitive: boolean, wholeWord: boolean): RegExp | null => {
+const compileSubstring = (
+  q: string,
+  caseSensitive: boolean,
+  wholeWord: boolean,
+): RegExp | null => {
   const pat = wholeWord ? `\\b(?:${escapeRegex(q)})\\b` : escapeRegex(q);
   try {
     return new RegExp(pat, caseSensitive ? '' : 'i');
@@ -25,7 +29,11 @@ const compileSubstring = (q: string, caseSensitive: boolean, wholeWord: boolean)
   }
 };
 
-const compileRegex = (q: string, caseSensitive: boolean, wholeWord: boolean): RegExp | null => {
+const compileRegex = (
+  q: string,
+  caseSensitive: boolean,
+  wholeWord: boolean,
+): RegExp | null => {
   const pat = wholeWord ? `\\b(?:${q})\\b` : q;
   try {
     return new RegExp(pat, caseSensitive ? '' : 'i');
@@ -34,7 +42,11 @@ const compileRegex = (q: string, caseSensitive: boolean, wholeWord: boolean): Re
   }
 };
 
-const compileFts = (q: string, caseSensitive: boolean, wholeWord: boolean): RegExp | null => {
+const compileFts = (
+  q: string,
+  caseSensitive: boolean,
+  wholeWord: boolean,
+): RegExp | null => {
   // Until the dedicated FTS5 path is wired we approximate FTS as a
   // substring fallback so the UI keeps returning results when the user
   // flips the toggle. The Phase 1.2 indexer path will replace this.
@@ -51,7 +63,9 @@ export interface CompiledQuery {
  * Returns `null` when the filter has no query (the caller should skip
  * filtering entirely in that case to keep the fast path unchanged).
  */
-export const compileFreeTextQuery = (filter: LogFilter): CompiledQuery | null => {
+export const compileFreeTextQuery = (
+  filter: LogFilter,
+): CompiledQuery | null => {
   const q = filter.query.trim();
   if (q === '') return null;
   const re =

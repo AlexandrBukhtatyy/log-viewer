@@ -53,13 +53,28 @@ export interface FieldDescriptor {
  * when laying out columns or grouping.
  */
 export const BUILT_IN_FIELD_DESCRIPTORS: ReadonlyArray<FieldDescriptor> = [
-  { key: '@ts',          label: 'Time',         type: 'time',   origin: 'builtin' },
-  { key: '@level',       label: 'Level',        type: 'level',  origin: 'builtin' },
-  { key: '@file',        label: 'File',         type: 'string', origin: 'builtin' },
-  { key: '@source.name', label: 'Source name',  type: 'string', origin: 'builtin' },
-  { key: '@source.kind', label: 'Source kind',  type: 'enum',   origin: 'builtin' },
-  { key: '@source.id',   label: 'Source id',    type: 'string', origin: 'builtin' },
-  { key: '@seq',         label: 'Sequence',     type: 'number', origin: 'builtin' },
-  { key: '@byte_start',  label: 'Byte start',   type: 'number', origin: 'builtin' },
-  { key: '@byte_end',    label: 'Byte end',     type: 'number', origin: 'builtin' },
+  { key: '@ts', label: 'Time', type: 'time', origin: 'builtin' },
+  { key: '@level', label: 'Level', type: 'level', origin: 'builtin' },
+  { key: '@file', label: 'File', type: 'string', origin: 'builtin' },
+  {
+    key: '@source.name',
+    label: 'Source name',
+    type: 'string',
+    origin: 'builtin',
+  },
+  {
+    key: '@source.kind',
+    label: 'Source kind',
+    type: 'enum',
+    origin: 'builtin',
+  },
+  { key: '@source.id', label: 'Source id', type: 'string', origin: 'builtin' },
+  { key: '@seq', label: 'Sequence', type: 'number', origin: 'builtin' },
+  {
+    key: '@byte_start',
+    label: 'Byte start',
+    type: 'number',
+    origin: 'builtin',
+  },
+  { key: '@byte_end', label: 'Byte end', type: 'number', origin: 'builtin' },
 ];

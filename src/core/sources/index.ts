@@ -15,7 +15,10 @@ import {
 import type { LogSourceKind } from '../types/log-source.ts';
 
 export { createLineSplitter } from './line-splitter.ts';
-export type { LogSourceAdapter, LogSourceAdapterFactory } from './source-adapter.ts';
+export type {
+  LogSourceAdapter,
+  LogSourceAdapterFactory,
+} from './source-adapter.ts';
 export { createDirectoryAdapter } from './directory-adapter.ts';
 export { createFileAdapter } from './file-adapter.ts';
 export { createSnapshotAdapter } from './snapshot-adapter.ts';
@@ -36,7 +39,10 @@ export {
  *
  * Stubs throw `not implemented` on open(); see ./stub-adapters.ts.
  */
-export const defaultAdapterFactories: Record<LogSourceKind, LogSourceAdapterFactory> = {
+export const defaultAdapterFactories: Record<
+  LogSourceKind,
+  LogSourceAdapterFactory
+> = {
   file: createFileAdapter,
   directory: createDirectoryAdapter,
   stream: createStreamAdapter,

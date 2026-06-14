@@ -38,9 +38,9 @@ worker-pipeline, индексер OPFS+FTS5, парсеры, источники.
 Chosen option: **«B. Выровнять core под UI, без конверсий»**.
 
 Это **уточнение** трактовки [ADR-0002 §Adapter-слой](0002-headless-architecture.md), а не отказ
-от него. Прямая цитата из ADR-0002: *«Если шейпы совпадают — adapter =
+от него. Прямая цитата из ADR-0002: _«Если шейпы совпадают — adapter =
 re-export. Если adapter растёт за ~30 строк — переделываем промпт под
-контракт.»* После выравнивания core шейпы совпадают, и адаптеры
+контракт.»_ После выравнивания core шейпы совпадают, и адаптеры
 вырождаются до пустоты — `src/ui/adapters/` остаётся опциональной папкой
 для починки props при будущих регенерациях UI (renamed prop'ы и т.п.).
 
@@ -100,6 +100,7 @@ gate: пометить регенерируемым по этому контра
 
 **5 новых UI-only хуков** в [src/hooks/](../../src/hooks/) с
 `localStorage`-persist'ом:
+
 - [use-ui-prefs.ts](../../src/hooks/use-ui-prefs.ts) — tweaks
   (theme/density/accent/wrap/showDate/timelineOn).
 - [use-bookmarks.ts](../../src/hooks/use-bookmarks.ts) — `Set<EntryId>`.

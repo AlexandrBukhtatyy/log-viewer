@@ -17,7 +17,9 @@ const useBookmarksStore = create<BookmarksState>()(
       ids: [],
       toggle: (id) => {
         const cur = get().ids;
-        set({ ids: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
+        set({
+          ids: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
+        });
       },
       remove: (id) => set({ ids: get().ids.filter((x) => x !== id) }),
       clear: () => set({ ids: [] }),
@@ -44,7 +46,8 @@ export const useBookmarks = (): UseBookmarks => {
   const remove = useBookmarksStore((s) => s.remove);
   const clear = useBookmarksStore((s) => s.clear);
   const idSet = useMemo(
-    () => new Set(ids as unknown as ReadonlyArray<EntryId>) as ReadonlySet<EntryId>,
+    () =>
+      new Set(ids as unknown as ReadonlyArray<EntryId>) as ReadonlySet<EntryId>,
     [ids],
   );
   return { ids: idSet, toggle, remove, clear };

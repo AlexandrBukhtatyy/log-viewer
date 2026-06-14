@@ -39,7 +39,8 @@ const installRegexpUdf = (db: Database): void => {
     return re;
   };
 
-  const matcher = (flags: string) =>
+  const matcher =
+    (flags: string) =>
     (_ctxPtr: number, ...values: SqlValue[]): SqlValue => {
       const [pattern, text] = values;
       if (typeof pattern !== 'string' || typeof text !== 'string') return 0;
@@ -70,10 +71,7 @@ const installRegexpUdf = (db: Database): void => {
    * lazy-resolved through a byte pointer (ADR-0016) and never live in
    * the database.
    */
-  const extractMatcher = (
-    _ctxPtr: number,
-    ...values: SqlValue[]
-  ): SqlValue => {
+  const extractMatcher = (_ctxPtr: number, ...values: SqlValue[]): SqlValue => {
     const [pattern, text, group, flags] = values;
     if (typeof pattern !== 'string' || typeof text !== 'string') return null;
     const f = typeof flags === 'string' ? flags : '';
@@ -218,7 +216,9 @@ export const openDb = async (
           initialCapacity: 16,
           forceReinitIfPreviouslyFailed: attempt > 0,
         } as Parameters<typeof sqlite3.installOpfsSAHPoolVfs>[0];
-        return (await sqlite3.installOpfsSAHPoolVfs(opts)) as unknown as PoolUtil;
+        return (await sqlite3.installOpfsSAHPoolVfs(
+          opts,
+        )) as unknown as PoolUtil;
       } catch (err) {
         if (!isLockConflict(err)) throw err;
         if (attempt >= RETRY_DELAYS_MS.length) {

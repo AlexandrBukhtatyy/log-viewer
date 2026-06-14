@@ -65,7 +65,8 @@ export const createStreamAdapter: LogSourceAdapterFactory = (source) => {
       const writer = await OpfsChunkedSpoolWriter.open(source.id);
 
       const queue: LogLineFrame[] = [];
-      let controller: ReadableStreamDefaultController<LogLineFrame> | null = null;
+      let controller: ReadableStreamDefaultController<LogLineFrame> | null =
+        null;
       let closed = false;
       let tail: Uint8Array = new Uint8Array(0);
       const encoder = new TextEncoder();
@@ -183,7 +184,9 @@ export const createStreamAdapter: LogSourceAdapterFactory = (source) => {
           return;
         }
         if (raw instanceof Blob) {
-          void raw.arrayBuffer().then((buf) => handleBytes(new Uint8Array(buf)));
+          void raw
+            .arrayBuffer()
+            .then((buf) => handleBytes(new Uint8Array(buf)));
           return;
         }
         // Other binary types not handled in MVP.
@@ -214,7 +217,8 @@ export const createStreamAdapter: LogSourceAdapterFactory = (source) => {
           fail(new Error(`stream-adapter: websocket error for ${source.url}`));
         ws.onclose = (e) => {
           if (e.wasClean) finish();
-          else fail(new Error(`stream-adapter: websocket closed code=${e.code}`));
+          else
+            fail(new Error(`stream-adapter: websocket closed code=${e.code}`));
         };
         conn = ws;
       } else {
@@ -222,7 +226,9 @@ export const createStreamAdapter: LogSourceAdapterFactory = (source) => {
         es.onmessage = (e) => ingest(e.data);
         es.onerror = () => {
           if (es.readyState === EventSource.CLOSED) {
-            fail(new Error(`stream-adapter: eventsource error for ${source.url}`));
+            fail(
+              new Error(`stream-adapter: eventsource error for ${source.url}`),
+            );
           }
         };
         conn = es;

@@ -24,11 +24,7 @@ const userField = (
 describe('validateLogicalFieldId', () => {
   it('passes a clean new id', () => {
     expect(
-      validateLogicalFieldId(
-        'audit_id',
-        EMPTY_LOGICAL_FIELDS_CONFIG,
-        null,
-      ),
+      validateLogicalFieldId('audit_id', EMPTY_LOGICAL_FIELDS_CONFIG, null),
     ).toBeNull();
   });
 
@@ -40,21 +36,13 @@ describe('validateLogicalFieldId', () => {
 
   it('rejects malformed id', () => {
     expect(
-      validateLogicalFieldId(
-        'Bad Id',
-        EMPTY_LOGICAL_FIELDS_CONFIG,
-        null,
-      ),
+      validateLogicalFieldId('Bad Id', EMPTY_LOGICAL_FIELDS_CONFIG, null),
     ).toMatch(/lowercase/i);
   });
 
   it('rejects collision with built-in', () => {
     expect(
-      validateLogicalFieldId(
-        'trace_id',
-        EMPTY_LOGICAL_FIELDS_CONFIG,
-        null,
-      ),
+      validateLogicalFieldId('trace_id', EMPTY_LOGICAL_FIELDS_CONFIG, null),
     ).toMatch(/built-in/i);
   });
 
@@ -98,7 +86,9 @@ describe('validateLabel', () => {
 
 describe('validateExtractor', () => {
   it('field extractor with non-empty path passes', () => {
-    expect(validateExtractor({ type: 'field', path: 'service.name' })).toBeNull();
+    expect(
+      validateExtractor({ type: 'field', path: 'service.name' }),
+    ).toBeNull();
   });
 
   it('field extractor with empty path fails', () => {

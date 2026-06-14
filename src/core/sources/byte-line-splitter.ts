@@ -62,7 +62,10 @@ export const createByteLineSplitter = (
 
         // Strip a trailing `\r` if present — CRLF terminator.
         let lineEndExclusive = nl;
-        if (lineEndExclusive > scanFrom && buffer[lineEndExclusive - 1] === 0x0d) {
+        if (
+          lineEndExclusive > scanFrom &&
+          buffer[lineEndExclusive - 1] === 0x0d
+        ) {
           lineEndExclusive -= 1;
         }
 

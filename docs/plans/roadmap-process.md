@@ -49,9 +49,11 @@
 ## Critical files (предварительно)
 
 Новые:
+
 - `.github/PULL_REQUEST_TEMPLATE/roadmap.md` (опционально) — чек-лист для roadmap-правок.
 
 Изменяются:
+
 - [docs/ROADMAP.md](../ROADMAP.md) — переразметить под пять секций (`In progress / Planned / On the horizon / Shipped / Dropped`).
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) — секция «Roadmap process» с описанием движения пунктов.
 - [docs/adr/](../adr/) — возможно новый ADR `NNNN-roadmap-process.md` после принятия решения (это процесс, тянет на architectural decision).

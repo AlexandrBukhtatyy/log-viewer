@@ -112,7 +112,9 @@ export const migrateUiPrefs = (
             },
           ]
         : [];
-    const existing = Array.isArray(p.presets) ? (p.presets as LvColumnPreset[]) : [];
+    const existing = Array.isArray(p.presets)
+      ? (p.presets as LvColumnPreset[])
+      : [];
     p = {
       ...p,
       presets: existing.length > 0 ? existing : seed,
@@ -154,7 +156,8 @@ export const useUiPrefs = create<UiPrefsState>()(
     {
       name: 'lv:ui-prefs',
       version: 3,
-      migrate: (persisted, version) => migrateUiPrefs(persisted, version) as LvTweaks,
+      migrate: (persisted, version) =>
+        migrateUiPrefs(persisted, version) as LvTweaks,
       partialize: (s): LvTweaks => ({
         theme: s.theme,
         density: s.density,

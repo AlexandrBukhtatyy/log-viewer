@@ -56,7 +56,11 @@ const SECTIONS: ShortcutSection[] = [
     items: [
       { keys: ['level:error'], label: 'Filter by log level', mono: true },
       { keys: ['status:5'], label: 'Field starts-with', mono: true },
-      { keys: ['\\bdeadlock\\b'], label: 'Regex (when regex toggle on)', mono: true },
+      {
+        keys: ['\\bdeadlock\\b'],
+        label: 'Regex (when regex toggle on)',
+        mono: true,
+      },
     ],
   },
 ];
@@ -89,7 +93,12 @@ export const LvShortcutsModal = ({ open, onClose }: LvShortcutsModalProps) => {
       >
         <div className="lv-modal-hd">
           <span>Keyboard Shortcuts</span>
-          <button type="button" className="lv-modal-x" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="lv-modal-x"
+            onClick={onClose}
+            aria-label="Close"
+          >
             ✕
           </button>
         </div>
@@ -103,7 +112,10 @@ export const LvShortcutsModal = ({ open, onClose }: LvShortcutsModalProps) => {
                     <span className="lv-shortcuts-label">{it.label}</span>
                     <span className="lv-shortcuts-keys">
                       {it.keys.map((k, ki) => (
-                        <span key={ki} className={`lv-kbd${it.mono ? ' lv-kbd-mono' : ''}`}>
+                        <span
+                          key={ki}
+                          className={`lv-kbd${it.mono ? ' lv-kbd-mono' : ''}`}
+                        >
                           {k}
                         </span>
                       ))}

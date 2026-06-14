@@ -16,7 +16,11 @@ export interface LvSearchPanelProps {
   onApplyPreset: (preset: LvSavedSearch) => void;
 }
 
-export const LvSearchPanel = ({ onRun, savedSearches, onApplyPreset }: LvSearchPanelProps) => {
+export const LvSearchPanel = ({
+  onRun,
+  savedSearches,
+  onApplyPreset,
+}: LvSearchPanelProps) => {
   const [q, setQ] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);

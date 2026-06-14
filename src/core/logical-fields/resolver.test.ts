@@ -108,9 +108,7 @@ describe('resolveLogicalField — regex extractor', () => {
 
   it('skips silently on a malformed regex (does not throw)', () => {
     const entry = makeEntry({ message: 'x' });
-    const f = field('bad', [
-      { type: 'regex', on: 'message', pattern: '(' },
-    ]);
+    const f = field('bad', [{ type: 'regex', on: 'message', pattern: '(' }]);
     expect(resolveLogicalField(entry, f)).toBeNull();
   });
 });
@@ -161,8 +159,8 @@ describe('resolveLogicalField — chain semantics', () => {
     const entry = makeEntry({ fields: { traceId: 'abc' } });
     const f = field('trace_id', [
       { type: 'field', path: 'trace_id' }, // null
-      { type: 'field', path: 'traceId' },  // match
-      { type: 'field', path: 'tid' },      // not reached
+      { type: 'field', path: 'traceId' }, // match
+      { type: 'field', path: 'tid' }, // not reached
     ]);
     expect(resolveLogicalField(entry, f)).toBe('abc');
   });

@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { FieldFilter, LogFilter, LogLevel } from '../../../core/types/index.ts';
+import type {
+  FieldFilter,
+  LogFilter,
+  LogLevel,
+} from '../../../core/types/index.ts';
 
 interface AiMessage {
   readonly id: string;
@@ -18,7 +22,11 @@ interface Suggestion {
 const SUGGESTIONS: Suggestion[] = [
   { id: 'sp1', label: 'Summarize errors in the last hour', icon: '⚠' },
   { id: 'sp2', label: 'What caused the 502 spike at 14:32?', icon: '◎' },
-  { id: 'sp3', label: 'Compare auth-svc latency today vs yesterday', icon: '≈' },
+  {
+    id: 'sp3',
+    label: 'Compare auth-svc latency today vs yesterday',
+    icon: '≈',
+  },
   { id: 'sp4', label: 'Find traces touching user u_184502', icon: '⌕' },
 ];
 
@@ -55,10 +63,12 @@ export const LvAiPanel = ({
       body: (
         <>
           <p>
-            Готов копаться в логах. У меня контекст из <b>{fileCount}</b> выбранных файлов,
-            текущих фильтров и закладок.
+            Готов копаться в логах. У меня контекст из <b>{fileCount}</b>{' '}
+            выбранных файлов, текущих фильтров и закладок.
           </p>
-          <p className="lv-ai-muted">Спроси что-нибудь или выбери подсказку снизу.</p>
+          <p className="lv-ai-muted">
+            Спроси что-нибудь или выбери подсказку снизу.
+          </p>
         </>
       ),
     },
@@ -75,10 +85,13 @@ export const LvAiPanel = ({
       body: (
         <>
           <p>
-            Коротко: <b>pool saturation в <code>pg-primary</code></b>. В <code>billing-svc</code>{' '}
-            между <b>14:28–14:36</b> — 47 ошибок{' '}
-            <span className="lv-level-tag-error">error</span>, из них 41 совпадает по пути{' '}
-            <code>/invoices/issue</code>.
+            Коротко:{' '}
+            <b>
+              pool saturation в <code>pg-primary</code>
+            </b>
+            . В <code>billing-svc</code> между <b>14:28–14:36</b> — 47 ошибок{' '}
+            <span className="lv-level-tag-error">error</span>, из них 41
+            совпадает по пути <code>/invoices/issue</code>.
           </p>
           <ol className="lv-ai-list">
             <li>
@@ -92,8 +105,9 @@ export const LvAiPanel = ({
               — <code>connection pool exhausted (size=20)</code>.
             </li>
             <li>
-              Следом <b>23×</b> <code>deadlock detected</code> на <code>invoice_id</code>;
-              транзакции ретраятся и падают по таймауту.
+              Следом <b>23×</b> <code>deadlock detected</code> на{' '}
+              <code>invoice_id</code>; транзакции ретраятся и падают по
+              таймауту.
             </li>
             <li>
               Триггер совпал с деплоем <code>billing@1.14.3</code> в 14:27 (из{' '}
@@ -111,7 +125,8 @@ export const LvAiPanel = ({
                 })
               }
             >
-              <span>Apply filter:</span> <code>pool exhausted</code> · error+warn
+              <span>Apply filter:</span> <code>pool exhausted</code> ·
+              error+warn
             </button>
             <button
               type="button"
@@ -164,7 +179,8 @@ export const LvAiPanel = ({
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollRef.current)
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length, busy]);
 
   const send = async (text?: string) => {
@@ -172,7 +188,10 @@ export const LvAiPanel = ({
     if (!q || busy) return;
     const now = new Date();
     const ts = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    setMessages((m) => [...m, { id: `u-${Date.now()}`, role: 'user', ts, body: q }]);
+    setMessages((m) => [
+      ...m,
+      { id: `u-${Date.now()}`, role: 'user', ts, body: q },
+    ]);
     setInput('');
     setBusy(true);
     try {
@@ -183,7 +202,11 @@ export const LvAiPanel = ({
             id: `a-${Date.now()}`,
             role: 'assistant',
             ts,
-            body: <span className="lv-ai-muted">AI completion is not connected in this preview.</span>,
+            body: (
+              <span className="lv-ai-muted">
+                AI completion is not connected in this preview.
+              </span>
+            ),
           },
         ]);
         return;

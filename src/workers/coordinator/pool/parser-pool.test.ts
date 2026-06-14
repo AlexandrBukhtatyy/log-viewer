@@ -7,7 +7,8 @@ import { ParserPool } from './parser-pool.ts';
  * is just a tagged stub with a `terminate` spy.
  */
 vi.mock('comlink', () => ({
-  wrap: <T>(w: { __id: number }) => ({ __id: w.__id, ping: () => `worker-${w.__id}` } as unknown as T),
+  wrap: <T>(w: { __id: number }) =>
+    ({ __id: w.__id, ping: () => `worker-${w.__id}` }) as unknown as T,
 }));
 
 let nextId = 0;
@@ -34,7 +35,11 @@ describe('ParserPool — dynamic lifecycle', () => {
 
   it('spawns a worker on first acquire and reuses it on second', async () => {
     const create = vi.fn(makeWorker);
-    const pool = new ParserPool({ maxSize: 4, idleTtlMs: 1000, createWorker: create });
+    const pool = new ParserPool({
+      maxSize: 4,
+      idleTtlMs: 1000,
+      createWorker: create,
+    });
 
     await pool.withWorker(async () => 'a');
     expect(create).toHaveBeenCalledTimes(1);
@@ -48,7 +53,11 @@ describe('ParserPool — dynamic lifecycle', () => {
 
   it('spawns up to maxSize concurrent workers', async () => {
     const create = vi.fn(makeWorker);
-    const pool = new ParserPool({ maxSize: 3, idleTtlMs: 1000, createWorker: create });
+    const pool = new ParserPool({
+      maxSize: 3,
+      idleTtlMs: 1000,
+      createWorker: create,
+    });
 
     let resolveA: () => void = () => {};
     let resolveB: () => void = () => {};
@@ -70,17 +79,22 @@ describe('ParserPool — dynamic lifecycle', () => {
   });
 
   it('queues callers when at the cap and wakes them in order on release', async () => {
-    const pool = new ParserPool({ maxSize: 1, idleTtlMs: 10_000, createWorker: makeWorker });
+    const pool = new ParserPool({
+      maxSize: 1,
+      idleTtlMs: 10_000,
+      createWorker: makeWorker,
+    });
     const order: string[] = [];
 
     let releaseFirst: () => void = () => {};
-    const first = pool.withWorker(() =>
-      new Promise<void>((r) => {
-        releaseFirst = () => {
-          order.push('first');
-          r();
-        };
-      }),
+    const first = pool.withWorker(
+      () =>
+        new Promise<void>((r) => {
+          releaseFirst = () => {
+            order.push('first');
+            r();
+          };
+        }),
     );
     // Both queued behind `first`.
     const second = pool.withWorker(async () => {
@@ -103,11 +117,17 @@ describe('ParserPool — dynamic lifecycle', () => {
     vi.useFakeTimers();
     const created: { terminate: ReturnType<typeof vi.fn> }[] = [];
     const create = () => {
-      const w = makeWorker() as unknown as { terminate: ReturnType<typeof vi.fn> };
+      const w = makeWorker() as unknown as {
+        terminate: ReturnType<typeof vi.fn>;
+      };
       created.push(w);
       return w as unknown as Worker;
     };
-    const pool = new ParserPool({ maxSize: 2, idleTtlMs: 100, createWorker: create });
+    const pool = new ParserPool({
+      maxSize: 2,
+      idleTtlMs: 100,
+      createWorker: create,
+    });
 
     await pool.withWorker(async () => 'work');
     expect(pool.size).toBe(1);
@@ -127,11 +147,17 @@ describe('ParserPool — dynamic lifecycle', () => {
     vi.useFakeTimers();
     const created: { terminate: ReturnType<typeof vi.fn> }[] = [];
     const create = () => {
-      const w = makeWorker() as unknown as { terminate: ReturnType<typeof vi.fn> };
+      const w = makeWorker() as unknown as {
+        terminate: ReturnType<typeof vi.fn>;
+      };
       created.push(w);
       return w as unknown as Worker;
     };
-    const pool = new ParserPool({ maxSize: 2, idleTtlMs: 200, createWorker: create });
+    const pool = new ParserPool({
+      maxSize: 2,
+      idleTtlMs: 200,
+      createWorker: create,
+    });
 
     await pool.withWorker(async () => 'first');
     vi.advanceTimersByTime(150);

@@ -76,7 +76,7 @@ const setupMocks = (): Mocks => {
       getCount,
       getRange,
     }),
-    proxy: <T,>(fn: T) => fn,
+    proxy: <T>(fn: T) => fn,
   }));
 
   return {

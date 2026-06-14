@@ -14,6 +14,7 @@
 Парсер-пул [src/workers/coordinator/pool/parser-pool.ts](../../src/workers/coordinator/pool/parser-pool.ts) — stateless: orchestrator кидает `parserPool.withWorker((p) => p.parse(lines, ctx))`, любой worker может взять batch. Multi-line аккумуляция плохо ложится: buffer должен жить **между batch'ами одного source'а**, а worker'ы чередуются.
 
 Дополнительный constraint: после ADR-0016 индексер хранит только pointers (`byteStart`, `byteEnd`); тело лениво читается lazy-resolver'ом из OPFS / file handle. Любая модель «одна логическая запись = диапазон байт» должна работать в обе стороны:
+
 - ingest: накопить N физических строк → собрать в одну запись с широким `[byteStart, byteEnd)`,
 - read: lazy-resolver читает этот диапазон (со `\n` внутри) и снова парсит — multiline-парсер должен корректно обработать вход.
 

@@ -99,7 +99,9 @@ export const LvFilterBar = ({
   // in filters.sources means "every catalog source"; we fall back to
   // the keys of `filesById` in that case so the picker can still tell
   // the user that `req_id` is unique to pino vs. nginx.
-  const activeSources = useMemo<ReadonlyArray<{ id: string; name: string }>>(() => {
+  const activeSources = useMemo<
+    ReadonlyArray<{ id: string; name: string }>
+  >(() => {
     if (!filesById) return [];
     const ids =
       filters.sources && filters.sources.length > 0
@@ -127,7 +129,11 @@ export const LvFilterBar = ({
     if (!filtersOpen && !savedOpen) return;
     const onDoc = (e: MouseEvent): void => {
       const t = e.target as Node;
-      if (filtersOpen && filtersRef.current && !filtersRef.current.contains(t)) {
+      if (
+        filtersOpen &&
+        filtersRef.current &&
+        !filtersRef.current.contains(t)
+      ) {
         setFiltersOpen(false);
       }
       if (savedOpen && savedRef.current && !savedRef.current.contains(t)) {
@@ -149,8 +155,10 @@ export const LvFilterBar = ({
   }, [filtersOpen, savedOpen]);
 
   const setQuery = (q: string) => setFilters((f) => ({ ...f, query: q }));
-  const toggleCase = () => setFilters((f) => ({ ...f, caseSensitive: !f.caseSensitive }));
-  const toggleWord = () => setFilters((f) => ({ ...f, wholeWord: !f.wholeWord }));
+  const toggleCase = () =>
+    setFilters((f) => ({ ...f, caseSensitive: !f.caseSensitive }));
+  const toggleWord = () =>
+    setFilters((f) => ({ ...f, wholeWord: !f.wholeWord }));
   const toggleMode = (mode: QueryMode) =>
     setFilters((f) => ({
       ...f,
@@ -191,7 +199,12 @@ export const LvFilterBar = ({
         </div>
 
         <div className="lv-search">
-          <Search className="lv-search-ico" size={13} strokeWidth={1.5} aria-hidden="true" />
+          <Search
+            className="lv-search-ico"
+            size={13}
+            strokeWidth={1.5}
+            aria-hidden="true"
+          />
           <input
             type="text"
             className="lv-search-input"
@@ -232,7 +245,15 @@ export const LvFilterBar = ({
               title="Full-text search (FTS5 grammar — phrases, AND, OR, NOT)"
               aria-label="FTS5 query mode"
             >
-              <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'sans-serif' }}>FTS</span>
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  fontFamily: 'sans-serif',
+                }}
+              >
+                FTS
+              </span>
             </button>
             <button
               type="button"
@@ -293,7 +314,9 @@ export const LvFilterBar = ({
           >
             <ListFilter size={13} strokeWidth={1.5} aria-hidden="true" />
             <span>Filters</span>
-            {filtersBadge > 0 && <span className="lv-btn-badge">{filtersBadge}</span>}
+            {filtersBadge > 0 && (
+              <span className="lv-btn-badge">{filtersBadge}</span>
+            )}
             <ChevronDown size={12} strokeWidth={1.75} aria-hidden="true" />
           </button>
           {filtersOpen && (
@@ -301,7 +324,11 @@ export const LvFilterBar = ({
               <div className="lv-pop-hd">
                 <span>Field filters</span>
                 {activeFieldsCount > 0 && (
-                  <button type="button" className="lv-pop-clear" onClick={clearFieldFilters}>
+                  <button
+                    type="button"
+                    className="lv-pop-clear"
+                    onClick={clearFieldFilters}
+                  >
                     Clear
                   </button>
                 )}
@@ -319,7 +346,8 @@ export const LvFilterBar = ({
                         presentSources: [],
                         missingSources: [],
                       };
-                  const isLossy = compat.kind === 'unique' || compat.kind === 'partial';
+                  const isLossy =
+                    compat.kind === 'unique' || compat.kind === 'partial';
                   const missingNames = compat.missingSources
                     .map((id) => sourceNameById.get(id) ?? id)
                     .join(', ');
@@ -401,7 +429,10 @@ export const LvFilterBar = ({
                   onSaveSearch();
                 }}
               >
-                <span className="lv-pop-name" style={{ color: 'var(--lv-accent)' }}>
+                <span
+                  className="lv-pop-name"
+                  style={{ color: 'var(--lv-accent)' }}
+                >
                   ＋ Save current as preset
                 </span>
               </button>

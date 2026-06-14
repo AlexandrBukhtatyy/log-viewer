@@ -23,7 +23,8 @@ export const LvMenu = ({ items, onRun, nested = false }: LvMenuProps) => {
   return (
     <div className={`lv-menu${nested ? ' is-nested' : ''}`}>
       {items.map((it, i) => {
-        if (it.kind === 'sep') return <div key={`s:${i}`} className="lv-menu-sep" />;
+        if (it.kind === 'sep')
+          return <div key={`s:${i}`} className="lv-menu-sep" />;
         const hasSub = !!(it.submenu && it.submenu.length > 0);
         const isSubOpen = subOpen === it.id;
         return (

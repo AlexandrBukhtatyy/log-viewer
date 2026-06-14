@@ -89,7 +89,9 @@ export interface CustomParserDef {
   readonly updatedAt: number;
 }
 
-const buildLevelStrategy = (def: CustomParserDef): LevelStrategy | undefined => {
+const buildLevelStrategy = (
+  def: CustomParserDef,
+): LevelStrategy | undefined => {
   switch (def.levelStrategy) {
     case 'fixed':
       return { kind: 'fixed', value: def.levelFixed ?? 'unknown' };
@@ -129,7 +131,8 @@ const compileMessageTemplate = (
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(template)) !== null) {
-    if (m.index > last) tokens.push({ kind: 'lit', v: template.slice(last, m.index) });
+    if (m.index > last)
+      tokens.push({ kind: 'lit', v: template.slice(last, m.index) });
     const ref = m[1];
     if (/^\d+$/.test(ref)) {
       tokens.push({ kind: 'g', n: Number(ref) });
@@ -141,10 +144,13 @@ const compileMessageTemplate = (
     }
     last = m.index + m[0].length;
   }
-  if (last < template.length) tokens.push({ kind: 'lit', v: template.slice(last) });
+  if (last < template.length)
+    tokens.push({ kind: 'lit', v: template.slice(last) });
   return (groups) =>
     tokens
-      .map((t) => (t.kind === 'lit' ? t.v : (t.n >= 0 ? (groups[t.n] ?? '') : '')))
+      .map((t) =>
+        t.kind === 'lit' ? t.v : t.n >= 0 ? (groups[t.n] ?? '') : '',
+      )
       .join('');
 };
 
@@ -188,7 +194,10 @@ interface JsParseOutput {
   readonly fields?: Record<string, unknown>;
 }
 
-type JsParseFn = (line: string, ctx: ParseCtx) => JsParseOutput | null | undefined;
+type JsParseFn = (
+  line: string,
+  ctx: ParseCtx,
+) => JsParseOutput | null | undefined;
 
 const compileJsFunctionKind = (def: CustomParserDef): LogParser | null => {
   let fn: JsParseFn;

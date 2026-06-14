@@ -24,13 +24,11 @@ import { defineMultilineParser } from './lib/multiline.ts';
  *   - Plain:  any line with leading whitespace (indented continuation)
  */
 
-const OPEN_LINE_RE =
-  /^\[([^\]]+)\]\s+([A-Za-z]+)\s+(.*)$/;
+const OPEN_LINE_RE = /^\[([^\]]+)\]\s+([A-Za-z]+)\s+(.*)$/;
 
 // Continuation pattern — matched on each subsequent line. Anything
 // matching this gets appended to the open record's `stack` array.
-const CONTINUATION_RE =
-  /^(?:\s+|Caused by:|\.\.\.|java\.|com\.|org\.|io\.)/;
+const CONTINUATION_RE = /^(?:\s+|Caused by:|\.\.\.|java\.|com\.|org\.|io\.)/;
 
 const isStackFrame = (line: string): boolean =>
   line.startsWith(' ') ||
@@ -65,7 +63,9 @@ export const appTextParser = defineMultilineParser({
         // line — both Python (`ConnectionError: foo`) and JVM
         // (`java.lang.RuntimeException: foo`) put it there.
         const last = stack[stack.length - 1];
-        const exMatch = /^([\w.]+(?:Error|Exception)):\s*(.*)$/.exec(last ?? '');
+        const exMatch = /^([\w.]+(?:Error|Exception)):\s*(.*)$/.exec(
+          last ?? '',
+        );
         if (exMatch) {
           fields.exception_type = exMatch[1];
           fields.exception_message = exMatch[2];

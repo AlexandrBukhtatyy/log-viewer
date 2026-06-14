@@ -7,7 +7,12 @@ export interface LvTweakTextProps {
   onChange: (value: string) => void;
 }
 
-export const LvTweakText = ({ label, value, placeholder, onChange }: LvTweakTextProps) => (
+export const LvTweakText = ({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: LvTweakTextProps) => (
   <LvTweakRow label={label}>
     <input
       className="twk-field"

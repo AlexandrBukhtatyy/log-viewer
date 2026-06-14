@@ -117,9 +117,7 @@ export interface IndexerApi {
    * calls this on every `LogicalFieldsConfig` change; the indexer
    * keeps the latest snapshot until the next push.
    */
-  setLogicalFields: (
-    fields: ReadonlyArray<LogicalField>,
-  ) => Promise<void>;
+  setLogicalFields: (fields: ReadonlyArray<LogicalField>) => Promise<void>;
 
   /**
    * Coverage report for one logical field (ADR-0030, Phase 2):
@@ -130,9 +128,7 @@ export interface IndexerApi {
    * Caller passes the resolved field definition so the indexer
    * doesn't have to round-trip through `setLogicalFields` first.
    */
-  logicalFieldCoverage: (
-    field: LogicalField,
-  ) => Promise<LogicalFieldCoverage>;
+  logicalFieldCoverage: (field: LogicalField) => Promise<LogicalFieldCoverage>;
 
   vacuum: () => Promise<void>;
   estimateSize: () => Promise<SizeReport>;

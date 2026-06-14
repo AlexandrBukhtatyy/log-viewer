@@ -10,7 +10,9 @@ const isFileSource = (s: LogSource): s is FileLogSource => s.kind === 'file';
 
 export const createFileAdapter: LogSourceAdapterFactory = (source) => {
   if (!isFileSource(source)) {
-    throw new Error(`createFileAdapter: expected source.kind='file', got '${source.kind}'`);
+    throw new Error(
+      `createFileAdapter: expected source.kind='file', got '${source.kind}'`,
+    );
   }
   let aborter: AbortController | null = null;
 

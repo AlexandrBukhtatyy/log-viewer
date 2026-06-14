@@ -42,7 +42,11 @@ const TRANSFORMS = [
 
 /** Rough id sanitisation — keeps the id usable as a registry key and in source.parserId. */
 const slugify = (raw: string): string =>
-  raw.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/-+/g, '-');
+  raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-');
 
 /** Form state: easier to manipulate when fields/timestamp/level live as strings on the edit form. */
 interface FormState {
@@ -213,7 +217,11 @@ const buildDef = (
   if (form.customTokensJson.trim()) {
     try {
       const parsed = JSON.parse(form.customTokensJson);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        Array.isArray(parsed)
+      ) {
         throw new Error('customTokens must be a JSON object');
       }
       for (const [k, v] of Object.entries(parsed)) {
@@ -244,7 +252,8 @@ const buildDef = (
     pattern: form.pattern,
     flags: '',
     fields: [],
-    customTokens: Object.keys(customTokens).length > 0 ? customTokens : undefined,
+    customTokens:
+      Object.keys(customTokens).length > 0 ? customTokens : undefined,
     timestampField: form.timestampField.trim() || undefined,
     timestampTransform: form.timestampField.trim()
       ? (form.timestampTransform as CustomParserDef['timestampTransform'])
@@ -311,7 +320,9 @@ export const LvParsersPanel = ({
 
   const save = async (): Promise<void> => {
     const prior =
-      edit.mode === 'edit' ? (parsers.find((p) => p.id === edit.id) ?? null) : null;
+      edit.mode === 'edit'
+        ? (parsers.find((p) => p.id === edit.id) ?? null)
+        : null;
     const { def, error } = buildDef(form, prior);
     if (def === undefined || error) {
       setForm({ ...form, error: error ?? 'unknown error' });
@@ -321,8 +332,10 @@ export const LvParsersPanel = ({
     cancel();
   };
 
-  const updateField = <K extends keyof FormState>(key: K, value: FormState[K]): void =>
-    setForm({ ...form, [key]: value, error: null });
+  const updateField = <K extends keyof FormState>(
+    key: K,
+    value: FormState[K],
+  ): void => setForm({ ...form, [key]: value, error: null });
 
   return (
     <aside className="lv-sidebar lv-parsers-panel">
@@ -333,12 +346,17 @@ export const LvParsersPanel = ({
           onClick={startNew}
           title="Create a new custom parser"
         >
-          <span className="lv-add-src-plus" aria-hidden="true">＋</span>
+          <span className="lv-add-src-plus" aria-hidden="true">
+            ＋
+          </span>
           <span>New parser</span>
         </button>
       </div>
 
-      <label className="lv-parsers-js-toggle" title="JS parsers run with full worker permissions — only enable for code you've reviewed.">
+      <label
+        className="lv-parsers-js-toggle"
+        title="JS parsers run with full worker permissions — only enable for code you've reviewed."
+      >
         <input
           type="checkbox"
           checked={jsEnabled}
@@ -363,9 +381,7 @@ export const LvParsersPanel = ({
         </div>
       )}
 
-      {parsers.length > 0 && (
-        <div className="lv-parsers-section-hd">Yours</div>
-      )}
+      {parsers.length > 0 && <div className="lv-parsers-section-hd">Yours</div>}
       <div className="lv-parsers-list">
         {parsers.map((p) => (
           <div key={p.id} className="lv-parsers-row">
@@ -472,7 +488,11 @@ export const LvParsersPanel = ({
               </select>
             </label>
           </div>
-          <LvFormField orientation="column" label="Label" htmlFor="lv-parser-label">
+          <LvFormField
+            orientation="column"
+            label="Label"
+            htmlFor="lv-parser-label"
+          >
             <input
               id="lv-parser-label"
               className="lv-form-input"
@@ -528,7 +548,11 @@ export const LvParsersPanel = ({
           </LvFormField>
           {form.kind === 'regex' && (
             <>
-              <LvFormField orientation="column" label="Flags" htmlFor="lv-parser-flags">
+              <LvFormField
+                orientation="column"
+                label="Flags"
+                htmlFor="lv-parser-flags"
+              >
                 <input
                   id="lv-parser-flags"
                   className="lv-form-input"
@@ -562,8 +586,8 @@ export const LvParsersPanel = ({
               htmlFor="lv-parser-tokens"
               help={
                 <>
-                  Optional map of additional <code>%&#123;NAME&#125;</code> tokens
-                  — each value is itself a grok source.
+                  Optional map of additional <code>%&#123;NAME&#125;</code>{' '}
+                  tokens — each value is itself a grok source.
                 </>
               }
             >
@@ -573,7 +597,9 @@ export const LvParsersPanel = ({
                 rows={3}
                 value={form.customTokensJson}
                 placeholder='{"MYID": "[A-Z]{3}-%{NUMBER}"}'
-                onChange={(e) => updateField('customTokensJson', e.target.value)}
+                onChange={(e) =>
+                  updateField('customTokensJson', e.target.value)
+                }
               />
             </LvFormField>
           )}
@@ -582,16 +608,22 @@ export const LvParsersPanel = ({
               <div className="lv-form-row lv-parsers-row-pair">
                 <label className="lv-form-half">
                   <span className="lv-form-label">
-                    {form.kind === 'grok' ? 'Timestamp field' : 'Timestamp group'}
+                    {form.kind === 'grok'
+                      ? 'Timestamp field'
+                      : 'Timestamp group'}
                   </span>
                   <input
                     className="lv-form-input"
                     type="text"
                     value={
-                      form.kind === 'grok' ? form.timestampField : form.timestampGroup
+                      form.kind === 'grok'
+                        ? form.timestampField
+                        : form.timestampGroup
                     }
                     placeholder={
-                      form.kind === 'grok' ? '(field name, e.g. @ts)' : '(group # or empty)'
+                      form.kind === 'grok'
+                        ? '(field name, e.g. @ts)'
+                        : '(group # or empty)'
                     }
                     onChange={(e) =>
                       form.kind === 'grok'
@@ -623,7 +655,9 @@ export const LvParsersPanel = ({
                   <select
                     className="lv-form-input"
                     value={form.levelStrategy}
-                    onChange={(e) => updateField('levelStrategy', e.target.value)}
+                    onChange={(e) =>
+                      updateField('levelStrategy', e.target.value)
+                    }
                   >
                     <option value="">(unknown)</option>
                     <option value="fixed">fixed</option>
@@ -657,8 +691,12 @@ export const LvParsersPanel = ({
                     <input
                       className="lv-form-input"
                       type="text"
-                      value={form.kind === 'grok' ? form.levelField : form.levelGroup}
-                      placeholder={form.kind === 'grok' ? '(field name)' : '(group #)'}
+                      value={
+                        form.kind === 'grok' ? form.levelField : form.levelGroup
+                      }
+                      placeholder={
+                        form.kind === 'grok' ? '(field name)' : '(group #)'
+                      }
                       onChange={(e) =>
                         form.kind === 'grok'
                           ? updateField('levelField', e.target.value)
@@ -670,7 +708,11 @@ export const LvParsersPanel = ({
                   <span className="lv-form-half" />
                 )}
               </div>
-              <LvFormField orientation="column" label="Message template" htmlFor="lv-parser-msg">
+              <LvFormField
+                orientation="column"
+                label="Message template"
+                htmlFor="lv-parser-msg"
+              >
                 <input
                   id="lv-parser-msg"
                   className="lv-form-input"
@@ -681,7 +723,9 @@ export const LvParsersPanel = ({
                       ? '${method} ${uri} → ${status}'
                       : '${2} ${3} (use ${n} for group n)'
                   }
-                  onChange={(e) => updateField('messageTemplate', e.target.value)}
+                  onChange={(e) =>
+                    updateField('messageTemplate', e.target.value)
+                  }
                 />
               </LvFormField>
             </>
@@ -702,9 +746,7 @@ export const LvParsersPanel = ({
             />
           </LvFormField>
 
-          {form.error && (
-            <div className="lv-form-error">{form.error}</div>
-          )}
+          {form.error && <div className="lv-form-error">{form.error}</div>}
 
           <div className="lv-parsers-form-ft">
             <button

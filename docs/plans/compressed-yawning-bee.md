@@ -26,10 +26,12 @@
 // было: Math.min(Math.max(cores - 1, 1), 4)
 // стало:
 export const recommendedPoolSize = (): number => {
-  const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
+  const cores =
+    (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
   return Math.min(Math.max(cores - 1, 1), 8);
 };
 ```
+
 Upper bound `8` — чтобы на 32-ядерных машинах не плодить лишние воркеры (каждый держит свой SQLite handle и парсер-state). На типичных 8-12-ядерных лэптопах получим 7-8 параллельных парсеров вместо 4.
 
 **1.2. Увеличить SQLite cache и включить mmap.**
@@ -43,13 +45,14 @@ PRAGMA temp_store = MEMORY;
 PRAGMA cache_size = -65000;     -- было -8000 (8 МБ → ~64 МБ)
 PRAGMA mmap_size = 268435456;   -- 256 МБ memory-mapped I/O
 ```
+
 Cache 64 МБ покрывает индексы и горячую часть `entry`/`field_meta` для типичных файлов до сотен МБ. `mmap_size` ускоряет чтения при сборке временных результатов и поиске.
 
 **1.3. Снизить частоту status-emit во время инжеста.**
 [src/workers/coordinator/coordinator.ts:420](src/workers/coordinator/coordinator.ts#L420)
 
 ```ts
-const CHANGE_THROTTLE_MS = 500;   // было 200
+const CHANGE_THROTTLE_MS = 500; // было 200
 ```
 
 Дополнительно: проверить в `dispatchChangeNotice`, что во время активного инжеста (есть source со статусом `indexing`/`streaming`) **не** запускается `count(activeFilter)` для каждого батча — достаточно публиковать `totalCount` из per-source counters (которые уже инкрементируются в `bumpSourceCountStmt`, см. [indexer-api.ts:401-403](src/workers/indexer/indexer-api.ts#L401-L403)). Точный `filteredCount` пересчитывать только когда все источники переходят в `ready`.
@@ -68,13 +71,23 @@ const CHANGE_THROTTLE_MS = 500;   // было 200
 const ROWS_PER_INSERT = 256;
 for (let i = 0; i < entries.length; i += ROWS_PER_INSERT) {
   const slice = entries.slice(i, i + ROWS_PER_INSERT);
-  const placeholders = slice.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+  const placeholders = slice
+    .map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .join(', ');
   const sql = `INSERT OR IGNORE INTO entry (${ENTRY_COLS_UNQUALIFIED}) VALUES ${placeholders}`;
   const params: SqlValue[] = [];
   for (const e of slice) {
     params.push(
-      e.id, e.sourceId, e.seq, e.timestamp, e.level,
-      e.filePath, e.byteStart, e.byteEnd, e.lineNumber, e.fileSeq,
+      e.id,
+      e.sourceId,
+      e.seq,
+      e.timestamp,
+      e.level,
+      e.filePath,
+      e.byteStart,
+      e.byteEnd,
+      e.lineNumber,
+      e.fileSeq,
       typeof e.fields === 'string' ? e.fields : JSON.stringify(e.fields),
     );
   }
@@ -83,6 +96,7 @@ for (let i = 0; i < entries.length; i += ROWS_PER_INSERT) {
 ```
 
 Заметки:
+
 - Prepared statement `insertEntryStmt` тут не нужен (SQL разный по числу `VALUES`-групп); либо удалить его, либо оставить как fallback для случая `entries.length < ROWS_PER_INSERT`. По коду — удалить и упростить.
 - `typeof e.fields === 'string'` — защита от двойной сериализации (см. п. 2.3).
 
@@ -98,7 +112,10 @@ for (const [sid, perKey] of fieldsBySource) {
 if (allPairs.length > 0) {
   const conds = allPairs.map(() => '(source_id = ? AND key = ?)').join(' OR ');
   const params: SqlValue[] = [];
-  for (const [sid, key] of allPairs) { params.push(sid); params.push(key); }
+  for (const [sid, key] of allPairs) {
+    params.push(sid);
+    params.push(key);
+  }
   const existingRows = runRows(
     db,
     `SELECT source_id, key, type, occurrences, total_seen, top_values_json
@@ -119,12 +136,12 @@ if (allPairs.length > 0) {
 
 ### Критические файлы
 
-| Файл | Что меняем |
-|---|---|
-| [src/workers/coordinator/pool/parser-pool.ts](src/workers/coordinator/pool/parser-pool.ts) | Лимит пула 4 → 8 (одна строка). |
-| [src/workers/indexer/db/open-db.ts](src/workers/indexer/db/open-db.ts) | `cache_size`, `mmap_size` (две строки в PRAGMA-блоке). |
-| [src/workers/coordinator/coordinator.ts](src/workers/coordinator/coordinator.ts) | `CHANGE_THROTTLE_MS` 200 → 500; во время инжеста не дёргать `count(activeFilter)` — отдавать approximate `totalCount` из source counters. |
-| [src/workers/indexer/indexer-api.ts](src/workers/indexer/indexer-api.ts) | Multi-row INSERT для `entry`, единый SELECT для field_meta, опционально — `fields_json` без повторной сериализации. |
+| Файл                                                                                       | Что меняем                                                                                                                                |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [src/workers/coordinator/pool/parser-pool.ts](src/workers/coordinator/pool/parser-pool.ts) | Лимит пула 4 → 8 (одна строка).                                                                                                           |
+| [src/workers/indexer/db/open-db.ts](src/workers/indexer/db/open-db.ts)                     | `cache_size`, `mmap_size` (две строки в PRAGMA-блоке).                                                                                    |
+| [src/workers/coordinator/coordinator.ts](src/workers/coordinator/coordinator.ts)           | `CHANGE_THROTTLE_MS` 200 → 500; во время инжеста не дёргать `count(activeFilter)` — отдавать approximate `totalCount` из source counters. |
+| [src/workers/indexer/indexer-api.ts](src/workers/indexer/indexer-api.ts)                   | Multi-row INSERT для `entry`, единый SELECT для field_meta, опционально — `fields_json` без повторной сериализации.                       |
 
 ### Что **не** делаем
 

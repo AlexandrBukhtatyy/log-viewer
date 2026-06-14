@@ -30,10 +30,7 @@ export const useLogWindow = (): UseLogWindow => {
   const entries = useStore(store, (s) => s.entries);
   const hasLoadedEntries = entries.size > 0;
 
-  const getRow = useCallback(
-    (index: number) => entries.get(index),
-    [entries],
-  );
+  const getRow = useCallback((index: number) => entries.get(index), [entries]);
 
   const setVisibleRange = useCallback(
     (from: number, to: number) => store.getState().setVisibleRange(from, to),

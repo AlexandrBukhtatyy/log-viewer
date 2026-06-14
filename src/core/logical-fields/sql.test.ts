@@ -48,9 +48,7 @@ describe('logicalFieldToSql', () => {
   it('nested dot path produces $.a.b JSON-path', () => {
     expect(
       logicalFieldToSql(
-        field('http.status', [
-          { type: 'field', path: 'http.status_code' },
-        ]),
+        field('http.status', [{ type: 'field', path: 'http.status_code' }]),
       ),
     ).toEqual({
       sql: "JSON_EXTRACT(entry.fields_json, '$.http.status_code')",

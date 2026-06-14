@@ -37,7 +37,7 @@ readonly sort?: LogSort | null;
 ```ts
 export const orderByForFilter = (filter: LogFilter): string => {
   if (filter.sort) {
-    const { sql } = fieldKeyToSql(filter.sort.key);  // reuse existing translator
+    const { sql } = fieldKeyToSql(filter.sort.key); // reuse existing translator
     const dir = filter.sort.dir === 'desc' ? 'DESC' : 'ASC';
     // Nulls last, stable tiebreaker by (source_id, seq).
     return `ORDER BY ${sql} IS NULL, ${sql} ${dir}, entry.source_id ASC, entry.seq ASC`;
@@ -58,7 +58,7 @@ export const orderByForFilter = (filter: LogFilter): string => {
 ```tsx
 type SortableHeaderProps = {
   readonly className: string;
-  readonly sortKey: FieldKey | null;       // null = неактивная (message, caret)
+  readonly sortKey: FieldKey | null; // null = неактивная (message, caret)
   readonly label: string;
   readonly sort: LogSort | null | undefined;
   readonly onCycle: (key: FieldKey) => void;
@@ -70,31 +70,34 @@ type SortableHeaderProps = {
 
 Заголовки переводятся на `SortableHeader`:
 
-| header | sortKey |
-| --- | --- |
-| `@seq` | `@seq` |
-| caret | `null` |
-| `timestamp` | `@ts` |
-| `level` | `@level` |
-| `service` | `service` (динамическое JSON-поле) |
-| `@file` | `@file` |
-| dynamic columns (each `c`) | `c.key` |
-| `message` | `null` |
-| actions | `null` |
+| header                     | sortKey                            |
+| -------------------------- | ---------------------------------- |
+| `@seq`                     | `@seq`                             |
+| caret                      | `null`                             |
+| `timestamp`                | `@ts`                              |
+| `level`                    | `@level`                           |
+| `service`                  | `service` (динамическое JSON-поле) |
+| `@file`                    | `@file`                            |
+| dynamic columns (each `c`) | `c.key`                            |
+| `message`                  | `null`                             |
+| actions                    | `null`                             |
 
 ### Цикл и обработчик
 
 ```ts
-const onSortCycle = useCallback((key: FieldKey) => {
-  setFilter((prev) => {
-    const cur = prev.sort;
-    let next: LogSort | null;
-    if (!cur || cur.key !== key)        next = { key, dir: 'asc' };
-    else if (cur.dir === 'asc')         next = { key, dir: 'desc' };
-    else                                next = null;  // 3-я фаза — сброс
-    return { ...prev, sort: next };
-  });
-}, [setFilter]);
+const onSortCycle = useCallback(
+  (key: FieldKey) => {
+    setFilter((prev) => {
+      const cur = prev.sort;
+      let next: LogSort | null;
+      if (!cur || cur.key !== key) next = { key, dir: 'asc' };
+      else if (cur.dir === 'asc') next = { key, dir: 'desc' };
+      else next = null; // 3-я фаза — сброс
+      return { ...prev, sort: next };
+    });
+  },
+  [setFilter],
+);
 ```
 
 ### Group-by
@@ -109,12 +112,24 @@ const onSortCycle = useCallback((key: FieldKey) => {
 
 ```css
 .lv-sh-sortable {
-  display: inline-flex; align-items: center; gap: 4px;
-  background: transparent; border: 0; padding: 0; margin: 0;
-  font: inherit; color: inherit; cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
-.lv-sh-sortable:hover { color: var(--lv-fg); }
-.lv-sh-sort-icon { width: 10px; opacity: 0.7; }
+.lv-sh-sortable:hover {
+  color: var(--lv-fg);
+}
+.lv-sh-sort-icon {
+  width: 10px;
+  opacity: 0.7;
+}
 ```
 
 ### Persistence
@@ -124,9 +139,11 @@ const onSortCycle = useCallback((key: FieldKey) => {
 ## Critical files
 
 Переименование (первый шаг реализации):
+
 - `docs/plans/binary-baking-clover.md` → `docs/plans/column-click-sort.md` (`mv`, файл untracked).
 
 Изменяются:
+
 - [src/core/types/log-filter.ts](src/core/types/log-filter.ts) — `LogSort`, `LogFilter.sort`.
 - [src/core/filter/query.ts](src/core/filter/query.ts) — `orderByForFilter` с веткой `filter.sort`.
 - [src/core/filter/query.test.ts](src/core/filter/query.test.ts) — новые юнит-тесты.
@@ -134,6 +151,7 @@ const onSortCycle = useCallback((key: FieldKey) => {
 - [src/ui/styles/lv.css](src/ui/styles/lv.css) — `.lv-sh-sortable`, `.lv-sh-sort-icon`.
 
 Не меняются, но переиспользуются:
+
 - [`fieldKeyToSql`](src/core/filter/field-key.ts) — построение SQL-выражения по FieldKey (built-in и dynamic).
 - [`useLogFilter` / `setFilter`](src/hooks/use-log-filter.ts) — пушим `sort` через тот же канал.
 - Существующий `ORDER_BY_DEFAULT` / `ORDER_BY_PHYSICAL` — остаются в fallback-ветке.

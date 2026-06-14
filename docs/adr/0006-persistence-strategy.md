@@ -6,6 +6,7 @@
 ## Context and Problem Statement
 
 Источники логов в приложении неоднородны по природе:
+
 - **`file`** — `File`-объект из `<input type="file">` или drag-and-drop. После reload объект теряется (нет постоянной ссылки).
 - **`directory`** — `FileSystemDirectoryHandle` через `showDirectoryPicker` (File System Access API). **Сам handle структурно-клонируем и хранится в IndexedDB** — после reload можно re-открыть ту же папку (после подтверждения permission'а пользователем).
 - **`text`** — вставленный текст. Самодостаточный.
@@ -29,13 +30,13 @@ Chosen option: **«Дифференцированная стратегия»**. 
 
 ### Политика по типам
 
-| Источник     | Что персистится                                       | Где                                  | Поведение после reload                                         |
-|--------------|-------------------------------------------------------|---------------------------------------|----------------------------------------------------------------|
-| `file`       | Entries в SQLite (только если user opt-in)           | OPFS (`logs.sqlite`)                 | На MVP: source исчезает (нет handle для re-open). После MVP — `entry_raw_ref` для отложенного re-open через persisted handle ([ADR-0005](0005-sqlite-fts5-opfs-index.md), §H плана). |
-| `directory`  | `FileSystemDirectoryHandle` + entries                 | IndexedDB (handle), OPFS (entries)   | App спрашивает permission → если granted, сравнивает `mtime`/`size` индексированных файлов с актуальными → инкрементальный re-index. |
-| `text`       | Не персистится                                       | —                                     | Source исчезает.                                               |
-| `url`        | Не персистится по умолчанию                          | —                                     | Source исчезает (URL можно сохранить отдельной фичей «pinned URL» — после MVP). |
-| `stream`     | Не персистится (live-data)                           | —                                     | Source исчезает.                                               |
+| Источник    | Что персистится                            | Где                                | Поведение после reload                                                                                                                                                               |
+| ----------- | ------------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `file`      | Entries в SQLite (только если user opt-in) | OPFS (`logs.sqlite`)               | На MVP: source исчезает (нет handle для re-open). После MVP — `entry_raw_ref` для отложенного re-open через persisted handle ([ADR-0005](0005-sqlite-fts5-opfs-index.md), §H плана). |
+| `directory` | `FileSystemDirectoryHandle` + entries      | IndexedDB (handle), OPFS (entries) | App спрашивает permission → если granted, сравнивает `mtime`/`size` индексированных файлов с актуальными → инкрементальный re-index.                                                 |
+| `text`      | Не персистится                             | —                                  | Source исчезает.                                                                                                                                                                     |
+| `url`       | Не персистится по умолчанию                | —                                  | Source исчезает (URL можно сохранить отдельной фичей «pinned URL» — после MVP).                                                                                                      |
+| `stream`    | Не персистится (live-data)                 | —                                  | Source исчезает.                                                                                                                                                                     |
 
 ### Где какое хранилище и почему
 
@@ -70,6 +71,7 @@ Chosen option: **«Дифференцированная стратегия»**. 
 ### Quotas и Reset
 
 OPFS-квота непредсказуема (Chrome ~60% диска, Safari ~1 ГБ). Поэтому:
+
 - `coordinator.estimateStorage()` показывает текущее потребление и разбивку по источникам.
 - UI «Очистить базу» / «Удалить источник» доступен из Settings (см. план §«Дополнительно C»).
 - На старте один раз: `navigator.storage.persist()` — снижает риск, что браузер прибьёт OPFS под давлением.

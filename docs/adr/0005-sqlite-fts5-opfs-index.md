@@ -6,6 +6,7 @@
 ## Context and Problem Statement
 
 Поиск по логам — основная UX-функция приложения. Нужна возможность:
+
 - Полнотекстовый поиск по `message` / `raw` (типичные кейсы: «найти все строки с request-id `abc-123`», «все ошибки за последние 5 минут»).
 - Range-фильтры по `timestamp` (временной диапазон), `level` (severity), `sourceId`.
 - Структурные предикаты по парсенным полям (`fields_json`).
@@ -66,6 +67,7 @@ CREATE VIRTUAL TABLE entry_fts USING fts5(
 ```
 
 `LogFilter` транслируется в SQL в `src/core/filter/query.ts`:
+
 - `levels` → `WHERE level IN (...)`
 - `timeRange` → `WHERE ts BETWEEN ? AND ?`
 - `sources` → `WHERE source_id IN (...)`

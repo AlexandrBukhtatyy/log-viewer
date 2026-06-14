@@ -23,7 +23,12 @@ export const LvSettingsPopover = ({
       >
         <div className="lv-settings-hd">
           <span>Settings</span>
-          <button type="button" className="lv-settings-x" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="lv-settings-x"
+            onClick={onClose}
+            aria-label="Close"
+          >
             ✕
           </button>
         </div>
@@ -117,8 +122,15 @@ export const LvSettingsPopover = ({
             <span className="lv-settings-label">Build</span>
             <code>{__APP_BUILD_HASH__}</code>
           </div>
-          <div className="lv-settings-row" style={{ flexWrap: 'wrap', gap: 10 }}>
-            <a href="https://github.com/AlexandrBukhtatyy/log-viewer" target="_blank" rel="noopener">
+          <div
+            className="lv-settings-row"
+            style={{ flexWrap: 'wrap', gap: 10 }}
+          >
+            <a
+              href="https://github.com/AlexandrBukhtatyy/log-viewer"
+              target="_blank"
+              rel="noopener"
+            >
               GitHub
             </a>
             <a

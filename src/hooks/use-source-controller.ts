@@ -147,10 +147,7 @@ export const useSourceController = (): UseSourceController => {
     [store],
   );
 
-  const clearAll = useCallback(
-    () => store.getState().clearAll(),
-    [store],
-  );
+  const clearAll = useCallback(() => store.getState().clearAll(), [store]);
 
   const resumePersistedSources = useCallback(
     () => store.getState().resumePersistedSources(),

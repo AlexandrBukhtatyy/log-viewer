@@ -4,7 +4,11 @@ export interface LvTweakToggleProps {
   onChange: (value: boolean) => void;
 }
 
-export const LvTweakToggle = ({ label, value, onChange }: LvTweakToggleProps) => (
+export const LvTweakToggle = ({
+  label,
+  value,
+  onChange,
+}: LvTweakToggleProps) => (
   <div className="twk-row twk-row-h">
     <div className="twk-lbl">
       <span>{label}</span>

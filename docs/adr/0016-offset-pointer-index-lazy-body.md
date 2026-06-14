@@ -7,7 +7,7 @@
 
 Текущий индекс ([ADR-0005](0005-sqlite-fts5-opfs-index.md)) — это **перенос содержимого**: парсер для каждой строки сохраняет в `entry` колонки `message` и `raw`, а FTS5-триггеры ([schema-v2-fts.sql](../../src/workers/indexer/db/schema-v2-fts.sql)) дополнительно копируют те же поля во `entry_fts`. На `large.jsonl` 6.5 МБ это ≈10–12 МБ в OPFS-SQLite — индекс **больше** исходных данных.
 
-Для **directory**-источников ситуация особенно бессмысленна: исходные `.log`-файлы уже лежат в файловой системе пользователя, доступны через `FileSystemDirectoryHandle`, и копировать их содержимое внутрь OPFS-SQLite не нужно — мы можем хранить только *указатель* на нужные байты в исходном файле и читать их лениво при отображении.
+Для **directory**-источников ситуация особенно бессмысленна: исходные `.log`-файлы уже лежат в файловой системе пользователя, доступны через `FileSystemDirectoryHandle`, и копировать их содержимое внутрь OPFS-SQLite не нужно — мы можем хранить только _указатель_ на нужные байты в исходном файле и читать их лениво при отображении.
 
 Аналогичная логика применима к **non-directory** источникам (text/pasted/snapshot/url/stream), но с оговоркой: у них исходного байтового файла нет — данные приходят разово (text/pasted/snapshot/url) или потоком (stream). Им нужно **место для байтов**, и единственное безопасное место в браузере — OPFS.
 
@@ -18,16 +18,19 @@
 ## Considered Options
 
 **Структура индекса:**
+
 - A. **Per-entry pointer-only** — одна row на каждую запись с `(file_path, byte_start, byte_end, ts, level, fields_json)`. Точные SQL-фильтры. Без aggregates.
 - B. **Per-file × per-minute aggregates only** — одна row на (файл, минута) с byte-range bucket'а. Минимум места, но точечные фильтры по trace_id/level не работают на индексном уровне.
 - C. **Гибрид: pointer + minute bucket** — обе таблицы. Точные фильтры через pointer-таблицу, timeline/group-by через aggregates.
 
 **Full-text search (на чём индексируем):**
+
 - α. **Без FTS5** — поиск substring/regex применяется на post-resolve-уровне после SQL-фильтра по полям/времени.
 - β. **FTS5 на parsed `message`** — `raw` уходит, `message` остаётся как материализованная колонка ради FTS.
 - γ. **Свой inverted index в OPFS** — отдельный артефакт, не SQLite.
 
 **Хранилище байтов для non-directory источников (stream особенно):**
+
 - I. **Один OPFS-файл append-only** — `lv-spool/<sourceId>.bin`, writer пишет, reader читает.
 - II. **Chunk-per-packet** — для каждого pushed-packet'а `lv-spool/<sourceId>/<chunkSeq>.bin`. Writer и reader работают на разных файлах.
 
@@ -66,6 +69,7 @@ CREATE TABLE entry_minute (
 ```
 
 `file_path` semantics определяется типом источника:
+
 - directory/file → relative path внутри source-handle (`sub/a.log`).
 - text/pasted/snapshot/url → пустая строка `''` (единственный spool-файл `lv-spool/<sourceId>.bin`).
 - stream → chunk-seq как строка (`'0'`, `'1'`, …), указывает на `lv-spool/<sourceId>/<chunkSeq>.bin`.

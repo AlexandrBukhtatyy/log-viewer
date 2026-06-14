@@ -63,7 +63,9 @@ export interface ParserApi {
    * with the same list is a no-op.
    */
   loadCustomParsers: (
-    defs: ReadonlyArray<import('../parsers/custom-parser-def.ts').CustomParserDef>,
+    defs: ReadonlyArray<
+      import('../parsers/custom-parser-def.ts').CustomParserDef
+    >,
   ) => Promise<void>;
   parse: (
     lines: ReadonlyArray<ParseLineFrame>,

@@ -38,8 +38,15 @@ export const LvFilePeek = ({
           <span>{file.name}</span>
           <span className="lv-peek-line">:{line}</span>
         </span>
-        <span className="lv-peek-path">{file.path ?? `/var/log/${file.name}`}</span>
-        <button type="button" className="lv-peek-close" onClick={onClose} aria-label="Close">
+        <span className="lv-peek-path">
+          {file.path ?? `/var/log/${file.name}`}
+        </span>
+        <button
+          type="button"
+          className="lv-peek-close"
+          onClick={onClose}
+          aria-label="Close"
+        >
           ✕
         </button>
       </div>

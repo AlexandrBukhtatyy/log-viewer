@@ -27,7 +27,11 @@ const DEFAULT_SCOPE: LvClearDataScope = {
   pwaCache: false,
 };
 
-export const LvClearDataModal = ({ open, onClose, onConfirm }: LvClearDataModalProps) => {
+export const LvClearDataModal = ({
+  open,
+  onClose,
+  onConfirm,
+}: LvClearDataModalProps) => {
   const [scope, setScope] = useState<LvClearDataScope>(DEFAULT_SCOPE);
 
   // The parent is expected to unmount the modal between sessions (via
@@ -96,9 +100,12 @@ export const LvClearDataModal = ({ open, onClose, onConfirm }: LvClearDataModalP
               onChange={() => toggle('indexData')}
             />
             <span>
-              <span className="lv-clear-row-title">Indexed data &amp; sources</span>
+              <span className="lv-clear-row-title">
+                Indexed data &amp; sources
+              </span>
               <span className="lv-clear-row-sub">
-                SQLite index, OPFS body cache, file-handle registry, custom parsers.
+                SQLite index, OPFS body cache, file-handle registry, custom
+                parsers.
               </span>
             </span>
           </label>
@@ -111,7 +118,8 @@ export const LvClearDataModal = ({ open, onClose, onConfirm }: LvClearDataModalP
             <span>
               <span className="lv-clear-row-title">UI state</span>
               <span className="lv-clear-row-sub">
-                Bookmarks, saved searches, recent files, layout &amp; theme prefs.
+                Bookmarks, saved searches, recent files, layout &amp; theme
+                prefs.
               </span>
             </span>
           </label>

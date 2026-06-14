@@ -6,11 +6,13 @@
 ## Context and Problem Statement
 
 Топология ([ADR-0003](0003-worker-centric-topology.md)) требует RPC между:
+
 - Главным потоком и coordinator worker'ом — типизированный API, подписки на статус/прогресс, передача `File`/`FileSystemDirectoryHandle`.
 - Coordinator'ом и pool из N parser worker'ов — round-robin раздача чанков строк, ожидание `LogEntry[]`.
 - Coordinator'ом и indexer worker'ом — батчевые `insertBatch`, поисковые `search`/`count`/`getEntry`.
 
 Нужен механизм, который:
+
 - Сохранит TypeScript-типизацию через границу worker'а (RPC-вызов `coordinator.search(...)` должен компилироваться с теми же типами, что и реализация).
 - Поддержит подписки (callbacks для статусов и change-notifications).
 - Поддержит `Transferable` (на будущее — `ArrayBuffer` для горячих путей).
@@ -59,6 +61,7 @@ export class ParserPool {
 ### Cancellation
 
 Comlink не передаёт `AbortSignal` через границу worker'а из коробки. Используем шаблон с taskId:
+
 - Main создаёт локальный `AbortController`, шлёт `taskId` в RPC-вызов.
 - Coordinator держит `Map<taskId, AbortController>` внутри worker'а.
 - При abort на main — отдельный `coordinator.cancel(taskId)`-вызов отзывает контроллер внутри.

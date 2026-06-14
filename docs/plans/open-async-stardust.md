@@ -22,6 +22,7 @@
 пользователю текущую версию + наличие обновления.
 
 **Решения, зафиксированные с пользователем:**
+
 - Release flow — **Release Please** (Conventional Commits).
 - UI-точки — все четыре: статус-бар, About-секция в Settings, PWA
   update-баннер, версия в футере лендинга.
@@ -80,7 +81,7 @@ workflow'ы — после merge release-please PR существующий `dep
   и `CHANGELOG.md` руками не править (после seed).
 - [README.md](../../README.md) — badge
   `https://img.shields.io/github/v/release/aleksandrbuhtatyj/log-viewer?include_prereleases&sort=semver`
-  + краткая секция "Releases" со ссылкой на CHANGELOG.
+  - краткая секция "Releases" со ссылкой на CHANGELOG.
 
 commitlint **не вводим сейчас** — соло-разработчик, шум в CI.
 Добавим, если появятся внешние контрибьюторы.
@@ -194,6 +195,7 @@ release automation via Release Please`. Введение CC + автоматиз
 ## Verification
 
 **Локально:**
+
 1. `pnpm install && pnpm test && pnpm lint && pnpm build` — все зелёные.
 2. `grep -o 'v0.1.0' dist/index.html` — найдено (футер лендинга).
 3. `grep -ro '0.1.0' dist/assets | head` — найдено (bundle PWA).
@@ -203,6 +205,7 @@ release automation via Release Please`. Введение CC + автоматиз
    открывает Settings → About с версией, build hash и 4 ссылками.
 
 **PWA update-баннер (ручная):**
+
 1. `pnpm build && pnpm preview`, открыть `/log-viewer/app/`, дождаться
    регистрации SW (DevTools → Application → Service Workers).
 2. Косметическая правка (например, пробел в `LvApp.tsx`), `pnpm build`
@@ -213,6 +216,7 @@ release automation via Release Please`. Введение CC + автоматиз
    переключить `injectRegister: 'auto'` → `false` в `vite.config.ts`.
 
 **Release Please dry-run:**
+
 1. После merge Phase 3 в main: Actions → workflow "Release Please" —
    зелёный.
 2. Pull Requests → автоматически создан PR `chore(main): release 0.x.x`
@@ -221,6 +225,7 @@ release automation via Release Please`. Введение CC + автоматиз
    запускается по `release: published`, PWA задеплоена.
 
 **Тестовый feat-коммит:**
+
 - На feature-ветке `feat: pretty-print json in entry detail` (мнимая
   фича), PR, merge — Release Please обновит уже открытый release PR,
   добавив запись в Features.

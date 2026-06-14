@@ -28,9 +28,7 @@ export const validateLogicalFieldId = (
   if (builtInLogicalField(id) !== null) {
     return `Id "${id}" collides with a built-in template.`;
   }
-  if (
-    config.customFields.some((f) => f.id === id && f.id !== selfId)
-  ) {
+  if (config.customFields.some((f) => f.id === id && f.id !== selfId)) {
     return `Id "${id}" is already used by another custom field.`;
   }
   return null;
@@ -39,9 +37,7 @@ export const validateLogicalFieldId = (
 export const validateLabel = (label: string): string | null =>
   label.trim().length === 0 ? 'Label is required.' : null;
 
-export const validateExtractor = (
-  ex: LogicalExtractor,
-): string | null => {
+export const validateExtractor = (ex: LogicalExtractor): string | null => {
   if (ex.type === 'field') {
     if (ex.path.trim().length === 0) return 'Field path is required.';
     return null;

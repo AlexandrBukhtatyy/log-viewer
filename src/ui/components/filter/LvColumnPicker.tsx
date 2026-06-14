@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  FieldDescriptor,
-} from '../../../core/filter/field-descriptor.ts';
+import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { LvColumnPref } from '../../contracts/lv-types.ts';
 import { builtInColumn } from '../../contracts/lv-column-registry.tsx';
 
@@ -24,7 +22,11 @@ export interface LvColumnPickerProps {
  * Keeps "high-signal" picks at the top while still letting the user
  * reach for `@source.kind` etc. without scrolling.
  */
-export const LvColumnPicker = ({ columns, descriptors, onChange }: LvColumnPickerProps) => {
+export const LvColumnPicker = ({
+  columns,
+  descriptors,
+  onChange,
+}: LvColumnPickerProps) => {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -37,7 +39,10 @@ export const LvColumnPicker = ({ columns, descriptors, onChange }: LvColumnPicke
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const selectedKeys = useMemo(() => new Set(columns.map((c) => c.key)), [columns]);
+  const selectedKeys = useMemo(
+    () => new Set(columns.map((c) => c.key)),
+    [columns],
+  );
 
   const sortedDescriptors = useMemo(() => {
     const dyn = descriptors.filter((d) => d.origin === 'dynamic').slice();

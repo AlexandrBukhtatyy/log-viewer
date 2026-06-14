@@ -62,7 +62,8 @@ export const LvSearchInput = ({
     return undefined;
   }, [autoFocus]);
 
-  const showCase = caseSensitive !== undefined && onCaseSensitiveChange !== undefined;
+  const showCase =
+    caseSensitive !== undefined && onCaseSensitiveChange !== undefined;
   const showWord = wholeWord !== undefined && onWholeWordChange !== undefined;
   const showRegex = regex !== undefined && onRegexChange !== undefined;
 
@@ -75,8 +76,20 @@ export const LvSearchInput = ({
         height="12"
         aria-hidden="true"
       >
-        <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.2" />
-        <path d="M9 9 L12 12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <circle
+          cx="6"
+          cy="6"
+          r="4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M9 9 L12 12"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
       </svg>
       <input
         ref={inputRef}
@@ -106,9 +119,32 @@ export const LvSearchInput = ({
               title="Match Case"
               aria-label="Match Case"
             >
-              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                <text x="1" y="12" fontSize="9" fontFamily="sans-serif" fontWeight="700" fill="currentColor">A</text>
-                <text x="7" y="12" fontSize="7" fontFamily="sans-serif" fontWeight="700" fill="currentColor">a</text>
+              <svg
+                viewBox="0 0 16 16"
+                width="12"
+                height="12"
+                aria-hidden="true"
+              >
+                <text
+                  x="1"
+                  y="12"
+                  fontSize="9"
+                  fontFamily="sans-serif"
+                  fontWeight="700"
+                  fill="currentColor"
+                >
+                  A
+                </text>
+                <text
+                  x="7"
+                  y="12"
+                  fontSize="7"
+                  fontFamily="sans-serif"
+                  fontWeight="700"
+                  fill="currentColor"
+                >
+                  a
+                </text>
               </svg>
             </button>
           )}
@@ -120,9 +156,28 @@ export const LvSearchInput = ({
               title="Match Whole Word"
               aria-label="Match Whole Word"
             >
-              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                <text x="1" y="11" fontSize="8" fontFamily="sans-serif" fontWeight="700" fill="currentColor">ab</text>
-                <path d="M1 13 H15" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <svg
+                viewBox="0 0 16 16"
+                width="12"
+                height="12"
+                aria-hidden="true"
+              >
+                <text
+                  x="1"
+                  y="11"
+                  fontSize="8"
+                  fontFamily="sans-serif"
+                  fontWeight="700"
+                  fill="currentColor"
+                >
+                  ab
+                </text>
+                <path
+                  d="M1 13 H15"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
               </svg>
             </button>
           )}
@@ -134,7 +189,12 @@ export const LvSearchInput = ({
               title="Use Regular Expression"
               aria-label="Regex"
             >
-              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+              <svg
+                viewBox="0 0 16 16"
+                width="12"
+                height="12"
+                aria-hidden="true"
+              >
                 <path
                   d="M9 2 V8 M6.4 3.4 L11.6 6.6 M6.4 6.6 L11.6 3.4"
                   stroke="currentColor"
@@ -142,7 +202,14 @@ export const LvSearchInput = ({
                   strokeLinecap="round"
                   fill="none"
                 />
-                <rect x="2" y="11" width="3" height="3" rx="0.5" fill="currentColor" />
+                <rect
+                  x="2"
+                  y="11"
+                  width="3"
+                  height="3"
+                  rx="0.5"
+                  fill="currentColor"
+                />
               </svg>
             </button>
           )}

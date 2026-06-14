@@ -17,7 +17,9 @@ const isUrlSource = (s: LogSource): s is UrlLogSource => s.kind === 'url';
  */
 export const createUrlAdapter: LogSourceAdapterFactory = (source) => {
   if (!isUrlSource(source)) {
-    throw new Error(`createUrlAdapter: expected source.kind='url', got '${source.kind}'`);
+    throw new Error(
+      `createUrlAdapter: expected source.kind='url', got '${source.kind}'`,
+    );
   }
   let aborter: AbortController | null = null;
 

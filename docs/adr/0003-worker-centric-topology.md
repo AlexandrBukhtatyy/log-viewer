@@ -10,6 +10,7 @@ PWA log-viewer должен переваривать файлы в сотни М
 Web Workers — единственный браузерный примитив для off-main-thread compute. Вопрос: как разнести роли между worker'ами и через какой контракт связать их с приложением.
 
 Ограничения:
+
 - OPFS (Origin Private File System), нужный для SQLite-персистентности (см. [ADR-0005](0005-sqlite-fts5-opfs-index.md)), доступен **только из dedicated worker'ов** — main thread напрямую с ним работать не может.
 - SQLite — single-writer; параллельная запись из нескольких worker'ов небезопасна.
 - Хочется минимизировать поверхность API на главном потоке: чем меньше API-точек, тем стабильнее контракт для headless-архитектуры (см. [ADR-0002](0002-headless-architecture.md)).

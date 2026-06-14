@@ -32,7 +32,10 @@ export const LvMenuBar = ({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpenId(null);
     };
-    const t = setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+    const t = setTimeout(
+      () => document.addEventListener('mousedown', onDoc),
+      0,
+    );
     document.addEventListener('keydown', onKey);
     return () => {
       clearTimeout(t);
@@ -48,10 +51,25 @@ export const LvMenuBar = ({
 
   const recents = recentFiles ?? [];
   const fileMenu: LvMenuItem[] = [
-    { id: 'new-window', label: 'New Window', hint: '⇧⌘N', onRun: () => onCommand?.('new-window') },
+    {
+      id: 'new-window',
+      label: 'New Window',
+      hint: '⇧⌘N',
+      onRun: () => onCommand?.('new-window'),
+    },
     { kind: 'sep' },
-    { id: 'open-file', label: 'Open File…', hint: '⌘O', onRun: () => onOpenFile?.() },
-    { id: 'open-folder', label: 'Open Folder…', hint: '⇧⌘O', onRun: () => onCommand?.('open-folder') },
+    {
+      id: 'open-file',
+      label: 'Open File…',
+      hint: '⌘O',
+      onRun: () => onOpenFile?.(),
+    },
+    {
+      id: 'open-folder',
+      label: 'Open Folder…',
+      hint: '⇧⌘O',
+      onRun: () => onCommand?.('open-folder'),
+    },
     {
       id: 'open-recent',
       label: 'Open Recent',
@@ -66,46 +84,112 @@ export const LvMenuBar = ({
               }),
             ),
             { kind: 'sep' },
-            { id: 'recent-clear', label: 'Clear Recently Opened', onRun: () => onCommand?.('clear-recent') },
+            {
+              id: 'recent-clear',
+              label: 'Clear Recently Opened',
+              onRun: () => onCommand?.('clear-recent'),
+            },
           ]
         : [{ id: 'no-recent', label: 'No recent files', disabled: true }],
     },
     { kind: 'sep' },
-    { id: 'save-view', label: 'Save Filtered View…', hint: '⌘S', onRun: () => onCommand?.('save-view') },
+    {
+      id: 'save-view',
+      label: 'Save Filtered View…',
+      hint: '⌘S',
+      onRun: () => onCommand?.('save-view'),
+    },
     {
       id: 'export',
       label: 'Export',
       submenu: [
-        { id: 'export-json', label: 'As JSON', onRun: () => onCommand?.('export-json') },
-        { id: 'export-csv', label: 'As CSV', onRun: () => onCommand?.('export-csv') },
-        { id: 'export-ndjson', label: 'As NDJSON', onRun: () => onCommand?.('export-ndjson') },
+        {
+          id: 'export-json',
+          label: 'As JSON',
+          onRun: () => onCommand?.('export-json'),
+        },
+        {
+          id: 'export-csv',
+          label: 'As CSV',
+          onRun: () => onCommand?.('export-csv'),
+        },
+        {
+          id: 'export-ndjson',
+          label: 'As NDJSON',
+          onRun: () => onCommand?.('export-ndjson'),
+        },
       ],
     },
     { kind: 'sep' },
-    { id: 'close-tab', label: 'Close Tab', hint: '⌘W', onRun: () => onCommand?.('close-tab') },
-    { id: 'close-all', label: 'Close All Tabs', hint: '⇧⌘W', onRun: () => onCommand?.('close-all-tabs') },
+    {
+      id: 'close-tab',
+      label: 'Close Tab',
+      hint: '⌘W',
+      onRun: () => onCommand?.('close-tab'),
+    },
+    {
+      id: 'close-all',
+      label: 'Close All Tabs',
+      hint: '⇧⌘W',
+      onRun: () => onCommand?.('close-all-tabs'),
+    },
     { kind: 'sep' },
     {
       id: 'prefs',
       label: 'Preferences',
       submenu: [
-        { id: 'prefs-settings', label: 'Settings', hint: '⌘,', onRun: () => onCommand?.('open-settings') },
-        { id: 'prefs-keys', label: 'Keyboard Shortcuts', hint: '⌘K ⌘S', onRun: () => onCommand?.('open-keys') },
+        {
+          id: 'prefs-settings',
+          label: 'Settings',
+          hint: '⌘,',
+          onRun: () => onCommand?.('open-settings'),
+        },
+        {
+          id: 'prefs-keys',
+          label: 'Keyboard Shortcuts',
+          hint: '⌘K ⌘S',
+          onRun: () => onCommand?.('open-keys'),
+        },
       ],
     },
-    { id: 'clear-data', label: 'Clear Application Data…', onRun: () => onCommand?.('clear-data') },
+    {
+      id: 'clear-data',
+      label: 'Clear Application Data…',
+      onRun: () => onCommand?.('clear-data'),
+    },
     { kind: 'sep' },
     { id: 'exit', label: 'Exit', hint: '⌘Q', onRun: () => onCommand?.('exit') },
   ];
 
   const helpMenu: LvMenuItem[] = [
-    { id: 'docs', label: 'Documentation', onRun: () => onCommand?.('help-docs') },
-    { id: 'shortcuts', label: 'Keyboard Shortcuts', hint: '⌘K ⌘S', onRun: () => onCommand?.('open-keys') },
+    {
+      id: 'docs',
+      label: 'Documentation',
+      onRun: () => onCommand?.('help-docs'),
+    },
+    {
+      id: 'shortcuts',
+      label: 'Keyboard Shortcuts',
+      hint: '⌘K ⌘S',
+      onRun: () => onCommand?.('open-keys'),
+    },
     { kind: 'sep' },
-    { id: 'changelog', label: 'Release Notes', onRun: () => onCommand?.('help-changelog') },
-    { id: 'report', label: 'Report Issue…', onRun: () => onCommand?.('help-report') },
+    {
+      id: 'changelog',
+      label: 'Release Notes',
+      onRun: () => onCommand?.('help-changelog'),
+    },
+    {
+      id: 'report',
+      label: 'Report Issue…',
+      onRun: () => onCommand?.('help-report'),
+    },
     { kind: 'sep' },
-    { id: 'about', label: 'About Log Viewer', onRun: () => onCommand?.('help-about') },
+    {
+      id: 'about',
+      label: 'About Log Viewer',
+      onRun: () => onCommand?.('help-about'),
+    },
   ];
 
   const menus = [

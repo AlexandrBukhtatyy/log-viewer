@@ -9,6 +9,7 @@
 **Цель.** При `pagehide(persisted=true)` отпустить SAH-handle; при `pageshow(persisted=true)` пересоздать клиент без `location.reload()`, чтобы UX не моргал.
 
 **Что уже готово (переиспользуем как есть).**
+
 - `CoordinatorApi.shutdownIndexer()` — [coordinator.contract.ts:213-223](../../src/core/rpc/coordinator.contract.ts#L213-L223).
 - Реализация shutdown в [coordinator/index.ts:68-82](../../src/workers/coordinator/index.ts#L68-L82): close-RPC к indexer → terminate child worker → reset state; lazy `getIndexer()` ([index.ts:34-60](../../src/workers/coordinator/index.ts#L34-L60)) re-spawn'ит при следующем RPC.
 - `IndexerApi.close()` — [indexer-api.ts:327-335](../../src/workers/indexer/indexer-api.ts#L327-L335): finalize prepared statements + `db.close()`.
@@ -20,10 +21,12 @@
 ## Approach
 
 Два module-level экспорта в `log-client.ts` (рядом с HMR-блоком, та же семантика «pipeline invalidated, release SAH lock»):
+
 - `shutdownViewStore()` — публичная версия HMR dispose: `await singletonStore?.getState().destroy(); singletonStore = null;`.
 - `subscribeStoreReset(cb)` — простой module-level список callback'ов, вызываемых ПОСЛЕ reset.
 
 Module-level `pagehide`/`pageshow` listener'ы там же:
+
 - `pagehide(persisted=true)`: `void shutdownViewStore()` (fire-and-forget — `pagehide` не ждёт promise, см. trade-off ниже).
 - `pageshow(persisted=true)`: `shutdownViewStore()` (если ещё жив) → создать новый store через `getOrCreateViewStore()` → нотифицировать подписчиков.
 - `persisted=false` — ранний return.
@@ -52,6 +55,7 @@ React-сторона ([WorkerClientProvider.tsx:18](../../src/app/providers/Work
 ### 3. `src/worker-client/log-client.test.ts` (новый)
 
 Vitest unit-тесты (моки `Worker`/`Comlink.wrap` по образцу [parser-pool.test.ts:17](../../src/workers/coordinator/pool/parser-pool.test.ts#L17)):
+
 - `getOrCreateViewStore()` дважды подряд → один и тот же instance.
 - `shutdownViewStore()` → spy на `shutdownIndexer` и `terminate` вызваны; следующий `getOrCreateViewStore()` возвращает другой instance.
 - `subscribeStoreReset` callback вызван после reset; unsubscribe останавливает оповещение.
@@ -61,6 +65,7 @@ Vitest unit-тесты (моки `Worker`/`Comlink.wrap` по образцу [pa
 ### 4. ADR (`/adr bfcache worker reset`)
 
 Обязателен по политике CLAUDE.md («контракт между модулями, на который будем ссылаться»). Мотивация: ADR-0014 явно фиксирует «ViewStore singleton не destroy'ится» ([0014-worker-lifecycle.md:54](../adr/0014-worker-lifecycle.md#L54)) — новый ADR вводит исключение для bfcache, ссылается на 0014 и дополняет его. Содержание:
+
 - Проблема (SAH lock + bfcache).
 - Решение (pagehide → fire-and-forget shutdown, pageshow → reset + notify subscribers, провайдер делает key-bump).
 - Контракт `shutdownViewStore` + `subscribeStoreReset` как новых публичных module-level API в log-client.ts.

@@ -39,7 +39,9 @@ const SYSLOG_LEVEL_NUMERIC: Readonly<Record<number, LogLevel>> = {
  */
 export const normalizeLevel = (value: unknown): LogLevel => {
   if (typeof value === 'number') {
-    return PINO_LEVEL_NUMERIC[value] ?? SYSLOG_LEVEL_NUMERIC[value] ?? 'unknown';
+    return (
+      PINO_LEVEL_NUMERIC[value] ?? SYSLOG_LEVEL_NUMERIC[value] ?? 'unknown'
+    );
   }
   if (typeof value !== 'string') return 'unknown';
   const v = value.trim().toLowerCase();

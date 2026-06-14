@@ -148,13 +148,20 @@ export const aggregateFieldDescriptors = (
     acc.occurrences += rOcc;
     acc.totalSeen += rTot;
     if (r.source_id !== '') {
-      const ps = acc.perSource.get(r.source_id) ?? { occurrences: 0, totalSeen: 0 };
+      const ps = acc.perSource.get(r.source_id) ?? {
+        occurrences: 0,
+        totalSeen: 0,
+      };
       ps.occurrences += rOcc;
       ps.totalSeen += rTot;
       acc.perSource.set(r.source_id, ps);
     }
     if (r.type === 'mixed') acc.sawMixed = true;
-    else if (r.type === 'string' || r.type === 'number' || r.type === 'boolean') {
+    else if (
+      r.type === 'string' ||
+      r.type === 'number' ||
+      r.type === 'boolean'
+    ) {
       acc.types.add(r.type);
     }
     if (r.top_values_json !== null && r.top_values_json !== '') {

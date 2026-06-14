@@ -17,9 +17,9 @@
 В [src/ui/utils/build-catalog.ts](../../src/ui/utils/build-catalog.ts) добавить:
 
 ```ts
-export const collectAllFileIds = (
-  nodes: ReadonlyArray<LvNode>,
-): string[] => { /* DFS, push node.id if type==='file', else recurse children */ };
+export const collectAllFileIds = (nodes: ReadonlyArray<LvNode>): string[] => {
+  /* DFS, push node.id if type==='file', else recurse children */
+};
 ```
 
 Текущий локальный `collectFileIds` в LvTreeNode останется (он принимает один узел и accumulator), но мы переименуем его или импортируем новую обёртку — пусть LvTreeNode тоже использует утилиту, чтобы исключить расхождение логики.
@@ -27,6 +27,7 @@ export const collectAllFileIds = (
 ### 2. Фикс Select all и счётчика
 
 В [LvSidebar.tsx](../../src/ui/components/sidebar/LvSidebar.tsx):
+
 - Удалить prop `filesById` (его больше негде в `LvSidebar` использовать — после фикса toolbar'а и selectAll). Если он используется внешним consumer'ом для других целей — оставить, но **не** использовать его для select-all. Проверю через grep перед удалением; скорее всего сейчас он используется только в Sidebar.
 - Импортировать `collectAllFileIds`.
 - `const allFileIds = useMemo(() => collectAllFileIds(catalog), [catalog]);` — мемо по catalog.
@@ -38,6 +39,7 @@ export const collectAllFileIds = (
 ### 3. Кликабельный folder-checkbox в LvTreeNode
 
 В [LvTreeNode.tsx](../../src/ui/components/sidebar/LvTreeNode.tsx):
+
 - Заменить `collectFileIds` local helper на импорт `collectAllFileIds([node])` (единая утилита).
 - На месте декоративного `lv-tree-pick` ([line 126-130](../../src/ui/components/sidebar/LvTreeNode.tsx#L126-L130)) рендерить тот же `lv-tree-check`-checkbox, что и для файлов, но в трёх состояниях: `all` (✓), `some` (─ indeterminate), `none` (пусто).
 - Новый prop `toggleFolderSelect: (fileIds: ReadonlyArray<string>, shouldSelect: boolean) => void` — родитель решает, что делать.
@@ -46,6 +48,7 @@ export const collectAllFileIds = (
 ### 4. Передача `toggleFolderSelect` из LvSidebar
 
 В LvSidebar:
+
 ```ts
 const toggleFolderSelect = (fileIds, shouldSelect) => {
   setSelectedIds((prev) => {
@@ -56,17 +59,20 @@ const toggleFolderSelect = (fileIds, shouldSelect) => {
   });
 };
 ```
+
 Пробросить в `<LvTreeNode ... toggleFolderSelect={toggleFolderSelect}>` и рекурсивно во вложенные `LvTreeNode`.
 
 ### 5. Стили indeterminate-checkbox
 
 В sidebar CSS (вероятно [src/ui/styles/lv.css](../../src/ui/styles/lv.css), но grep'нуть `.lv-tree-check`):
+
 - Добавить вариант `.lv-tree-check.is-indeterminate` — рендерим горизонтальную полоску (─) либо SVG `<line>` вместо галочки. По дизайну: тот же accent-цвет, что и `is-on`.
 - Декоративные классы `.lv-tree-pick`, `.lv-tree-pick-all`, `.lv-tree-pick-some` — **больше не используются** в JSX, удалить из CSS если не ссылаются ниоткуда (grep подтвердит).
 
 ### 6. Тесты
 
 В [src/ui/utils/build-catalog.test.ts](../../src/ui/utils/build-catalog.test.ts) добавить новую describe-секцию `collectAllFileIds`:
+
 - Empty catalog → `[]`.
 - Flat source (file kind) → `[sourceId]`.
 - Directory с 2 файлами внутри → `[<sourceId>::file1, <sourceId>::file2]`.

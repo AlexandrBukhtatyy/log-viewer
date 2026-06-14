@@ -6,7 +6,10 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0c1116" />
-    <meta name="description" content="Log Viewer — PWA для просмотра логов в браузере. Локально, приватно, без серверов." />
+    <meta
+      name="description"
+      content="Log Viewer — PWA для просмотра логов в браузере. Локально, приватно, без серверов."
+    />
     <title>Log Viewer — PWA для просмотра логов</title>
     <style>
       :root {
@@ -20,19 +23,33 @@
         --accent-hi: #60a5fa;
         --border: #1f2937;
       }
-      * { box-sizing: border-box; }
-      html, body { margin: 0; padding: 0; }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
       body {
         background: var(--bg);
         color: var(--fg);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter,
+          sans-serif;
         line-height: 1.55;
       }
-      .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+      .container {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
 
       /* Top bar — name left, CTA right (content lives inside .container,
          mirroring the footer layout so widths line up with .lead / .features). */
-      .topbar { padding: 24px 0; }
+      .topbar {
+        padding: 24px 0;
+      }
       .topbar-row {
         display: flex;
         align-items: center;
@@ -55,7 +72,10 @@
         text-decoration: none;
         font-weight: 600;
         font-size: 14px;
-        transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+        transition:
+          background 120ms ease,
+          transform 120ms ease,
+          box-shadow 120ms ease;
         box-shadow: 0 8px 24px -8px rgba(59, 130, 246, 0.6);
         white-space: nowrap;
       }
@@ -83,9 +103,15 @@
         /* Soft fade into the body background under the image. */
         content: '';
         position: absolute;
-        left: 0; right: 0; bottom: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         height: 80px;
-        background: linear-gradient(180deg, rgba(12,17,22,0) 0%, var(--bg) 100%);
+        background: linear-gradient(
+          180deg,
+          rgba(12, 17, 22, 0) 0%,
+          var(--bg) 100%
+        );
         pointer-events: none;
       }
 
@@ -119,9 +145,14 @@
         border: 1px solid var(--border);
         border-radius: 12px;
         padding: 20px;
-        transition: border-color 120ms ease, transform 120ms ease;
+        transition:
+          border-color 120ms ease,
+          transform 120ms ease;
       }
-      .card:hover { border-color: #2d3a4b; transform: translateY(-1px); }
+      .card:hover {
+        border-color: #2d3a4b;
+        transform: translateY(-1px);
+      }
       .card .icon {
         width: 28px;
         height: 28px;
@@ -140,7 +171,9 @@
         color: var(--fg-2);
         line-height: 1.5;
       }
-      .card { position: relative; }
+      .card {
+        position: relative;
+      }
       .card-soon {
         position: absolute;
         top: 14px;
@@ -166,7 +199,9 @@
         color: var(--accent-hi);
         text-decoration: none;
         border-bottom: 1px dotted rgba(96, 165, 250, 0.4);
-        transition: color 120ms ease, border-color 120ms ease;
+        transition:
+          color 120ms ease,
+          border-color 120ms ease;
       }
       .card-links a:hover {
         color: var(--fg);
@@ -186,7 +221,9 @@
         justify-content: space-between;
         gap: 16px;
       }
-      .footer-copy { color: var(--fg-3); }
+      .footer-copy {
+        color: var(--fg-3);
+      }
       .footer-links {
         display: flex;
         align-items: center;
@@ -200,16 +237,33 @@
         text-decoration: none;
         transition: color 120ms ease;
       }
-      .footer-links a:hover { color: var(--fg); }
-      .footer-links svg { width: 18px; height: 18px; }
+      .footer-links a:hover {
+        color: var(--fg);
+      }
+      .footer-links svg {
+        width: 18px;
+        height: 18px;
+      }
 
       @media (max-width: 600px) {
-        .topbar { padding: 16px 0; }
-        .hero { height: 40vh; min-height: 220px; }
-        .features { gap: 12px; padding: 32px 0 56px; }
+        .topbar {
+          padding: 16px 0;
+        }
+        .hero {
+          height: 40vh;
+          min-height: 220px;
+        }
+        .features {
+          gap: 12px;
+          padding: 32px 0 56px;
+        }
       }
       @media (max-width: 480px) {
-        .footer-row { flex-direction: column; gap: 10px; text-align: center; }
+        .footer-row {
+          flex-direction: column;
+          gap: 10px;
+          text-align: center;
+        }
       }
     </style>
   </head>
@@ -230,89 +284,207 @@
       </section>
 
       <section class="lead container" aria-label="О приложении">
-        <p>Log Viewer — самостоятельное PWA-приложение, которое превращает браузер в полноценный лог-инспектор.</p>
-        <p>Никаких серверов, аплоадов и аккаунтов — только ваши файлы и быстрый ответ на вопрос «что пошло не так».</p>
+        <p>
+          Log Viewer — самостоятельное PWA-приложение, которое превращает
+          браузер в полноценный лог-инспектор.
+        </p>
+        <p>
+          Никаких серверов, аплоадов и аккаунтов — только ваши файлы и быстрый
+          ответ на вопрос «что пошло не так».
+        </p>
       </section>
 
       <section class="features container" aria-label="Возможности">
         <article class="card">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <rect x="3" y="11" width="18" height="11" rx="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
           <h3>Локально и приватно</h3>
-          <p>Файлы не покидают браузер. Парсинг и индексация — в Web Worker'ах, БД и кэш тел записей — в OPFS.</p>
+          <p>
+            Файлы не покидают браузер. Парсинг и индексация — в Web Worker'ах,
+            БД и кэш тел записей — в OPFS.
+          </p>
         </article>
 
         <article class="card">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
           </svg>
           <h3>Тянет большие логи</h3>
-          <p>Virtual scroll и batched contiguous reads. 50k+ строк на одном файле — без подвисаний даже на ноуте.</p>
+          <p>
+            Virtual scroll и batched contiguous reads. 50k+ строк на одном файле
+            — без подвисаний даже на ноуте.
+          </p>
         </article>
 
         <article class="card">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M12 2 2 7l10 5 10-5-10-5z" />
             <path d="M2 17l10 5 10-5" />
             <path d="M2 12l10 5 10-5" />
           </svg>
           <h3>Любой формат</h3>
-          <p>JSONL (pino, bunyan), plain-text, nginx-combined, syslog. Не хватает — добавь свой парсер на Grok или regex.</p>
+          <p>
+            JSONL (pino, bunyan), plain-text, nginx-combined, syslog. Не хватает
+            — добавь свой парсер на Grok или regex.
+          </p>
         </article>
 
         <article class="card">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M3 7h4l2-2h6l2 2h4v13H3z" />
             <circle cx="12" cy="13" r="3" />
           </svg>
           <h3>Источники любых типов, выборка по файлам</h3>
-          <p>Локальные файлы и директории, drag-and-drop, paste-текст, URL, WS/SSE-потоки, zip/tar-архивы. Отмечай чекбоксами только нужные файлы — фильтр, таймлайн и поиск работают по выделенному.</p>
+          <p>
+            Локальные файлы и директории, drag-and-drop, paste-текст, URL,
+            WS/SSE-потоки, zip/tar-архивы. Отмечай чекбоксами только нужные
+            файлы — фильтр, таймлайн и поиск работают по выделенному.
+          </p>
         </article>
 
         <article class="card">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
           <h3>PWA, ставится одним кликом</h3>
-          <p>Устанавливается на macOS, Windows, Android. Работает офлайн, service worker кэширует ассеты и WASM.</p>
+          <p>
+            Устанавливается на macOS, Windows, Android. Работает офлайн, service
+            worker кэширует ассеты и WASM.
+          </p>
         </article>
 
         <article class="card">
           <span class="card-soon">скоро</span>
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+            />
           </svg>
           <h3>Личные настройки источников</h3>
-          <p>Цветной ярлык, alias, набор колонок и предзаданные фильтры — отдельно для каждого источника. Открываете тот же файл — раскладка восстанавливается из памяти браузера.</p>
+          <p>
+            Цветной ярлык, alias, набор колонок и предзаданные фильтры —
+            отдельно для каждого источника. Открываете тот же файл — раскладка
+            восстанавливается из памяти браузера.
+          </p>
         </article>
 
         <article class="card">
           <span class="card-soon">скоро</span>
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <polyline points="3 8 7 4 11 8" />
             <line x1="7" y1="4" x2="7" y2="20" />
             <polyline points="21 16 17 20 13 16" />
             <line x1="17" y1="20" x2="17" y2="4" />
           </svg>
           <h3>Импорт и экспорт фильтров</h3>
-          <p>Сохраняйте набор условий поиска в JSON-файл, делитесь с командой или переносите между устройствами. Импорт одним кликом возвращает фильтр и сохранённые поиски.</p>
+          <p>
+            Сохраняйте набор условий поиска в JSON-файл, делитесь с командой или
+            переносите между устройствами. Импорт одним кликом возвращает фильтр
+            и сохранённые поиски.
+          </p>
         </article>
 
         <article class="card">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <polyline points="3 17 9 11 13 15 21 7" />
             <polyline points="14 7 21 7 21 14" />
           </svg>
           <h3>Дальше — лучше</h3>
-          <p>Проект активно развивается: новые парсеры, удобства поиска, кастомизация. Идеи, баг-репорты и pull-requests приветствуются — заходите.</p>
+          <p>
+            Проект активно развивается: новые парсеры, удобства поиска,
+            кастомизация. Идеи, баг-репорты и pull-requests приветствуются —
+            заходите.
+          </p>
           <div class="card-links">
-            <a href="https://github.com/AlexandrBukhtatyy/log-viewer/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
-            <a href="https://github.com/AlexandrBukhtatyy/log-viewer/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Как контрибьютить</a>
+            <a
+              href="https://github.com/AlexandrBukhtatyy/log-viewer/blob/main/docs/ROADMAP.md"
+              target="_blank"
+              rel="noopener"
+              >Roadmap</a
+            >
+            <a
+              href="https://github.com/AlexandrBukhtatyy/log-viewer/blob/main/CONTRIBUTING.md"
+              target="_blank"
+              rel="noopener"
+              >Как контрибьютить</a
+            >
           </div>
         </article>
       </section>
@@ -321,14 +493,28 @@
     <footer>
       <div class="container footer-row">
         <span class="footer-copy">
-          © 2026 Alexandr Bukhtatyy
-          · v<!--APP_VERSION-->0.1.0<!--/APP_VERSION-->
-          · <a href="https://github.com/AlexandrBukhtatyy/log-viewer/blob/main/CHANGELOG.md" target="_blank" rel="noopener" style="color: var(--accent-hi);">Changelog</a>
+          © 2026 Alexandr Bukhtatyy · v<!--APP_VERSION-->0.1.0<!--/APP_VERSION-->
+          ·
+          <a
+            href="https://github.com/AlexandrBukhtatyy/log-viewer/blob/main/CHANGELOG.md"
+            target="_blank"
+            rel="noopener"
+            style="color: var(--accent-hi)"
+            >Changelog</a
+          >
         </span>
         <nav class="footer-links" aria-label="External links">
-          <a href="https://github.com/AlexandrBukhtatyy/log-viewer" target="_blank" rel="noopener" aria-label="GitHub repository" title="GitHub">
+          <a
+            href="https://github.com/AlexandrBukhtatyy/log-viewer"
+            target="_blank"
+            rel="noopener"
+            aria-label="GitHub repository"
+            title="GitHub"
+          >
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1-.02-1.96-3.2.69-3.87-1.54-3.87-1.54-.52-1.34-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.13 0 1.54-.01 2.78-.01 3.16 0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
+              <path
+                d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1-.02-1.96-3.2.69-3.87-1.54-3.87-1.54-.52-1.34-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.13 0 1.54-.01 2.78-.01 3.16 0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"
+              />
             </svg>
             <span>GitHub</span>
           </a>

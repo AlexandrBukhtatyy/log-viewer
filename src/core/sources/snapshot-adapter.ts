@@ -45,7 +45,8 @@ const detectFormat = (
   filename: string,
 ): 'zip' | 'tar' | 'tar.gz' | 'unknown' => {
   if (bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b) return 'zip';
-  if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) return 'tar.gz';
+  if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b)
+    return 'tar.gz';
   const lower = filename.toLowerCase();
   if (lower.endsWith('.tar')) return 'tar';
   if (lower.endsWith('.zip')) return 'zip';
@@ -82,7 +83,11 @@ const readTar = (data: Uint8Array): ExtractedFile[] => {
     const size = parseInt(sizeStr, 8);
     const typeflag = String.fromCharCode(header[156] ?? 0);
     offset += 512;
-    if (Number.isFinite(size) && size > 0 && (typeflag === '0' || typeflag === '\0')) {
+    if (
+      Number.isFinite(size) &&
+      size > 0 &&
+      (typeflag === '0' || typeflag === '\0')
+    ) {
       out.push({ name, bytes: data.subarray(offset, offset + size) });
     }
     if (Number.isFinite(size) && size > 0) {
@@ -175,7 +180,8 @@ export const createSnapshotAdapter: LogSourceAdapterFactory = (source) => {
               for (let i = 0; i < bytes.byteLength; i++) {
                 if (bytes[i] !== 0x0a) continue;
                 let lineEnd = i;
-                if (lineEnd > lineStart && bytes[lineEnd - 1] === 0x0d) lineEnd -= 1;
+                if (lineEnd > lineStart && bytes[lineEnd - 1] === 0x0d)
+                  lineEnd -= 1;
                 lineNo += 1;
                 controller.enqueue({
                   path: f.name,

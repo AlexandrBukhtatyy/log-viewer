@@ -28,16 +28,19 @@
 Три ортогональных вопроса.
 
 **Storage схемы (где хранить «какие поля встречались»):**
+
 - A. Precomputed at ingest — отдельная таблица `field_meta(source_id, key, …)`, обновляется в той же транзакции, что и `entry`.
 - B. On-demand — `SELECT json_each.key, COUNT(*) FROM entry, json_each(fields_json) GROUP BY 1` каждый раз когда picker открывается.
 - C. Hybrid — кэш в worker memory + invalidation по change events.
 
 **UX колонок:**
+
 - α. User picks: дефолт = текущие 8 колонок, есть кнопка `+ Add column`.
 - β. Auto-suggest top-N most-common полей.
 - γ. Hybrid: фиксированные `LN / TIMESTAMP / LEVEL / MESSAGE` + auto-suggest посередине + ручной toggle.
 
 **Namespace built-in vs dynamic:**
+
 - I. `@`-prefix для built-in: `@ts`, `@level`, `@file`, `@source.name`, `@source.kind`.
 - II. Без префикса, визуальные группы в picker'е («Source / Built-in» сверху, «Fields» снизу).
 - III. Два отдельных picker'а — «Source attribute» и «Field».

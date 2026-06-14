@@ -8,7 +8,10 @@ export const LvChevron = ({ open }: LvChevronProps) => (
     width="10"
     height="10"
     aria-hidden="true"
-    style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }}
+    style={{
+      transform: open ? 'rotate(90deg)' : 'none',
+      transition: 'transform .12s',
+    }}
   >
     <path
       d="M3.5 2 L7 5 L3.5 8"

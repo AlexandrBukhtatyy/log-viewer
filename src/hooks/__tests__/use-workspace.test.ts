@@ -94,7 +94,11 @@ describe('mergeWorkspaceData', () => {
     expect([...data.selectedIds].sort()).toEqual(['s1', 's2']);
     expect(data.openTabs).toHaveLength(1);
     expect(data.activeTabId).toBe('s1');
-    expect(data.coreFilter).toEqual({ ...EMPTY_FILTER, sources: null, filePaths: null });
+    expect(data.coreFilter).toEqual({
+      ...EMPTY_FILTER,
+      sources: null,
+      filePaths: null,
+    });
     expect(data.liveTail).toBe(false);
     expect(data.groupBy).toEqual([]);
   });
@@ -149,7 +153,9 @@ describe('mergeWorkspaceData', () => {
         { key: 'request_uri', widthPx: 300 },
       ],
     };
-    const partialized = partializeWorkspace(baseState({ openTabs: [tabWithColumns] }));
+    const partialized = partializeWorkspace(
+      baseState({ openTabs: [tabWithColumns] }),
+    );
     // Round-trip through JSON to mirror what `persist` does in localStorage.
     const reparsed = JSON.parse(JSON.stringify(partialized));
     const data = mergeWorkspaceData(reparsed, baseState());
@@ -199,7 +205,11 @@ describe('useWorkspaceStore actions', () => {
   it('pruneMissingSources: keeps only entries whose base id is in the live set', () => {
     useWorkspaceStore.setState({
       selectedIds: new Set(['live', 'live::a.log', 'gone', 'gone::b.log']),
-      openTabs: [sampleTab('live'), sampleTab('gone'), sampleTab('live::a.log')],
+      openTabs: [
+        sampleTab('live'),
+        sampleTab('gone'),
+        sampleTab('live::a.log'),
+      ],
       activeTabId: 'gone::b.log',
     });
     useWorkspaceStore.getState().pruneMissingSources(new Set(['live']));
@@ -244,7 +254,9 @@ describe('useWorkspaceStore actions', () => {
   });
 
   it('setGroupBy / setLiveTail: simple value setters', () => {
-    useWorkspaceStore.getState().setGroupBy(['level'] as ReadonlyArray<LvGroupBy>);
+    useWorkspaceStore
+      .getState()
+      .setGroupBy(['level'] as ReadonlyArray<LvGroupBy>);
     useWorkspaceStore.getState().setLiveTail(true);
     expect(useWorkspaceStore.getState().groupBy).toEqual(['level']);
     expect(useWorkspaceStore.getState().liveTail).toBe(true);

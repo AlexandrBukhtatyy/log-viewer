@@ -132,8 +132,20 @@ describe('createByteLineSplitter', () => {
     // file. Emitted offsets are absolute (1000 + local).
     const frames = await collect([utf8.encode('a\nb')], 'chunk-3.bin', 1000);
     expect(frames).toEqual([
-      { path: 'chunk-3.bin', line: 'a', byteStart: 1000, byteEnd: 1001, lineNumber: 1 },
-      { path: 'chunk-3.bin', line: 'b', byteStart: 1002, byteEnd: 1003, lineNumber: 2 },
+      {
+        path: 'chunk-3.bin',
+        line: 'a',
+        byteStart: 1000,
+        byteEnd: 1001,
+        lineNumber: 1,
+      },
+      {
+        path: 'chunk-3.bin',
+        line: 'b',
+        byteStart: 1002,
+        byteEnd: 1003,
+        lineNumber: 2,
+      },
     ]);
   });
 

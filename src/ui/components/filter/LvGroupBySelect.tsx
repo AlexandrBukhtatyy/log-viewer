@@ -36,7 +36,6 @@ const sortDynamic = (
   return dyn;
 };
 
-
 /**
  * Group-by picker — classic combobox: a closed field with a chevron,
  * a dropdown that opens on focus/click and shows a (typeable)
@@ -80,7 +79,10 @@ export const LvGroupBySelect = ({
         setHighlightedIdx(0);
       }
     };
-    const t = setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+    const t = setTimeout(
+      () => document.addEventListener('mousedown', onDoc),
+      0,
+    );
     return () => {
       clearTimeout(t);
       document.removeEventListener('mousedown', onDoc);
@@ -240,10 +242,42 @@ export const LvGroupBySelect = ({
         title="Group logs by fields (stack multiple for nested groups)"
       >
         <svg viewBox="0 0 14 14" width="13" height="13">
-          <rect x="1.5" y="2" width="11" height="2" rx="1" fill="currentColor" opacity=".9" />
-          <rect x="3" y="6" width="9.5" height="1.5" rx=".7" fill="currentColor" opacity=".6" />
-          <rect x="3" y="9" width="9.5" height="1.5" rx=".7" fill="currentColor" opacity=".6" />
-          <rect x="3" y="12" width="6" height="1.5" rx=".7" fill="currentColor" opacity=".6" />
+          <rect
+            x="1.5"
+            y="2"
+            width="11"
+            height="2"
+            rx="1"
+            fill="currentColor"
+            opacity=".9"
+          />
+          <rect
+            x="3"
+            y="6"
+            width="9.5"
+            height="1.5"
+            rx=".7"
+            fill="currentColor"
+            opacity=".6"
+          />
+          <rect
+            x="3"
+            y="9"
+            width="9.5"
+            height="1.5"
+            rx=".7"
+            fill="currentColor"
+            opacity=".6"
+          />
+          <rect
+            x="3"
+            y="12"
+            width="6"
+            height="1.5"
+            rx=".7"
+            fill="currentColor"
+            opacity=".6"
+          />
         </svg>
         <span>
           Group: <b style={{ fontWeight: 600 }}>{label}</b>
@@ -264,7 +298,11 @@ export const LvGroupBySelect = ({
           <div className="lv-pop-hd">
             <span>Group by</span>
             {active.length > 0 && (
-              <button type="button" className="lv-pop-clear" onClick={() => onChange([])}>
+              <button
+                type="button"
+                className="lv-pop-clear"
+                onClick={() => onChange([])}
+              >
                 Clear
               </button>
             )}
@@ -311,7 +349,12 @@ export const LvGroupBySelect = ({
                     }
                   }}
                 >
-                  <svg viewBox="0 0 10 6" width="10" height="6" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 10 6"
+                    width="10"
+                    height="6"
+                    aria-hidden="true"
+                  >
                     <path
                       d="M1 1 L5 5 L9 1"
                       fill="none"
@@ -326,7 +369,9 @@ export const LvGroupBySelect = ({
               {comboOpen && (
                 <div className="lv-combo-pop">
                   {filtered.length === 0 ? (
-                    <div className="lv-pop-empty">No fields match “{query}”.</div>
+                    <div className="lv-pop-empty">
+                      No fields match “{query}”.
+                    </div>
                   ) : (
                     <div className="lv-group-search-list" ref={listRef}>
                       {filtered.map((d, idx) => {
@@ -386,7 +431,9 @@ export const LvGroupBySelect = ({
                             >
                               <span className="lv-group-search-key">
                                 {isSys && (
-                                  <span className="lv-group-search-sys">{d.key}</span>
+                                  <span className="lv-group-search-sys">
+                                    {d.key}
+                                  </span>
                                 )}
                                 {d.label || d.key}
                               </span>
@@ -396,7 +443,10 @@ export const LvGroupBySelect = ({
                                   title={
                                     c.kind === 'unique'
                                       ? `Field exists only in ${c.presentSources
-                                          .map((id) => sourceNameById.get(id) ?? id)
+                                          .map(
+                                            (id) =>
+                                              sourceNameById.get(id) ?? id,
+                                          )
                                           .join(', ')}`
                                       : `Field present in ${c.presentIn} of ${c.total} active sources`
                                   }
@@ -405,7 +455,8 @@ export const LvGroupBySelect = ({
                                 </span>
                               )}
                               <span className="lv-group-search-meta">
-                                {d.origin === 'dynamic' && d.presenceRate !== undefined
+                                {d.origin === 'dynamic' &&
+                                d.presenceRate !== undefined
                                   ? `${Math.round(d.presenceRate * 100)}%`
                                   : d.type}
                               </span>
@@ -425,7 +476,9 @@ export const LvGroupBySelect = ({
               {active.map((k, i) => (
                 <div key={k} className="lv-group-chip">
                   <span className="lv-group-chip-num">{i + 1}</span>
-                  <span className="lv-group-chip-label">{labelFor(k, descriptors)}</span>
+                  <span className="lv-group-chip-label">
+                    {labelFor(k, descriptors)}
+                  </span>
                   <button
                     type="button"
                     className="lv-group-chip-btn"

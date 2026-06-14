@@ -137,7 +137,9 @@ export const defineRegexParser = (spec: RegexParserSpec): LogParser => {
               if (raw === undefined) return null;
               const t = spec.timestampTransform ?? 'iso-time';
               const out = TRANSFORMS[t](raw);
-              return typeof out === 'number' && Number.isFinite(out) ? out : null;
+              return typeof out === 'number' && Number.isFinite(out)
+                ? out
+                : null;
             })()
           : null;
       const message = spec.message ? spec.message(m) : line;

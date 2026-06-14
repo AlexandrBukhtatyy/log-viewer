@@ -73,8 +73,9 @@ const activeColumns = useMemo<ReadonlyArray<LvColumnPref>>(() => {
 ```ts
 const parserId = resolveParserId(rawId, sourceRecordsById); // see 1.1
 const parser = parserRegistry.get(parserId);
-const initialColumns: LvColumnPref[] = (parser?.defaultColumns ?? [])
-  .map((key) => ({ key, widthPx: 140 }));
+const initialColumns: LvColumnPref[] = (parser?.defaultColumns ?? []).map(
+  (key) => ({ key, widthPx: 140 }),
+);
 // ... затем suggesting через field schema, если initialColumns пуст:
 const fallback = pickTopFieldsByPresence(parserId, fieldSchema, 3);
 const newTab: LvTab = {
@@ -98,11 +99,13 @@ const newTab: LvTab = {
 
 ### 1.7 Тесты
 
-В [src/hooks/__tests__/use-workspace.test.ts](../../src/hooks/__tests__/use-workspace.test.ts):
+В [src/hooks/**tests**/use-workspace.test.ts](../../src/hooks/__tests__/use-workspace.test.ts):
+
 - Tab с `columns` сериализуется и восстанавливается.
 - Tab без `columns` — поле просто отсутствует после rehydrate.
 
 Новый файл `src/app/containers/__tests__/active-columns-resolver.test.ts`:
+
 - `__all__` → берёт `tweaks.columns`.
 - Per-file tab без `columns` → `tweaks.columns`.
 - Per-file tab с `columns` → tab.columns.
@@ -146,6 +149,7 @@ export interface LvVirtualField {
 ```
 
 В `LvTab`:
+
 ```ts
 virtualFields?: ReadonlyArray<LvVirtualField>;
 ```
@@ -184,7 +188,7 @@ virtualFields?: ReadonlyArray<LvVirtualField>;
 
 ```ts
 export interface LvColumnPreset {
-  readonly id: string;          // 'pino-default', 'nginx-access', 'custom-1', …
+  readonly id: string; // 'pino-default', 'nginx-access', 'custom-1', …
   readonly name: string;
   readonly columns: ReadonlyArray<LvColumnPref>;
   readonly virtualFields?: ReadonlyArray<LvVirtualField>;
@@ -198,6 +202,7 @@ export interface LvColumnPreset {
 ### 3.2 UI
 
 В [LvTableSettings](../../src/ui/components/filter/LvTableSettings.tsx):
+
 - Dropdown "Apply preset" → список builtins + user presets.
 - Кнопка "Save current as preset" → запрос имени → push в `tweaks.presets`.
 - Apply preset: записывает columns+virtualFields в активный tab (или в global, если active = `'__all__'`).
@@ -205,6 +210,7 @@ export interface LvColumnPreset {
 ### 3.3 Миграция глобальных tweaks.columns
 
 При первом запуске после деплоя Phase 3:
+
 - Если `tweaks.columns` непуст и нет user-preset'а с этим набором → создаём preset "My columns" из них.
 - `tweaks.columns` сохраняется как есть (используется для `'__all__'`), просто становится доступен как preset.
 
@@ -222,6 +228,7 @@ export interface LvColumnPreset {
 ## Phase 4 — Unified column model (refactor)
 
 **Контекст.** После Phase 1–3 в таблице остались две несимметричных модели колонок:
+
 - "Chrome data" — захардкоженные `<span>` для timestamp/level/service/file (через классы `lv-row-ts/lvl/svc/file`), с фиксированными ширинами `178/58/120/150 px` прямо в `gridTemplateForColumns`. Видимость управляется четырьмя boolean'ами `tweaks.showTimestamp/Level/Service/File`.
 - "Data columns" — массив `LvColumnPref[]` с произвольным `widthPx`, ячейки рисуются через `cellValueOf`.
 
@@ -232,12 +239,14 @@ export interface LvColumnPreset {
 ### Скоуп
 
 **Chrome остаётся** (всегда виден):
+
 - LN gutter (52px)
 - CARET (16px)
 - MESSAGE — last, `1fr`, без wrap, single-line. Никаких переносов строки в message — `white-space: nowrap`, `overflow: hidden`, `text-overflow: ellipsis`. `tweaks.wrap` удаляется.
 - ACTIONS (52px)
 
 **Data колонки** — всё остальное через единый descriptor:
+
 - `@ts` → renderCell = `lvFmtTime(entry.timestamp, showDate)`, cellClass `lv-row-ts`.
 - `@level` → renderCell = level-tag span, cellClass `lv-row-lvl`.
 - `@source.name` → renderCell = service (с fileMeta fallback), cellClass `lv-row-svc`.
@@ -280,7 +289,7 @@ export interface LvColumnPreset {
 ## Критические файлы
 
 - [src/core/types/log-parser.ts](../../src/core/types/log-parser.ts) — `defaultColumns` уже задекларирован.
-- [src/core/parsers/*.ts](../../src/core/parsers/) — заполнить `defaultColumns`.
+- [src/core/parsers/\*.ts](../../src/core/parsers/) — заполнить `defaultColumns`.
 - [src/ui/contracts/lv-types.ts](../../src/ui/contracts/lv-types.ts) — `LvTab.columns`, `LvVirtualField`, `LvColumnPreset`.
 - [src/hooks/use-workspace.ts](../../src/hooks/use-workspace.ts) — persist расширенного LvTab.
 - [src/hooks/use-ui-prefs.ts](../../src/hooks/use-ui-prefs.ts) — `presets` + migrate v1→v2.
@@ -299,5 +308,6 @@ export interface LvColumnPreset {
 ## ADR-кандидаты
 
 Из текущего плана как минимум одно решение тянет на ADR:
+
 - **Per-tab column profile** (нарушает текущее "колонки глобальные") — стоит зафиксировать ADR после Phase 1.
 - **Virtual fields через regex** (новая концепция в field schema) — ADR после Phase 2.

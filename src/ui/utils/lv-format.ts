@@ -9,7 +9,10 @@
  * drops the date prefix when the user explicitly wants the compact
  * `HH:MM:SS.mmm` form (e.g. narrow screens).
  */
-export const lvFmtTime = (timestamp: number | null, showDate = true): string => {
+export const lvFmtTime = (
+  timestamp: number | null,
+  showDate = true,
+): string => {
   if (timestamp === null) return '—';
   const d = new Date(timestamp);
   const hh = String(d.getUTCHours()).padStart(2, '0');

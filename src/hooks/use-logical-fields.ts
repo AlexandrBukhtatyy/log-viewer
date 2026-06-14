@@ -90,9 +90,7 @@ export const useLogicalFields = create<LogicalFieldsState>()(
         }
         const { config } = get();
         if (config.customFields.some((f) => f.id === field.id)) {
-          throw new Error(
-            `custom logical field already exists: ${field.id}`,
-          );
+          throw new Error(`custom logical field already exists: ${field.id}`);
         }
         set({
           config: {
