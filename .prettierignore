@@ -1,0 +1,20 @@
+# Build output
+dist
+dev-dist
+
+# Debug artifacts and generated fixtures
+.tmp
+
+# Lockfile — managed by pnpm
+pnpm-lock.yaml
+
+# Release-please owns these
+CHANGELOG.md
+.release-please-manifest.json
+
+# Binary placeholder icons
+public/*.png
+
+# Claude Code harness config (not project code)
+.claude
+.mcp.json

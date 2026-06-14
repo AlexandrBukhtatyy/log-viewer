@@ -1,9 +1,10 @@
-import js from '@eslint/js'
-import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
-import tseslint from 'typescript-eslint'
-import { defineConfig, globalIgnores } from 'eslint/config'
+import js from '@eslint/js';
+import globals from 'globals';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import tseslint from 'typescript-eslint';
+import { defineConfig, globalIgnores } from 'eslint/config';
+import eslintConfigPrettier from 'eslint-config-prettier/flat';
 
 // Layer boundaries from ADR-0002 (headless architecture).
 // Encoded as @typescript-eslint/no-restricted-imports rules per layer.
@@ -16,11 +17,11 @@ const FORBID_LAYER = (layers, message, opts = {}) => ({
   group: layers.flatMap((layer) => [`**/${layer}/**`, `**/${layer}`]),
   message,
   ...(opts.allowTypeImports ? { allowTypeImports: true } : {}),
-})
+});
 const FORBID_PKG = (pkgs, message) => ({
   group: pkgs,
   message,
-})
+});
 
 const RULES_CORE = {
   '@typescript-eslint/no-restricted-imports': [
@@ -28,7 +29,15 @@ const RULES_CORE = {
     {
       patterns: [
         FORBID_PKG(
-          ['react', 'react-dom', 'react/*', 'react-dom/*', 'zustand', 'zustand/*', '@tanstack/*'],
+          [
+            'react',
+            'react-dom',
+            'react/*',
+            'react-dom/*',
+            'zustand',
+            'zustand/*',
+            '@tanstack/*',
+          ],
           'core/ must remain framework-agnostic (ADR-0002).',
         ),
         FORBID_LAYER(
@@ -38,7 +47,7 @@ const RULES_CORE = {
       ],
     },
   ],
-}
+};
 
 const RULES_WORKERS = {
   '@typescript-eslint/no-restricted-imports': [
@@ -46,7 +55,15 @@ const RULES_WORKERS = {
     {
       patterns: [
         FORBID_PKG(
-          ['react', 'react-dom', 'react/*', 'react-dom/*', 'zustand', 'zustand/*', '@tanstack/*'],
+          [
+            'react',
+            'react-dom',
+            'react/*',
+            'react-dom/*',
+            'zustand',
+            'zustand/*',
+            '@tanstack/*',
+          ],
           'workers/ run in a Worker context — no React or main-thread UI deps (ADR-0003).',
         ),
         FORBID_LAYER(
@@ -56,7 +73,7 @@ const RULES_WORKERS = {
       ],
     },
   ],
-}
+};
 
 const RULES_UI_COMPONENTS = {
   '@typescript-eslint/no-restricted-imports': [
@@ -77,7 +94,7 @@ const RULES_UI_COMPONENTS = {
       ],
     },
   ],
-}
+};
 
 const RULES_HOOKS = {
   '@typescript-eslint/no-restricted-imports': [
@@ -92,7 +109,7 @@ const RULES_HOOKS = {
       ],
     },
   ],
-}
+};
 
 const RULES_WORKER_CLIENT = {
   '@typescript-eslint/no-restricted-imports': [
@@ -113,7 +130,7 @@ const RULES_WORKER_CLIENT = {
       ],
     },
   ],
-}
+};
 
 export default defineConfig([
   globalIgnores(['dist', 'dev-dist']),
@@ -155,4 +172,7 @@ export default defineConfig([
     ignores: ['src/worker-client/**/*.{test,spec}.{ts,tsx}'],
     rules: RULES_WORKER_CLIENT,
   },
-])
+  // Disables ESLint's formatting-related rules — Prettier owns formatting.
+  // Must stay LAST so it overrides stylistic rules from the configs above.
+  eslintConfigPrettier,
+]);
