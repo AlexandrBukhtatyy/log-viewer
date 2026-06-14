@@ -114,3 +114,4 @@ flowchart LR
 - [0030. Logical fields (`~`-namespace) — cross-format semantic attributes](0030-logical-fields-tilde-namespace.md) — proposed
 - [0031. Единый компонент LvFormField как layout-контракт для полей форм](0031-form-field-layout-contract.md) — proposed
 - [0032. Quality tooling: Prettier, git-хуки, CI-gate, Dependabot](0032-quality-tooling.md) — proposed
+- [0033. Per-tab view rules (filter / sort / group-by) with apply-to-other-tabs](0033-per-tab-view-rules.md) — proposed
