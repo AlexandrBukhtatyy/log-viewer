@@ -246,21 +246,51 @@ export const LvAppContainer = () => {
     [activeTabId, openTabs, groupBy],
   );
 
+  // Filter edits write to the active tab's own `filter` (per-tab), except on
+  // the `__all__` aggregate which still owns the global `coreFilter`. The base
+  // for a tab's first edit is the global `coreFilter`, so the user inherits
+  // whatever the filter bar already showed. Mirrors `onColumnsChange`.
   const setFilter = useCallback(
     (next: (prev: LogFilter) => LogFilter) => {
-      setCoreFilter((prev) => {
-        const { sourcesArr, filePaths } = tabSelection();
-        const effectivePrev: LogFilter = {
-          ...prev,
+      const { sourcesArr, filePaths } = tabSelection();
+      const apply = (base: LogFilter): LogFilter => {
+        const computed = next({
+          ...base,
           sources: sourcesArr.length === 0 ? null : sourcesArr,
           filePaths: filePaths.length === 0 ? null : filePaths,
-        };
-        const computed = next(effectivePrev);
+        });
         // Strip sources/filePaths — they're derived from selection.
         return { ...computed, sources: null, filePaths: null };
-      });
+      };
+      if (activeTabId === '__all__') {
+        setCoreFilter((prev) => apply(prev));
+        return;
+      }
+      setOpenTabs((prev) =>
+        prev.map((t) =>
+          t.id === activeTabId
+            ? { ...t, filter: apply(t.filter ?? coreFilter) }
+            : t,
+        ),
+      );
     },
-    [tabSelection, setCoreFilter],
+    [activeTabId, coreFilter, tabSelection, setCoreFilter, setOpenTabs],
+  );
+
+  // Group-by edits are per-tab too (global for `__all__`). Reads the live
+  // active id so the callback stays stable across tab switches.
+  const onSetGroupBy = useCallback(
+    (next: ReadonlyArray<LvGroupBy>) => {
+      const id = useWorkspaceStore.getState().activeTabId;
+      if (id === '__all__') {
+        setGroupBy(next);
+        return;
+      }
+      setOpenTabs((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, groupBy: next } : t)),
+      );
+    },
+    [setGroupBy, setOpenTabs],
   );
 
   // Push effective filter to ViewStore (writes a Zustand store outside React's
@@ -888,7 +918,7 @@ export const LvAppContainer = () => {
   const onGroupDrillDown = useCallback(
     (bucket: GroupBucket, field: string) => {
       if (bucket.value === null) {
-        setGroupBy([]);
+        onSetGroupBy([]);
         return;
       }
       const ff: FieldFilter = { key: field, op: '=', value: bucket.value };
@@ -896,9 +926,9 @@ export const LvAppContainer = () => {
         ...f,
         fieldFilters: [...(f.fieldFilters ?? []), ff],
       }));
-      setGroupBy([]);
+      onSetGroupBy([]);
     },
-    [setFilter, setGroupBy],
+    [setFilter, onSetGroupBy],
   );
 
   // Level counts for the filter bar — derived from histogram (sum across
@@ -1144,7 +1174,7 @@ export const LvAppContainer = () => {
       liveTail={liveTail}
       onToggleLiveTail={() => setLiveTail(!liveTail)}
       groupBy={activeGroupBy}
-      setGroupBy={setGroupBy}
+      setGroupBy={onSetGroupBy}
       groupBuckets={groupField !== null ? groupBuckets : null}
       groupRootFilter={filter}
       fetchGroupCounts={fetchGroupCounts}
