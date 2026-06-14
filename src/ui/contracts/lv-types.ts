@@ -8,6 +8,7 @@
 // ergonomic UI imports. Same for LvSavedSearch (hooks/use-saved-searches.ts).
 // This keeps `hooks/` from importing `ui/`, satisfying the ADR-0002 layer
 // boundary in eslint.config.js.
+import type { LogFilter } from '../../core/types/index.ts';
 import type { LvColumnPref } from '../../hooks/use-ui-prefs.ts';
 export type {
   LvTweaks,
@@ -184,4 +185,20 @@ export interface LvTab {
    * single-file, time everywhere else).
    */
   sortBy?: { readonly key: string; readonly dir: 'asc' | 'desc' };
+  /**
+   * Per-tab override for the core filter (query / levels / services /
+   * fieldFilters / timeRange). When absent, the viewer falls back to the
+   * global `coreFilter` (used for the `'__all__'` aggregate tab and any
+   * legacy tab opened before per-tab filters landed).
+   *
+   * Stored WITHOUT `sources`/`filePaths` — the tab's scope is derived from
+   * its `id`/selection (see `tabSelection` in `LvAppContainer`), so those
+   * fields are always nulled before persisting.
+   */
+  filter?: LogFilter;
+  /**
+   * Per-tab override for group-by. When absent, falls back to the global
+   * `groupBy`. `'__all__'` ignores this and reads/writes the global value.
+   */
+  groupBy?: ReadonlyArray<LvGroupBy>;
 }
