@@ -5,7 +5,7 @@
 ## Разделы
 
 - [adr/](adr/) — Architecture Decision Records: ключевые технические решения и их обоснование.
-- [ui-conventions.md](ui-conventions.md) — UI/UX-конвенции: раскладка форм, компоненты, отступы.
+- [conventions/](conventions/) — инженерные практики: code style, TypeScript, React, CSS, тесты, тулинг, git, UI/UX.
 
 ## Конвенции
 

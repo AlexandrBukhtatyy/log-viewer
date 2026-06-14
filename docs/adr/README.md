@@ -31,11 +31,11 @@
 
 ## Жизненный цикл
 
-| Status | Когда |
-| --- | --- |
-| `proposed` | Черновик, обсуждается. |
-| `accepted` | Принято, действует. |
-| `deprecated` | Больше не актуально, но не заменено новым. |
+| Status                           | Когда                                                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `proposed`                       | Черновик, обсуждается.                                                                                             |
+| `accepted`                       | Принято, действует.                                                                                                |
+| `deprecated`                     | Больше не актуально, но не заменено новым.                                                                         |
 | `superseded by [NNNN](NNNN-...)` | Заменено новым ADR. Старый файл **не удаляется** — в нём меняется только статус и добавляется ссылка на преемника. |
 
 ## Как ссылаться
@@ -112,3 +112,5 @@ flowchart LR
 - [0028. Unified column model для таблицы логов](0028-unified-column-model.md) — accepted
 - [0029. On-prem дистрибутив: npm-пакет с bundled CLI + Dockerfile](0029-on-prem-npm-package-distribution.md) — proposed
 - [0030. Logical fields (`~`-namespace) — cross-format semantic attributes](0030-logical-fields-tilde-namespace.md) — proposed
+- [0031. Единый компонент LvFormField как layout-контракт для полей форм](0031-form-field-layout-contract.md) — proposed
+- [0032. Quality tooling: Prettier, git-хуки, CI-gate, Dependabot](0032-quality-tooling.md) — proposed
