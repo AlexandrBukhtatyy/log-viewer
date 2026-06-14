@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { LvFormField } from '../common/LvFormField.tsx';
 
 export interface LvAddSourceFormData {
   readonly handle: FileSystemDirectoryHandle;
@@ -156,40 +157,36 @@ export const LvAddSourceModal = ({
           </button>
         </div>
         <div className="lv-modal-body">
-          <div className="lv-form-row">
-            <label className="lv-form-label" htmlFor="lv-add-src-name">
-              Source name
-            </label>
-            <div className="lv-form-field">
-              <input
-                id="lv-add-src-name"
-                type="text"
-                className={`lv-form-input${nameTaken ? ' lv-form-input-error' : ''}`}
-                placeholder={handle?.name ?? 'Folder display name'}
-                value={name}
-                aria-invalid={nameTaken}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setNameTouched(true);
-                }}
-              />
-              {nameTaken && (
-                <span className="lv-form-error">
-                  A source named “{effectiveName}” already exists.
-                </span>
-              )}
-            </div>
-          </div>
+          <LvFormField
+            label="Source name"
+            htmlFor="lv-add-src-name"
+            error={
+              nameTaken ? (
+                <>A source named “{effectiveName}” already exists.</>
+              ) : null
+            }
+          >
+            <input
+              id="lv-add-src-name"
+              type="text"
+              className={`lv-form-input${nameTaken ? ' lv-form-input-error' : ''}`}
+              placeholder={handle?.name ?? 'Folder display name'}
+              value={name}
+              aria-invalid={nameTaken}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameTouched(true);
+              }}
+            />
+          </LvFormField>
 
-          <div className="lv-form-row">
-            <label className="lv-form-label">Type</label>
+          <LvFormField label="Type">
             <select className="lv-form-input" value="local-folder" disabled>
               <option value="local-folder">Local folder</option>
             </select>
-          </div>
+          </LvFormField>
 
-          <div className="lv-form-row">
-            <label className="lv-form-label">Watch</label>
+          <LvFormField label="Watch">
             <label className="lv-form-toggle">
               <input
                 type="checkbox"
@@ -204,10 +201,9 @@ export const LvAddSourceModal = ({
                 tail new entries as files grow
               </span>
             </label>
-          </div>
+          </LvFormField>
 
-          <div className="lv-form-row">
-            <label className="lv-form-label">Folder</label>
+          <LvFormField label="Folder" error={pickerError}>
             <div className="lv-form-folder">
               <button
                 type="button"
@@ -223,13 +219,9 @@ export const LvAddSourceModal = ({
                 {handle?.name ?? 'No folder selected'}
               </span>
             </div>
-            {pickerError && <span className="lv-form-error">{pickerError}</span>}
-          </div>
+          </LvFormField>
 
-          <div className="lv-form-row">
-            <label className="lv-form-label" htmlFor="lv-add-src-glob">
-              Glob
-            </label>
+          <LvFormField label="Glob" htmlFor="lv-add-src-glob">
             <input
               id="lv-add-src-glob"
               type="text"
@@ -238,12 +230,9 @@ export const LvAddSourceModal = ({
               value={glob}
               onChange={(e) => setGlob(e.target.value)}
             />
-          </div>
+          </LvFormField>
 
-          <div className="lv-form-row">
-            <label className="lv-form-label" htmlFor="lv-add-src-parser">
-              Parser
-            </label>
+          <LvFormField label="Parser" htmlFor="lv-add-src-parser">
             <select
               id="lv-add-src-parser"
               className="lv-form-input"
@@ -257,7 +246,7 @@ export const LvAddSourceModal = ({
                 </option>
               ))}
             </select>
-          </div>
+          </LvFormField>
         </div>
         <div className="lv-modal-ft lv-modal-ft-actions">
           <button type="button" className="lv-btn lv-btn-secondary" onClick={onClose}>

@@ -377,6 +377,15 @@ button{font-family:inherit}
    inline error/help text on its own line directly under the input. */
 .lv-form-field{flex:1; min-width:0; display:flex; flex-direction:column; gap:4px}
 .lv-form-field .lv-form-error{margin-left:0; margin-top:0}
+/* Orientation modifiers for the shared <LvFormField> component
+   (docs/ui-conventions.md → Forms). Bare `.lv-form-row` is the default
+   row layout — label left in an 80px gutter. */
+.lv-form-row--col{flex-direction:column; align-items:stretch; gap:3px}
+.lv-form-row--col > .lv-form-label{width:auto}
+/* Row + multi-line control (textarea): pin the label to the first line
+   instead of vertically centering it against the tall control. */
+.lv-form-row--top{align-items:flex-start}
+.lv-form-row--top > .lv-form-label{padding-top:6px}
 .lv-btn-secondary{background:transparent; border:1px solid var(--lv-border-strong); color:var(--lv-fg-2)}
 .lv-btn-secondary:hover{background:var(--lv-bg-2); color:var(--lv-fg)}
 .lv-btn:disabled{opacity:.4; cursor:not-allowed}
@@ -606,7 +615,11 @@ button{font-family:inherit}
   display:flex; flex-direction:column; gap:8px;
 }
 .lv-parsers-form-hd{font-weight:600; font-size:12.5px; color:var(--lv-fg)}
-.lv-parsers-form .lv-form-row{display:flex; flex-direction:column; gap:3px}
+/* Single fields use <LvFormField orientation="column">; paired fields
+   (two controls per row) stay raw — a documented composite exception.
+   Drop the default row padding so the narrow panel keeps its density
+   (vertical rhythm comes from `.lv-parsers-form { gap }`). */
+.lv-parsers-form .lv-form-row{padding:0}
 .lv-parsers-form .lv-form-row.lv-parsers-row-pair{flex-direction:row; gap:8px}
 .lv-form-half{flex:1; display:flex; flex-direction:column; gap:3px}
 .lv-parsers-pattern, .lv-parsers-fields{

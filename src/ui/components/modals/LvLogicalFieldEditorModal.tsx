@@ -5,6 +5,7 @@ import type {
   LogicalFieldType,
   LogicalFieldsConfig,
 } from '../../../core/types/index.ts';
+import { LvFormField } from '../common/LvFormField.tsx';
 
 const emptyFieldExtractor = (): LogicalExtractor => ({
   type: 'field',
@@ -326,9 +327,19 @@ export const LvLogicalFieldEditorModal = ({
         </div>
         <div className="lv-modal-body">
           <div className="lv-logical-field-form">
-            <label className="lv-tset-vf-field">
-              <span className="lv-tset-lbl">Id</span>
+            <LvFormField
+              label="Id"
+              htmlFor="lv-lf-id"
+              help={
+                <>
+                  Lowercase identifier — appears in pickers as{' '}
+                  <code>~{form.id || 'name'}</code>.
+                </>
+              }
+            >
               <input
+                id="lv-lf-id"
+                className="lv-form-input"
                 type="text"
                 value={form.id}
                 onChange={(e) => patch({ id: e.target.value })}
@@ -338,23 +349,21 @@ export const LvLogicalFieldEditorModal = ({
                 autoCorrect="off"
                 disabled={mode === 'edit'}
               />
-              <span className="lv-form-help">
-                Lowercase identifier — appears in pickers as{' '}
-                <code>~{form.id || 'name'}</code>.
-              </span>
-            </label>
-            <label className="lv-tset-vf-field">
-              <span className="lv-tset-lbl">Label</span>
+            </LvFormField>
+            <LvFormField label="Label" htmlFor="lv-lf-label">
               <input
+                id="lv-lf-label"
+                className="lv-form-input"
                 type="text"
                 value={form.label}
                 onChange={(e) => patch({ label: e.target.value })}
                 placeholder="Audit id"
               />
-            </label>
-            <label className="lv-tset-vf-field">
-              <span className="lv-tset-lbl">Type</span>
+            </LvFormField>
+            <LvFormField label="Type" htmlFor="lv-lf-type">
               <select
+                id="lv-lf-type"
+                className="lv-form-input"
                 value={form.type}
                 onChange={(e) =>
                   patch({ type: e.target.value as LogicalFieldType })
@@ -364,16 +373,17 @@ export const LvLogicalFieldEditorModal = ({
                 <option value="number">number</option>
                 <option value="bool">bool</option>
               </select>
-            </label>
-            <label className="lv-tset-vf-field">
-              <span className="lv-tset-lbl">Description (optional)</span>
+            </LvFormField>
+            <LvFormField label="Description" htmlFor="lv-lf-desc">
               <input
+                id="lv-lf-desc"
+                className="lv-form-input"
                 type="text"
                 value={form.description}
                 onChange={(e) => patch({ description: e.target.value })}
                 placeholder="Per-action audit-trail id"
               />
-            </label>
+            </LvFormField>
 
             <div className="lv-tset-vf-field">
               <span className="lv-tset-lbl">Extractors (first match wins)</span>

@@ -7,6 +7,7 @@ import {
   type CustomParserField,
   type CustomParserKind,
 } from '../../utils/parser-form.ts';
+import { LvFormField } from '../common/LvFormField.tsx';
 
 export interface LvParsersPanelProps {
   readonly parsers: ReadonlyArray<CustomParserDef>;
@@ -471,25 +472,47 @@ export const LvParsersPanel = ({
               </select>
             </label>
           </div>
-          <label className="lv-form-row">
-            <span className="lv-form-label">Label</span>
+          <LvFormField orientation="column" label="Label" htmlFor="lv-parser-label">
             <input
+              id="lv-parser-label"
               className="lv-form-input"
               type="text"
               value={form.label}
               placeholder="Human-readable name"
               onChange={(e) => updateField('label', e.target.value)}
             />
-          </label>
-          <label className="lv-form-row">
-            <span className="lv-form-label">
-              {form.kind === 'grok'
+          </LvFormField>
+          <LvFormField
+            orientation="column"
+            htmlFor="lv-parser-pattern"
+            label={
+              form.kind === 'grok'
                 ? 'Grok pattern'
                 : form.kind === 'js-function'
                   ? 'JS function body'
-                  : 'Regex pattern'}
-            </span>
+                  : 'Regex pattern'
+            }
+            help={
+              form.kind === 'grok' ? (
+                <>
+                  Use <code>%&#123;TOKEN:name&#125;</code> to capture, optional
+                  <code>:int</code>/<code>:float</code> coerces to number.
+                  Common tokens: IP, IPORHOST, NUMBER, INT, WORD, URIPATHPARAM,
+                  QUOTEDSTRING, TIMESTAMP_ISO8601, HTTPDATE, SYSLOGTIMESTAMP,
+                  LOGLEVEL, DATA, GREEDYDATA.
+                </>
+              ) : form.kind === 'js-function' ? (
+                <>
+                  Body of <code>(line, ctx) =&gt; …</code>. Return{' '}
+                  <code>null</code> to skip the line. Code runs inside the
+                  parser worker — no DOM, full <code>fetch</code>. Errors
+                  per-line are swallowed; syntax errors block the parser.
+                </>
+              ) : undefined
+            }
+          >
             <textarea
+              id="lv-parser-pattern"
               className="lv-form-input lv-parsers-pattern"
               rows={form.kind === 'js-function' ? 10 : 3}
               value={form.pattern}
@@ -502,66 +525,57 @@ export const LvParsersPanel = ({
               }
               onChange={(e) => updateField('pattern', e.target.value)}
             />
-            {form.kind === 'grok' && (
-              <span className="lv-form-help">
-                Use <code>%&#123;TOKEN:name&#125;</code> to capture, optional
-                <code>:int</code>/<code>:float</code> coerces to number.
-                Common tokens: IP, IPORHOST, NUMBER, INT, WORD, URIPATHPARAM,
-                QUOTEDSTRING, TIMESTAMP_ISO8601, HTTPDATE, SYSLOGTIMESTAMP,
-                LOGLEVEL, DATA, GREEDYDATA.
-              </span>
-            )}
-            {form.kind === 'js-function' && (
-              <span className="lv-form-help">
-                Body of <code>(line, ctx) =&gt; …</code>. Return <code>null</code> to
-                skip the line. Code runs inside the parser worker — no DOM,
-                full <code>fetch</code>. Errors per-line are swallowed; syntax
-                errors block the parser.
-              </span>
-            )}
-          </label>
+          </LvFormField>
           {form.kind === 'regex' && (
             <>
-              <label className="lv-form-row">
-                <span className="lv-form-label">Flags</span>
+              <LvFormField orientation="column" label="Flags" htmlFor="lv-parser-flags">
                 <input
+                  id="lv-parser-flags"
                   className="lv-form-input"
                   type="text"
                   value={form.flags}
                   placeholder="i, m, s, …"
                   onChange={(e) => updateField('flags', e.target.value)}
                 />
-              </label>
-              <label className="lv-form-row">
-                <span className="lv-form-label">Fields (JSON)</span>
+              </LvFormField>
+              <LvFormField
+                orientation="column"
+                label="Fields (JSON)"
+                htmlFor="lv-parser-fields"
+                help={<>Available transforms: {TRANSFORMS.join(', ')}.</>}
+              >
                 <textarea
+                  id="lv-parser-fields"
                   className="lv-form-input lv-parsers-fields"
                   rows={6}
                   value={form.fieldsJson}
                   placeholder='[{"group":1,"name":"service"}, {"group":2,"name":"status","transform":"number"}]'
                   onChange={(e) => updateField('fieldsJson', e.target.value)}
                 />
-                <span className="lv-form-help">
-                  Available transforms: {TRANSFORMS.join(', ')}.
-                </span>
-              </label>
+              </LvFormField>
             </>
           )}
           {form.kind === 'grok' && (
-            <label className="lv-form-row">
-              <span className="lv-form-label">Custom tokens (JSON)</span>
+            <LvFormField
+              orientation="column"
+              label="Custom tokens (JSON)"
+              htmlFor="lv-parser-tokens"
+              help={
+                <>
+                  Optional map of additional <code>%&#123;NAME&#125;</code> tokens
+                  — each value is itself a grok source.
+                </>
+              }
+            >
               <textarea
+                id="lv-parser-tokens"
                 className="lv-form-input lv-parsers-fields"
                 rows={3}
                 value={form.customTokensJson}
                 placeholder='{"MYID": "[A-Z]{3}-%{NUMBER}"}'
                 onChange={(e) => updateField('customTokensJson', e.target.value)}
               />
-              <span className="lv-form-help">
-                Optional map of additional <code>%&#123;NAME&#125;</code> tokens
-                — each value is itself a grok source.
-              </span>
-            </label>
+            </LvFormField>
           )}
           {form.kind !== 'js-function' && (
             <>
@@ -656,9 +670,9 @@ export const LvParsersPanel = ({
                   <span className="lv-form-half" />
                 )}
               </div>
-              <label className="lv-form-row">
-                <span className="lv-form-label">Message template</span>
+              <LvFormField orientation="column" label="Message template" htmlFor="lv-parser-msg">
                 <input
+                  id="lv-parser-msg"
                   className="lv-form-input"
                   type="text"
                   value={form.messageTemplate}
@@ -669,20 +683,24 @@ export const LvParsersPanel = ({
                   }
                   onChange={(e) => updateField('messageTemplate', e.target.value)}
                 />
-              </label>
+              </LvFormField>
             </>
           )}
-          <label className="lv-form-row">
-            <span className="lv-form-label">Default columns</span>
+          <LvFormField
+            orientation="column"
+            label="Default columns"
+            htmlFor="lv-parser-cols"
+            help={<>Comma-separated field names.</>}
+          >
             <input
+              id="lv-parser-cols"
               className="lv-form-input"
               type="text"
               value={form.defaultColumns}
               placeholder="status, request_uri"
               onChange={(e) => updateField('defaultColumns', e.target.value)}
             />
-            <span className="lv-form-help">Comma-separated field names.</span>
-          </label>
+          </LvFormField>
 
           {form.error && (
             <div className="lv-form-error">{form.error}</div>
