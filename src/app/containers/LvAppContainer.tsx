@@ -39,6 +39,8 @@ import { useWorkspace, useWorkspaceStore } from '../../hooks/use-workspace.ts';
 import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
 import { LvApp } from '../../ui/components/layout/LvApp.tsx';
 import {
+  applyTabRules,
+  extractTabRules,
   resolveActiveColumns,
   resolveActiveCoreFilter,
   resolveActiveGroupBy,
@@ -291,6 +293,58 @@ export const LvAppContainer = () => {
       );
     },
     [setGroupBy, setOpenTabs],
+  );
+
+  // Copy the active tab's view rules (filter + group-by + sort) onto other
+  // tabs — `'all'` for every other file tab, or a chosen subset. Columns are
+  // intentionally excluded (format-specific). Reads live workspace state so
+  // the source is always the currently-active tab.
+  const applyRulesToTabs = useCallback(
+    (target: 'all' | { ids: ReadonlyArray<string> }) => {
+      const {
+        activeTabId: srcId,
+        openTabs: tabs,
+        coreFilter: gf,
+        groupBy: gg,
+      } = useWorkspaceStore.getState();
+      if (srcId === '__all__') return;
+      const rules = extractTabRules(srcId, tabs, gf, gg);
+      const targetIds =
+        target === 'all'
+          ? new Set(
+              tabs
+                .filter((t) => t.id !== srcId && t.id !== '__all__')
+                .map((t) => t.id),
+            )
+          : new Set(target.ids);
+      if (targetIds.size === 0) return;
+      setOpenTabs((prev) => applyTabRules(prev, targetIds, rules));
+    },
+    [setOpenTabs],
+  );
+
+  // Drop the active tab's per-tab overrides so it falls back to the global
+  // filter/group-by/sort defaults again.
+  const resetActiveTabRules = useCallback(() => {
+    const id = useWorkspaceStore.getState().activeTabId;
+    if (id === '__all__') return;
+    setOpenTabs((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? { ...t, filter: undefined, groupBy: undefined, sortBy: undefined }
+          : t,
+      ),
+    );
+  }, [setOpenTabs]);
+
+  // Other file tabs the active tab's rules can be copied onto (excludes the
+  // active tab itself and the `__all__` aggregate).
+  const tabsForApply = useMemo(
+    () =>
+      openTabs
+        .filter((t) => t.id !== activeTabId && t.id !== '__all__')
+        .map((t) => ({ id: t.id, name: t.name })),
+    [openTabs, activeTabId],
   );
 
   // Push effective filter to ViewStore (writes a Zustand store outside React's
@@ -1175,6 +1229,10 @@ export const LvAppContainer = () => {
       onToggleLiveTail={() => setLiveTail(!liveTail)}
       groupBy={activeGroupBy}
       setGroupBy={onSetGroupBy}
+      applyRulesEnabled={activeTabId !== '__all__'}
+      tabsForApply={tabsForApply}
+      onApplyRulesToTabs={applyRulesToTabs}
+      onResetTabRules={resetActiveTabRules}
       groupBuckets={groupField !== null ? groupBuckets : null}
       groupRootFilter={filter}
       fetchGroupCounts={fetchGroupCounts}

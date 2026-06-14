@@ -200,6 +200,14 @@ export interface LvAppProps {
   // Group-by (UI state) + server-aggregated buckets (Phase 2).
   readonly groupBy: ReadonlyArray<LvGroupBy>;
   setGroupBy: (next: LvGroupBy[]) => void;
+  // Per-tab rules — "apply to other tabs" (filter + sort + group-by).
+  readonly applyRulesEnabled: boolean;
+  readonly tabsForApply: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+  }>;
+  onApplyRulesToTabs: (target: 'all' | { ids: string[] }) => void;
+  onResetTabRules: () => void;
   readonly groupBuckets: ReadonlyArray<GroupBucket> | null;
   readonly groupField: string | null;
   readonly groupRootFilter: LogFilter;
@@ -317,6 +325,10 @@ export const LvApp = ({
   onToggleLiveTail,
   groupBy,
   setGroupBy,
+  applyRulesEnabled,
+  tabsForApply,
+  onApplyRulesToTabs,
+  onResetTabRules,
   groupBuckets,
   groupField,
   groupRootFilter,
@@ -725,6 +737,10 @@ export const LvApp = ({
           onToggleTimeline={() => setTweak('timelineOn', !tweaks.timelineOn)}
           groupBy={groupBy}
           setGroupBy={setGroupBy}
+          applyRulesEnabled={applyRulesEnabled}
+          tabsForApply={tabsForApply}
+          onApplyRulesToTabs={onApplyRulesToTabs}
+          onResetTabRules={onResetTabRules}
           histogramData={histogramData}
           groupBuckets={groupBuckets}
           groupRootFilter={groupRootFilter}

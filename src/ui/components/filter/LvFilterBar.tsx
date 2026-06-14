@@ -4,6 +4,7 @@ import {
   Bookmark,
   CaseSensitive,
   ChevronDown,
+  Copy,
   ListFilter,
   Regex,
   Search,
@@ -57,6 +58,19 @@ export interface LvFilterBarProps {
   onToggleTimeline: () => void;
   readonly groupBy: ReadonlyArray<LvGroupBy>;
   onGroupByChange: (next: LvGroupBy[]) => void;
+  /**
+   * Per-tab rules ("apply to other tabs"). Enabled only when a real file tab
+   * is active (the `__all__` aggregate owns the global defaults and has no
+   * rules to copy). `tabsForApply` are the other open file tabs the active
+   * tab's filter/sort/group-by can be copied onto.
+   */
+  readonly applyRulesEnabled: boolean;
+  readonly tabsForApply: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+  }>;
+  onApplyRulesToTabs: (target: 'all' | { ids: string[] }) => void;
+  onResetTabRules: () => void;
   readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
   readonly tweaks: LvTweaks;
   setTweak: <K extends keyof LvTweaks>(key: K, value: LvTweaks[K]) => void;
@@ -83,6 +97,10 @@ export const LvFilterBar = ({
   onToggleTimeline,
   groupBy,
   onGroupByChange,
+  applyRulesEnabled,
+  tabsForApply,
+  onApplyRulesToTabs,
+  onResetTabRules,
   fieldDescriptors,
   tweaks,
   setTweak,
@@ -92,8 +110,11 @@ export const LvFilterBar = ({
 }: LvFilterBarProps) => {
   const [savedOpen, setSavedOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(new Set());
   const filtersRef = useRef<HTMLDivElement>(null);
   const savedRef = useRef<HTMLDivElement>(null);
+  const applyRef = useRef<HTMLDivElement>(null);
 
   // Compose the active-source set for compatibility badges. `null`
   // in filters.sources means "every catalog source"; we fall back to
@@ -126,7 +147,7 @@ export const LvFilterBar = ({
   const filtersBadge = activeFieldsCount;
 
   useEffect(() => {
-    if (!filtersOpen && !savedOpen) return;
+    if (!filtersOpen && !savedOpen && !applyOpen) return;
     const onDoc = (e: MouseEvent): void => {
       const t = e.target as Node;
       if (
@@ -139,11 +160,15 @@ export const LvFilterBar = ({
       if (savedOpen && savedRef.current && !savedRef.current.contains(t)) {
         setSavedOpen(false);
       }
+      if (applyOpen && applyRef.current && !applyRef.current.contains(t)) {
+        setApplyOpen(false);
+      }
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         setFiltersOpen(false);
         setSavedOpen(false);
+        setApplyOpen(false);
       }
     };
     document.addEventListener('mousedown', onDoc);
@@ -152,7 +177,19 @@ export const LvFilterBar = ({
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [filtersOpen, savedOpen]);
+  }, [filtersOpen, savedOpen, applyOpen]);
+
+  const toggleChecked = (id: string) =>
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const closeApply = () => {
+    setApplyOpen(false);
+    setCheckedIds(new Set());
+  };
 
   const setQuery = (q: string) => setFilters((f) => ({ ...f, query: q }));
   const toggleCase = () =>
@@ -393,6 +430,94 @@ export const LvFilterBar = ({
             </div>
           )}
         </div>
+
+        {applyRulesEnabled && (
+          <div className="lv-fbtn-wrap" ref={applyRef}>
+            <button
+              type="button"
+              className="lv-btn"
+              onClick={() => setApplyOpen((v) => !v)}
+              title="Apply this tab's filter / sort / grouping to other tabs"
+              aria-haspopup="menu"
+              aria-expanded={applyOpen}
+            >
+              <Copy size={12} strokeWidth={1.5} aria-hidden="true" />
+              <span>Tabs</span>
+              <ChevronDown size={12} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            {applyOpen && (
+              <div className="lv-pop" role="menu">
+                <div className="lv-pop-hd">Apply this tab’s rules</div>
+                <button
+                  type="button"
+                  className="lv-pop-item"
+                  disabled={tabsForApply.length === 0}
+                  onClick={() => {
+                    onApplyRulesToTabs('all');
+                    closeApply();
+                  }}
+                >
+                  <span className="lv-pop-name">Apply to all tabs</span>
+                  <span className="lv-pop-q">
+                    {tabsForApply.length === 0
+                      ? 'no other tabs'
+                      : `${tabsForApply.length} tab${tabsForApply.length > 1 ? 's' : ''}`}
+                  </span>
+                </button>
+                {tabsForApply.length > 0 && (
+                  <>
+                    <div className="lv-pop-sep" />
+                    {tabsForApply.map((t) => (
+                      <label
+                        key={t.id}
+                        className="lv-pop-item"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checkedIds.has(t.id)}
+                          onChange={() => toggleChecked(t.id)}
+                        />
+                        <span className="lv-pop-name">{t.name}</span>
+                      </label>
+                    ))}
+                    <button
+                      type="button"
+                      className="lv-pop-item"
+                      disabled={checkedIds.size === 0}
+                      onClick={() => {
+                        onApplyRulesToTabs({ ids: [...checkedIds] });
+                        closeApply();
+                      }}
+                    >
+                      <span
+                        className="lv-pop-name"
+                        style={{ color: 'var(--lv-accent)' }}
+                      >
+                        Apply to selected ({checkedIds.size})
+                      </span>
+                    </button>
+                  </>
+                )}
+                <div className="lv-pop-sep" />
+                <button
+                  type="button"
+                  className="lv-pop-item"
+                  onClick={() => {
+                    onResetTabRules();
+                    closeApply();
+                  }}
+                >
+                  <span className="lv-pop-name">Reset to global defaults</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="lv-saved" ref={savedRef}>
           <button

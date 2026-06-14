@@ -104,6 +104,14 @@ export interface LvViewerProps {
   readonly groupBy: ReadonlyArray<LvGroupBy>;
   setGroupBy: (next: LvGroupBy[]) => void;
 
+  readonly applyRulesEnabled: boolean;
+  readonly tabsForApply: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+  }>;
+  onApplyRulesToTabs: (target: 'all' | { ids: string[] }) => void;
+  onResetTabRules: () => void;
+
   /** Server-aggregated histogram for timeline rendering (Phase 2). */
   readonly histogramData: HistogramResponse;
   /**
@@ -193,6 +201,10 @@ export const LvViewer = ({
   onToggleTimeline,
   groupBy,
   setGroupBy,
+  applyRulesEnabled,
+  tabsForApply,
+  onApplyRulesToTabs,
+  onResetTabRules,
   histogramData,
   groupBuckets,
   groupField,
@@ -500,6 +512,10 @@ export const LvViewer = ({
             onToggleTimeline={onToggleTimeline}
             groupBy={groupBy}
             onGroupByChange={setGroupBy}
+            applyRulesEnabled={applyRulesEnabled}
+            tabsForApply={tabsForApply}
+            onApplyRulesToTabs={onApplyRulesToTabs}
+            onResetTabRules={onResetTabRules}
             fieldDescriptors={fieldDescriptors}
             tweaks={tweaks}
             setTweak={setTweak}
