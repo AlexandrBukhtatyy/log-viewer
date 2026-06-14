@@ -105,7 +105,14 @@ export const partializeWorkspace = (
   s: WorkspaceData,
 ): WorkspacePersistedV1 => ({
   version: 1,
-  openTabs: s.openTabs,
+  // Per-tab `filter` overrides are stored without scope — `sources`/`filePaths`
+  // are derived from the tab id, never frozen. Strip them defensively so a
+  // leaked scope can't survive a reload.
+  openTabs: s.openTabs.map((t) =>
+    t.filter
+      ? { ...t, filter: { ...t.filter, sources: null, filePaths: null } }
+      : t,
+  ),
   activeTabId: s.activeTabId,
   selectedIds: [...s.selectedIds].sort(),
   coreFilter: { ...s.coreFilter, sources: null, filePaths: null },
