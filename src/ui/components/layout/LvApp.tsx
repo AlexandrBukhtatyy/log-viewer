@@ -100,7 +100,7 @@ export interface LvAppProps {
   setActiveTabId: (id: string) => void;
   readonly tabs: ReadonlyArray<LvTab>;
   /** Click on a sidebar file → open (or replace) the preview tab. */
-  onOpenFile: (sourceId: string) => void;
+  onOpenFile: (sourceId: string, opts?: { readonly pinned?: boolean }) => void;
   onCloseTab: (tabId: string) => void;
   /** Promote a preview tab to pinned (fires from dbl-click on the tab). */
   onPinTab: (tabId: string) => void;

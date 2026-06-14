@@ -27,7 +27,7 @@ export interface LvTreeNodeProps {
    * column on the right edge handles selection independently. Folders
    * ignore this callback (they only expand/collapse).
    */
-  onOpenFile: (sourceId: string) => void;
+  onOpenFile: (sourceId: string, opts?: { readonly pinned?: boolean }) => void;
   /**
    * Toggle a folder's open state. Receives the current effective `open`
    * value (after applying the `openFolders[id] ?? !!node.open` fallback)
@@ -112,6 +112,9 @@ export const LvTreeNode = ({
           } else {
             onOpenFile(node.id);
           }
+        }}
+        onDoubleClick={() => {
+          if (!isFolder) onOpenFile(node.id, { pinned: true });
         }}
         onContextMenu={(e) => {
           if (!node.root || !onRemoveRoot) return;

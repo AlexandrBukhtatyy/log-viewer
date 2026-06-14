@@ -23,7 +23,7 @@ export interface LvSidebarProps {
    * column on the right edge drives multi-select independently and
    * does not open a tab.
    */
-  onOpenFile: (sourceId: string) => void;
+  onOpenFile: (sourceId: string, opts?: { readonly pinned?: boolean }) => void;
   onAddRoot: (sourceType: LvSourceKind) => void;
   onRemoveRoot: (rootId: string) => void;
   onDropFolders?: (names: string[]) => void;

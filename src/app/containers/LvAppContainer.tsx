@@ -552,10 +552,12 @@ export const LvAppContainer = () => {
 
   // VS Code-style preview/pinned tabs. A single-click on a sidebar file
   // opens (or replaces) one preview slot — at most one preview tab lives
-  // alongside any pinned tabs. Double-click on the tab itself promotes
-  // it to pinned; from there it behaves like any other tab.
+  // alongside any pinned tabs. Double-click on the tab itself — or on the
+  // file in the sidebar (`opts.pinned`) — promotes it to pinned; from there
+  // it behaves like any other tab.
   const openFileTab = useCallback(
-    (rawId: string) => {
+    (rawId: string, opts?: { readonly pinned?: boolean }) => {
+      const pinned = opts?.pinned ?? false;
       // Resolve the node. For root-level file sources the click delivers
       // a plain SourceId and `filesById` is enough. For files *inside* a
       // walked directory the id is compound (`<sourceId>::<relPath>`); we
@@ -598,16 +600,27 @@ export const LvAppContainer = () => {
           ? parserCols.map((k) => ({ key: k, widthPx: 140 }))
           : undefined;
       setOpenTabs((prev) => {
-        if (prev.some((t) => t.id === rawId)) return prev;
+        // Already open: pin it on double-click, otherwise leave it as-is
+        // (a single-click on an open file is a no-op beyond activation).
+        const existingIdx = prev.findIndex((t) => t.id === rawId);
+        if (existingIdx !== -1) {
+          if (!pinned || prev[existingIdx].isPinned) return prev;
+          const next = prev.slice();
+          next[existingIdx] = { ...prev[existingIdx], isPinned: true };
+          return next;
+        }
         const newTab: LvTab = {
           id: rawId,
           name: resolved.name,
           path: resolved.path,
           kind: resolved.kind,
-          isPinned: false,
+          isPinned: pinned,
           ...(initialColumns ? { columns: initialColumns } : {}),
         };
-        // Preview: replace any existing preview slot, otherwise append.
+        // Double-click opens a pinned tab directly, appended alongside any
+        // existing preview. Single-click opens a preview: replace any
+        // existing preview slot, otherwise append.
+        if (pinned) return [...prev, newTab];
         const previewIdx = prev.findIndex((t) => !t.isPinned);
         if (previewIdx === -1) return [...prev, newTab];
         const next = prev.slice();
