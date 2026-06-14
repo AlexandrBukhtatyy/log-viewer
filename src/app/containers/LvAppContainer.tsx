@@ -38,7 +38,11 @@ import type { FieldDescriptor } from '../../core/filter/field-descriptor.ts';
 import { useWorkspace, useWorkspaceStore } from '../../hooks/use-workspace.ts';
 import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
 import { LvApp } from '../../ui/components/layout/LvApp.tsx';
-import { resolveActiveColumns } from '../../ui/utils/active-columns.ts';
+import {
+  resolveActiveColumns,
+  resolveActiveCoreFilter,
+  resolveActiveGroupBy,
+} from '../../ui/utils/active-columns.ts';
 import type {
   LvGroupBy,
   LvLogKind,
@@ -217,15 +221,30 @@ export const LvAppContainer = () => {
     [activeTabId, openTabs],
   );
 
+  // Per-tab core filter (query/levels/services/fieldFilters/timeRange).
+  // Falls back to the global `coreFilter` for `__all__` and legacy tabs.
+  // Scope (sources/filePaths) is mixed in below from `tabSelection`.
+  const activeCoreFilter = useMemo(
+    () => resolveActiveCoreFilter(activeTabId, openTabs, coreFilter),
+    [activeTabId, openTabs, coreFilter],
+  );
+
   const filter = useMemo<LogFilter>(() => {
     const { sourcesArr, filePaths } = tabSelection();
     return {
-      ...coreFilter,
+      ...activeCoreFilter,
       sources: sourcesArr.length === 0 ? null : sourcesArr,
       filePaths: filePaths.length === 0 ? null : filePaths,
       sortBy: activeTabSortBy,
     };
-  }, [coreFilter, tabSelection, activeTabSortBy]);
+  }, [activeCoreFilter, tabSelection, activeTabSortBy]);
+
+  // Per-tab group-by. Falls back to the global `groupBy` for `__all__` and
+  // legacy tabs.
+  const activeGroupBy = useMemo(
+    () => resolveActiveGroupBy(activeTabId, openTabs, groupBy),
+    [activeTabId, openTabs, groupBy],
+  );
 
   const setFilter = useCallback(
     (next: (prev: LogFilter) => LogFilter) => {
@@ -854,7 +873,7 @@ export const LvAppContainer = () => {
   }, [filter, savedSearchesStore]);
 
   // Server-aggregated group buckets when the user picked a group-by axis.
-  const groupField = lvGroupByToCoreField(groupBy[0]);
+  const groupField = lvGroupByToCoreField(activeGroupBy[0]);
   const { buckets: groupBuckets } = useGroupCounts(groupField, GROUP_LIMIT);
 
   // Server-aggregated histogram — only when the timeline is on, otherwise we
@@ -1124,7 +1143,7 @@ export const LvAppContainer = () => {
       recentFiles={recentFiles}
       liveTail={liveTail}
       onToggleLiveTail={() => setLiveTail(!liveTail)}
-      groupBy={groupBy}
+      groupBy={activeGroupBy}
       setGroupBy={setGroupBy}
       groupBuckets={groupField !== null ? groupBuckets : null}
       groupRootFilter={filter}
