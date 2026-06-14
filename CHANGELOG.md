@@ -9,6 +9,34 @@ Releases after 0.1.0 are generated automatically by
 [release-please](https://github.com/googleapis/release-please) from
 Conventional Commits — do not edit entries below this line by hand.
 
+## [0.1.3](https://github.com/AlexandrBukhtatyy/log-viewer/compare/v0.1.2...v0.1.3) (2026-06-14)
+
+
+### Features
+
+* logical fields (~-namespace) for cross-format semantic attributes ([e86aae6](https://github.com/AlexandrBukhtatyy/log-viewer/commit/e86aae6eca72c72790d8f3e2170fdb06f1218ebf))
+* **logical-fields:** coverage drill-down and quick filter from row ([b67f687](https://github.com/AlexandrBukhtatyy/log-viewer/commit/b67f687600fc024e425b2599e9314cab824dbf20))
+* **logical-fields:** editor modal + group-by section split ([3d9cc84](https://github.com/AlexandrBukhtatyy/log-viewer/commit/3d9cc84448950b76a64a6ad088d98e1c532efb97))
+* **logical-fields:** inline editor for user-defined custom fields ([d91be8d](https://github.com/AlexandrBukhtatyy/log-viewer/commit/d91be8dcb298e4130bc9ef3954b8278f06eaa98f))
+* **logical-fields:** regex-on-json, discovery, import/export ([8b07a46](https://github.com/AlexandrBukhtatyy/log-viewer/commit/8b07a4657389f4354d606c20c42c926372f8e025))
+* **table:** single-column sort with per-tab persistence ([8542903](https://github.com/AlexandrBukhtatyy/log-viewer/commit/8542903819fd5c5f3c5ec3be4bd92fc0ad053a24))
+
+
+### Bug Fixes
+
+* **cli:** show localhost URL when bound to wildcard host ([40d1551](https://github.com/AlexandrBukhtatyy/log-viewer/commit/40d15510ef8996649bc004ee94d0c746c954fa27))
+
+
+### Documentation
+
+* **conventions:** add engineering practices guide ([459c958](https://github.com/AlexandrBukhtatyy/log-viewer/commit/459c958e9e65c6d8ebeef9da84e15ab07c5b6fb7))
+* record commit workflow and decision-doc boundaries in CLAUDE.md ([45024a5](https://github.com/AlexandrBukhtatyy/log-viewer/commit/45024a5e64a2a3226e7e7146861458fcebdcafef))
+
+
+### Code Refactoring
+
+* **ui:** unify form-field layout via shared LvFormField ([7e7372b](https://github.com/AlexandrBukhtatyy/log-viewer/commit/7e7372bbae7ca206f27ea62b21e4a62c278fe387))
+
 ## [0.1.2](https://github.com/AlexandrBukhtatyy/log-viewer/compare/v0.1.1...v0.1.2) (2026-06-07)
 
 
