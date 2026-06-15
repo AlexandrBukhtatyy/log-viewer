@@ -85,7 +85,12 @@ export const LvSearchPanel = ({
           setFts(next);
           if (next) setRegex(false);
         }}
-        suggest={{ items: suggestions, onAccept: (item) => setQ(item.insert) }}
+        suggest={{
+          items: suggestions,
+          onAccept: (item) => {
+            if (item.insert !== undefined) setQ(item.insert);
+          },
+        }}
         onSubmit={run}
         autoFocus
       />

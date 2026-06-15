@@ -2,7 +2,7 @@ import type { FieldDescriptor } from '../../core/filter/field-descriptor.ts';
 import type { QueryMode } from '../../core/types/index.ts';
 import type { LvSavedSearch } from '../contracts/lv-types.ts';
 
-export type SuggestKind = 'recent' | 'saved' | 'value' | 'syntax';
+export type SuggestKind = 'recent' | 'saved' | 'value' | 'field' | 'syntax';
 
 export interface SearchSuggestion {
   readonly kind: SuggestKind;
@@ -12,8 +12,26 @@ export interface SearchSuggestion {
   readonly label: string;
   /** Secondary text (field key, count, saved-search name, …). */
   readonly hint?: string;
-  /** The full query string to set when this item is accepted. */
-  readonly insert: string;
+  /**
+   * Text suggestions (recent/saved/value/syntax): the full query string to
+   * set when accepted. Absent for structured `field` suggestions.
+   */
+  readonly insert?: string;
+  /**
+   * Structured `field` suggestion — accepting adds a `key = value` field
+   * filter instead of mutating the query text.
+   */
+  readonly filter?: { readonly key: string; readonly value: string };
+}
+
+/** A `field = value` candidate for the structured "Fields" group. Built by
+ *  the container from system fields (@level / @source.*) and lazily-fetched
+ *  logical-field values. */
+export interface StructuredValue {
+  readonly key: string;
+  readonly label: string;
+  readonly value: string;
+  readonly count: number;
 }
 
 export interface BuildSuggestionsInput {
@@ -22,10 +40,13 @@ export interface BuildSuggestionsInput {
   readonly descriptors: ReadonlyArray<FieldDescriptor>;
   readonly saved: ReadonlyArray<LvSavedSearch>;
   readonly recent: ReadonlyArray<string>;
+  /** System/logical `field = value` candidates (structured filters). */
+  readonly structuredValues?: ReadonlyArray<StructuredValue>;
 }
 
 const PER_GROUP = 6;
 const VALUE_GROUP = 8;
+const FIELD_GROUP = 8;
 
 /** Split a query into the part before the last token and the last token
  *  itself. A trailing space means the last token is empty (head = whole). */
@@ -54,6 +75,7 @@ export const buildSearchSuggestions = ({
   descriptors,
   saved,
   recent,
+  structuredValues = [],
 }: BuildSuggestionsInput): ReadonlyArray<SearchSuggestion> => {
   const out: SearchSuggestion[] = [];
   const trimmed = query.trim();
@@ -111,6 +133,40 @@ export const buildSearchSuggestions = ({
       label: c.value,
       hint: c.field,
       insert: `${head}${c.value}`,
+    });
+  }
+
+  // --- Fields (structured `key = value` filters) ---
+  // System (@level / @source.*) and logical (~…) values match against value
+  // or key/label and accept into a field filter rather than text.
+  type FCand = StructuredValue & { rank: number };
+  const fseen = new Set<string>();
+  const fcands: FCand[] = [];
+  for (const s of structuredValues) {
+    if (s.value === '' || s.value.length > 80) continue;
+    const vl = s.value.toLowerCase();
+    const kl = `${s.key} ${s.label}`.toLowerCase();
+    if (tokenCore !== '' && !vl.includes(tokenCore) && !kl.includes(tokenCore))
+      continue;
+    const dk = `${s.key}=${vl}`;
+    if (fseen.has(dk)) continue;
+    fseen.add(dk);
+    const rank =
+      tokenCore === ''
+        ? 0
+        : vl.startsWith(tokenCore) || kl.startsWith(tokenCore)
+          ? 2
+          : 1;
+    fcands.push({ ...s, rank });
+  }
+  fcands.sort((a, b) => b.rank - a.rank || b.count - a.count);
+  for (const c of fcands.slice(0, FIELD_GROUP)) {
+    out.push({
+      kind: 'field',
+      group: 'Fields',
+      label: `${c.key} = ${c.value}`,
+      hint: c.count > 0 ? String(c.count) : undefined,
+      filter: { key: c.key, value: c.value },
     });
   }
 

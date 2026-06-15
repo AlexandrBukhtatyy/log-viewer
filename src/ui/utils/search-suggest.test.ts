@@ -119,6 +119,43 @@ describe('buildSearchSuggestions', () => {
     );
   });
 
+  it('structured field values become field filters, not text', () => {
+    const out = buildSearchSuggestions({
+      query: 'err',
+      mode: 'substring',
+      descriptors: [],
+      saved: [],
+      recent: [],
+      structuredValues: [
+        { key: '@level', label: 'Level', value: 'error', count: 120 },
+        { key: '@level', label: 'Level', value: 'warn', count: 40 },
+        { key: '@source.kind', label: 'Source kind', value: 'file', count: 2 },
+      ],
+    });
+    const fields = out.filter((s) => s.kind === 'field');
+    const error = fields.find((f) => f.label === '@level = error')!;
+    expect(error).toBeDefined();
+    expect(error.filter).toEqual({ key: '@level', value: 'error' });
+    expect(error.insert).toBeUndefined();
+    expect(error.hint).toBe('120');
+    // 'warn' / 'file' don't match 'err' → excluded
+    expect(fields.map((f) => f.label)).not.toContain('@level = warn');
+  });
+
+  it('matches structured values by key/label too', () => {
+    const out = buildSearchSuggestions({
+      query: 'level',
+      mode: 'substring',
+      descriptors: [],
+      saved: [],
+      recent: [],
+      structuredValues: [
+        { key: '@level', label: 'Level', value: 'error', count: 5 },
+      ],
+    });
+    expect(out.find((s) => s.kind === 'field')?.label).toBe('@level = error');
+  });
+
   it('does not suggest the exact current query as recent', () => {
     const out = buildSearchSuggestions({
       query: 'error timeout',

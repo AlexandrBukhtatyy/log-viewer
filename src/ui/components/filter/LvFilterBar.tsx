@@ -222,9 +222,13 @@ export const LvFilterBar = ({
     };
   }, [filtersOpen, savedOpen, applyOpen, suggestOpen]);
 
-  // Accept a suggestion: set the query to its `insert` and keep typing.
+  // Accept a suggestion. Text suggestions set the query; structured `field`
+  // ones add a field filter and strip the trigger token (wired in a later
+  // step). For now, text suggestions only.
   const acceptSuggestion = (item: SearchSuggestion): void => {
-    setFilters((f) => ({ ...f, query: item.insert }));
+    if (item.insert !== undefined) {
+      setFilters((f) => ({ ...f, query: item.insert! }));
+    }
     setHighlighted(-1);
     setSuggestOpen(false);
   };
