@@ -23,6 +23,7 @@ import { useBookmarks } from '../../hooks/use-bookmarks.ts';
 import { useRecentFiles } from '../../hooks/use-recent-files.ts';
 import { useSavedSearches } from '../../hooks/use-saved-searches.ts';
 import { useSearchHistory } from '../../hooks/use-search-history.ts';
+import { useFieldValueSuggestions } from '../../hooks/use-field-value-suggestions.ts';
 import { useLogicalFields } from '../../hooks/use-logical-fields.ts';
 import {
   BUILT_IN_LOGICAL_FIELDS,
@@ -1024,8 +1025,17 @@ export const LvAppContainer = () => {
       out.push({ key: '@source.kind', label: 'Source kind', value, count });
     return out;
   }, [levelCounts, sources]);
-  // Merged with lazily-fetched logical-field values in a later step.
-  const structuredValues = systemFieldValues;
+  // Logical-field values are fetched lazily (one getGroupCounts per active
+  // ~field, cached) and merged with the cheap system values.
+  const logicalFieldValues = useFieldValueSuggestions({
+    activeLogicalFields,
+    filter,
+    fetchGroupCounts,
+  });
+  const structuredValues = useMemo(
+    () => [...systemFieldValues, ...logicalFieldValues],
+    [systemFieldValues, logicalFieldValues],
+  );
 
   const stats = useMemo(() => {
     let ingestingSources = 0;
