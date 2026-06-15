@@ -575,10 +575,13 @@ export const LvApp = ({
             query: q,
             caseSensitive: opts.caseSensitive,
             wholeWord: opts.wholeWord,
-            queryMode: opts.regex ? 'regex' : 'substring',
+            queryMode: opts.fts ? 'fts' : opts.regex ? 'regex' : 'substring',
           }));
           setRail('files');
         }}
+        fieldDescriptors={fieldDescriptors}
+        recentSearches={recentSearches}
+        onSubmitQuery={onSubmitQuery}
         savedSearches={savedSearches}
         onApplyPreset={(p) => {
           setFilter((f) => ({

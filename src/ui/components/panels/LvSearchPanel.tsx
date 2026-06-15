@@ -1,30 +1,63 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { LvSavedSearch } from '../../contracts/lv-types.ts';
+import { buildSearchSuggestions } from '../../utils/search-suggest.ts';
 import { LvSearchInput } from '../common/LvSearchInput.tsx';
 
 export interface LvSearchPanelProps {
   /**
    * Run the search across all files. Receives the typed query plus the
-   * three toggle states so the caller can map them onto `LogFilter`
-   * (caseSensitive / wholeWord / queryMode='regex').
+   * toggle states so the caller can map them onto `LogFilter`
+   * (caseSensitive / wholeWord / queryMode).
    */
   onRun: (
     query: string,
-    opts: { caseSensitive: boolean; wholeWord: boolean; regex: boolean },
+    opts: {
+      caseSensitive: boolean;
+      wholeWord: boolean;
+      regex: boolean;
+      fts: boolean;
+    },
   ) => void;
   readonly savedSearches: ReadonlyArray<LvSavedSearch>;
   onApplyPreset: (preset: LvSavedSearch) => void;
+  /** Autocomplete inputs (field values + recent history). */
+  readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
+  readonly recentSearches: ReadonlyArray<string>;
+  onSubmitQuery: (query: string) => void;
 }
 
 export const LvSearchPanel = ({
   onRun,
   savedSearches,
   onApplyPreset,
+  fieldDescriptors,
+  recentSearches,
+  onSubmitQuery,
 }: LvSearchPanelProps) => {
   const [q, setQ] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);
   const [regex, setRegex] = useState(false);
+  const [fts, setFts] = useState(false);
+
+  const mode = fts ? 'fts' : regex ? 'regex' : 'substring';
+  const suggestions = useMemo(
+    () =>
+      buildSearchSuggestions({
+        query: q,
+        mode,
+        descriptors: fieldDescriptors,
+        saved: savedSearches,
+        recent: recentSearches,
+      }),
+    [q, mode, fieldDescriptors, savedSearches, recentSearches],
+  );
+
+  const run = (): void => {
+    onSubmitQuery(q);
+    onRun(q, { caseSensitive, wholeWord, regex, fts });
+  };
 
   return (
     <aside className="lv-sidebar">
@@ -43,8 +76,17 @@ export const LvSearchPanel = ({
         wholeWord={wholeWord}
         onWholeWordChange={setWholeWord}
         regex={regex}
-        onRegexChange={setRegex}
-        onSubmit={() => onRun(q, { caseSensitive, wholeWord, regex })}
+        onRegexChange={(next) => {
+          setRegex(next);
+          if (next) setFts(false);
+        }}
+        fts={fts}
+        onFtsChange={(next) => {
+          setFts(next);
+          if (next) setRegex(false);
+        }}
+        suggest={{ items: suggestions, onAccept: (item) => setQ(item.insert) }}
+        onSubmit={run}
         autoFocus
       />
       <div className="lv-search-section">

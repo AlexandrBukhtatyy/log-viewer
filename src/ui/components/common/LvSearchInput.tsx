@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { LvSearchSuggest } from './LvSearchSuggest.tsx';
+import type { SearchSuggestion } from '../../utils/search-suggest.ts';
 
 export interface LvSearchInputProps {
   readonly value: string;
@@ -17,6 +19,22 @@ export interface LvSearchInputProps {
 
   readonly regex?: boolean;
   onRegexChange?: (next: boolean) => void;
+
+  /** FTS-mode toggle (rendered like the regex one). Mutual exclusivity with
+   *  regex is coordinated by the caller. */
+  readonly fts?: boolean;
+  onFtsChange?: (next: boolean) => void;
+
+  /**
+   * Optional autocomplete. When provided, the input renders the suggestions
+   * dropdown and owns the open/highlight state + keyboard navigation. The
+   * caller recomputes `items` from the current value/mode and applies the
+   * accepted item via `onAccept`.
+   */
+  readonly suggest?: {
+    readonly items: ReadonlyArray<SearchSuggestion>;
+    onAccept: (item: SearchSuggestion) => void;
+  };
 
   /** Called on Enter (Shift+Enter is intentionally not handled here). */
   onSubmit?: () => void;
@@ -47,12 +65,18 @@ export const LvSearchInput = ({
   onWholeWordChange,
   regex,
   onRegexChange,
+  fts,
+  onFtsChange,
+  suggest,
   onSubmit,
   onEscape,
   autoFocus,
   className,
 }: LvSearchInputProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(-1);
 
   useEffect(() => {
     if (autoFocus) {
@@ -62,13 +86,38 @@ export const LvSearchInput = ({
     return undefined;
   }, [autoFocus]);
 
+  const items = suggest?.items ?? [];
+  const showSuggest = suggestOpen && items.length > 0;
+
+  useEffect(() => {
+    if (!showSuggest) return;
+    const onDoc = (e: MouseEvent): void => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setSuggestOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [showSuggest]);
+
+  const accept = (item: SearchSuggestion): void => {
+    suggest?.onAccept(item);
+    setHighlighted(-1);
+    setSuggestOpen(false);
+  };
+
   const showCase =
     caseSensitive !== undefined && onCaseSensitiveChange !== undefined;
   const showWord = wholeWord !== undefined && onWholeWordChange !== undefined;
   const showRegex = regex !== undefined && onRegexChange !== undefined;
+  const showFts = fts !== undefined && onFtsChange !== undefined;
+  const showToggles = showCase || showWord || showRegex || showFts;
 
   return (
-    <div className={`lv-search${className ? ' ' + className : ''}`}>
+    <div
+      className={`lv-search${className ? ' ' + className : ''}`}
+      ref={rootRef}
+    >
       <svg
         className="lv-search-ico"
         viewBox="0 0 14 14"
@@ -98,18 +147,47 @@ export const LvSearchInput = ({
         value={value}
         placeholder={placeholder}
         spellCheck={false}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          if (suggest) {
+            setSuggestOpen(true);
+            setHighlighted(-1);
+          }
+        }}
+        onFocus={() => {
+          if (suggest) setSuggestOpen(true);
+        }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') {
+          if (suggest && e.key === 'ArrowDown') {
             e.preventDefault();
+            if (!showSuggest) {
+              setSuggestOpen(true);
+              setHighlighted(0);
+            } else {
+              setHighlighted((h) => Math.min(items.length - 1, h + 1));
+            }
+          } else if (suggest && e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlighted((h) => Math.max(0, h - 1));
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (showSuggest && highlighted >= 0 && highlighted < items.length) {
+              accept(items[highlighted]!);
+              return;
+            }
+            setSuggestOpen(false);
             onSubmit?.();
           } else if (e.key === 'Escape') {
             e.preventDefault();
+            if (showSuggest) {
+              setSuggestOpen(false);
+              return;
+            }
             onEscape?.();
           }
         }}
       />
-      {(showCase || showWord || showRegex) && (
+      {showToggles && (
         <div className="lv-search-toggles">
           {showCase && (
             <button
@@ -213,6 +291,25 @@ export const LvSearchInput = ({
               </svg>
             </button>
           )}
+          {showFts && (
+            <button
+              type="button"
+              className={`lv-search-tog${fts ? ' is-on' : ''}`}
+              onClick={() => onFtsChange!(!fts)}
+              title="Full-text search (phrases, AND, OR, NOT, prefix*)"
+              aria-label="FTS query mode"
+            >
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  fontFamily: 'sans-serif',
+                }}
+              >
+                FTS
+              </span>
+            </button>
+          )}
         </div>
       )}
       {value !== '' && (
@@ -228,6 +325,14 @@ export const LvSearchInput = ({
         >
           ✕
         </button>
+      )}
+      {showSuggest && suggest && (
+        <LvSearchSuggest
+          items={items}
+          highlighted={highlighted}
+          onHover={setHighlighted}
+          onAccept={accept}
+        />
       )}
     </div>
   );
