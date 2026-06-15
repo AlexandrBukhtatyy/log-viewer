@@ -1294,6 +1294,95 @@ button {
   padding: 2px 8px;
   font-size: 10.5px;
 }
+
+/* Logical fields — compact two-line cards (ADR-0030) */
+.lv-lf-row {
+  border-radius: 5px;
+}
+.lv-lf-row.is-active {
+  background: color-mix(in srgb, var(--lv-accent) 7%, transparent);
+  box-shadow: inset 2px 0 0 var(--lv-accent);
+}
+.lv-lf-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+.lv-lf-row:not(.is-active):hover .lv-lf-head {
+  background: var(--lv-bg-2);
+}
+.lv-lf-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.lv-lf-main:disabled,
+.lv-lf-main[aria-disabled] {
+  cursor: default;
+}
+.lv-lf-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.lv-lf-id {
+  font-family: var(--lv-font-mono);
+  font-size: 11.5px;
+  color: var(--lv-fg);
+  white-space: nowrap;
+}
+.lv-lf-label {
+  min-width: 0;
+  font-size: 11px;
+  color: var(--lv-fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lv-lf-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--lv-fg-3);
+}
+.lv-lf-caret {
+  font-size: 8px;
+  line-height: 1;
+  color: var(--lv-fg-3);
+}
+.lv-lf-kind {
+  font-family: var(--lv-font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lv-lf-meta {
+  color: var(--lv-fg-3);
+}
+.lv-lf-act {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.lv-lf-act .lv-btn {
+  padding: 2px 7px;
+  font-size: 10.5px;
+}
+.lv-lf-detail {
+  padding: 0 8px 8px 10px;
+}
 .lv-parsers-form {
   margin: 8px 6px;
   padding: 10px;

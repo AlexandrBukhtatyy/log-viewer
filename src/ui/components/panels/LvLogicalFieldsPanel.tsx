@@ -4,6 +4,7 @@ import type {
   LogicalFieldsConfig,
 } from '../../../core/types/index.ts';
 import { LvLogicalFieldEditorModal } from '../modals/LvLogicalFieldEditorModal.tsx';
+import { LvSearchInput } from '../common/LvSearchInput.tsx';
 
 interface CoverageSourceView {
   readonly sourceId: string;
@@ -44,6 +45,7 @@ interface RowProps {
   onToggle(id: string): void;
   onEdit?: (id: string) => void;
   onRemove?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
   onLoadCoverage?: (id: string) => void;
 }
 
@@ -119,90 +121,113 @@ const Row = ({
   onToggle,
   onEdit,
   onRemove,
+  onDuplicate,
   onLoadCoverage,
 }: RowProps) => {
-  const [drillOpen, setDrillOpen] = useState(false);
-  const toggleDrill = (): void => {
-    if (!drillOpen && coverage === undefined) onLoadCoverage?.(field.id);
-    setDrillOpen((v) => !v);
+  const [open, setOpen] = useState(false);
+  const hasDescription =
+    field.description !== undefined && field.description.length > 0;
+  // Details worth expanding: the description and (for active fields) the
+  // per-source coverage drill-down. Inactive fields without a description
+  // have nothing to expand — the head stays inert.
+  const expandable = hasDescription || (active && onLoadCoverage !== undefined);
+  const toggle = (): void => {
+    if (!expandable) return;
+    if (!open && coverage === undefined) onLoadCoverage?.(field.id);
+    setOpen((v) => !v);
   };
   return (
-    <div className={`lv-parsers-row${active ? ' is-active' : ''}`}>
-      <div className="lv-parsers-row-main">
-        <span className="lv-parsers-row-id">
-          {PREFIX}
-          {field.id}
-        </span>
-        <span className="lv-parsers-row-label">{field.label}</span>
-        <span className="lv-parsers-row-kind">{extractorSummary(field)}</span>
-        {coverage === 'loading' && (
-          <span className="lv-colpick-meta" style={{ marginLeft: 6 }}>
-            …
-          </span>
-        )}
-        {coverage === 'error' && (
-          <span className="lv-colpick-meta" style={{ marginLeft: 6 }}>
-            err
-          </span>
-        )}
-        {typeof coverage === 'object' && <CoverageBadge coverage={coverage} />}
-        {field.description !== undefined && field.description.length > 0 && (
-          <span
-            className="lv-form-help"
-            style={{ display: 'block', marginTop: 4 }}
-          >
-            {field.description}
-          </span>
-        )}
-        {active && typeof coverage === 'object' && drillOpen && (
-          <CoverageDrill field={field} coverage={coverage} />
-        )}
-      </div>
-      <div className="lv-parsers-row-act">
-        {active && onLoadCoverage !== undefined && (
-          <button
-            type="button"
-            className="lv-btn lv-btn-secondary"
-            onClick={toggleDrill}
-            title="Show per-source extractor coverage"
-          >
-            {drillOpen ? 'Hide' : 'Coverage'}
-          </button>
-        )}
+    <div className={`lv-lf-row${active ? ' is-active' : ''}`}>
+      <div className="lv-lf-head">
         <button
           type="button"
-          className={`lv-btn ${active ? 'lv-btn-danger' : 'lv-btn-secondary'}`}
-          onClick={() => onToggle(field.id)}
+          className="lv-lf-main"
+          onClick={toggle}
+          disabled={!expandable}
+          aria-expanded={expandable ? open : undefined}
+          title={hasDescription ? field.description : undefined}
         >
-          {active ? 'Deactivate' : 'Activate'}
+          <span className="lv-lf-top">
+            <span className="lv-lf-id">
+              {PREFIX}
+              {field.id}
+            </span>
+            <span className="lv-lf-label">{field.label}</span>
+          </span>
+          <span className="lv-lf-sub">
+            {expandable && (
+              <span className="lv-lf-caret">{open ? '▾' : '▸'}</span>
+            )}
+            <span className="lv-lf-kind">{extractorSummary(field)}</span>
+            {coverage === 'loading' && <span className="lv-lf-meta">…</span>}
+            {coverage === 'error' && <span className="lv-lf-meta">err</span>}
+            {typeof coverage === 'object' && (
+              <CoverageBadge coverage={coverage} />
+            )}
+          </span>
         </button>
-        {onEdit !== undefined && (
+        <div className="lv-lf-act">
           <button
             type="button"
-            className="lv-btn lv-btn-secondary"
-            onClick={() => onEdit(field.id)}
+            className={`lv-btn ${active ? 'lv-btn-danger' : 'lv-btn-secondary'}`}
+            onClick={() => onToggle(field.id)}
           >
-            Edit
+            {active ? 'Deactivate' : 'Activate'}
           </button>
-        )}
-        {onRemove !== undefined && (
-          <button
-            type="button"
-            className="lv-btn lv-btn-danger"
-            onClick={() => onRemove(field.id)}
-            title={`Delete ${PREFIX}${field.id}`}
-          >
-            Delete
-          </button>
-        )}
+          {onEdit !== undefined && (
+            <button
+              type="button"
+              className="lv-btn lv-btn-secondary"
+              onClick={() => onEdit(field.id)}
+            >
+              Edit
+            </button>
+          )}
+          {onDuplicate !== undefined && (
+            <button
+              type="button"
+              className="lv-btn lv-btn-secondary"
+              onClick={() => onDuplicate(field.id)}
+              title={`Duplicate ${PREFIX}${field.id} into a custom field`}
+            >
+              Duplicate
+            </button>
+          )}
+          {onRemove !== undefined && (
+            <button
+              type="button"
+              className="lv-btn lv-btn-danger"
+              onClick={() => onRemove(field.id)}
+              title={`Delete ${PREFIX}${field.id}`}
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
+      {open && (
+        <div className="lv-lf-detail">
+          {hasDescription && (
+            <div className="lv-form-help">{field.description}</div>
+          )}
+          {active &&
+            onLoadCoverage !== undefined &&
+            (typeof coverage === 'object' ? (
+              <CoverageDrill field={field} coverage={coverage} />
+            ) : coverage === 'error' ? (
+              <div className="lv-form-help">Coverage unavailable.</div>
+            ) : (
+              <div className="lv-form-help">Loading coverage…</div>
+            ))}
+        </div>
+      )}
     </div>
   );
 };
 
 type EditState =
   | { mode: 'closed' }
-  | { mode: 'new' }
+  | { mode: 'new'; seed?: LogicalField }
   | { mode: 'edit'; id: string };
 
 export interface LvLogicalFieldSuggestion {
@@ -285,6 +310,7 @@ export const LvLogicalFieldsPanel = ({
 }: LvLogicalFieldsPanelProps) => {
   const [edit, setEdit] = useState<EditState>({ mode: 'closed' });
   const [ioError, setIoError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const [coverage, setCoverage] = useState<
     Readonly<Record<string, CoverageEntry>>
   >({});
@@ -316,11 +342,30 @@ export const LvLogicalFieldsPanel = ({
   const active = fields.filter((f) => activeSet.has(f.id));
   const inactive = fields.filter((f) => !activeSet.has(f.id));
 
+  // Case-insensitive search over `~id` / id / label. Drives the three
+  // sections; empty query shows everything.
+  const q = query.trim().toLowerCase();
+  const matchField = (f: LogicalField): boolean =>
+    q === '' ||
+    f.id.toLowerCase().includes(q) ||
+    f.label.toLowerCase().includes(q);
+  const shownActive = active.filter(matchField);
+  const shownInactive = inactive.filter(matchField);
+  const shownSuggestions = suggestions.filter((s) => matchField(s.field));
+
   const startNew = (): void => setEdit({ mode: 'new' });
   const startEdit = (id: string): void => {
     const f = config.customFields.find((x) => x.id === id);
     if (f === undefined) return;
     setEdit({ mode: 'edit', id });
+  };
+  // Fork any field (built-in or custom) into a fresh editable custom: copy
+  // label / type / description / extractors but blank the id (the user must
+  // pick a new one — `addCustom` rejects ids colliding with built-ins).
+  const startDuplicate = (id: string): void => {
+    const f = fields.find((x) => x.id === id);
+    if (f === undefined) return;
+    setEdit({ mode: 'new', seed: { ...f, id: '', origin: 'user' } });
   };
   const cancel = (): void => setEdit({ mode: 'closed' });
 
@@ -334,7 +379,9 @@ export const LvLogicalFieldsPanel = ({
   const initialField =
     edit.mode === 'edit'
       ? config.customFields.find((f) => f.id === edit.id)
-      : undefined;
+      : edit.mode === 'new'
+        ? edit.seed
+        : undefined;
 
   return (
     <aside className="lv-sidebar lv-fields-panel">
@@ -396,6 +443,13 @@ export const LvLogicalFieldsPanel = ({
           </button>
         )}
       </div>
+      <LvSearchInput
+        className="lv-search--block"
+        value={query}
+        onChange={setQuery}
+        placeholder="Search logical fields…"
+        onEscape={() => setQuery('')}
+      />
       {ioError !== null && (
         <div
           className="lv-tset-vf-error"
@@ -416,9 +470,11 @@ export const LvLogicalFieldsPanel = ({
         onClose={cancel}
       />
 
-      {active.length > 0 && <div className="lv-parsers-section-hd">Active</div>}
+      {shownActive.length > 0 && (
+        <div className="lv-parsers-section-hd">Active</div>
+      )}
       <div className="lv-parsers-list">
-        {active.map((f) => (
+        {shownActive.map((f) => (
           <Row
             key={f.id}
             field={f}
@@ -427,6 +483,7 @@ export const LvLogicalFieldsPanel = ({
             onToggle={onToggle}
             onEdit={isCustom(f.id) ? startEdit : undefined}
             onRemove={isCustom(f.id) ? onRemoveCustom : undefined}
+            onDuplicate={startDuplicate}
             onLoadCoverage={
               getCoverage !== undefined ? loadCoverage : undefined
             }
@@ -434,38 +491,44 @@ export const LvLogicalFieldsPanel = ({
         ))}
       </div>
 
-      {suggestions.length > 0 && (
+      {shownSuggestions.length > 0 && (
         <>
           <div className="lv-parsers-section-hd">Suggested</div>
           <div className="lv-parsers-list">
-            {suggestions.map(({ field: f, matchedKeys }) => (
-              <div key={`sugg-${f.id}`} className="lv-parsers-row">
-                <div className="lv-parsers-row-main">
-                  <span className="lv-parsers-row-id">
-                    {PREFIX}
-                    {f.id}
-                  </span>
-                  <span className="lv-parsers-row-label">{f.label}</span>
-                  <span className="lv-parsers-row-kind">
-                    matches: {matchedKeys.join(', ')}
-                  </span>
-                  {f.description !== undefined && f.description.length > 0 && (
-                    <span
-                      className="lv-form-help"
-                      style={{ display: 'block', marginTop: 4 }}
-                    >
-                      {f.description}
+            {shownSuggestions.map(({ field: f, matchedKeys }) => (
+              <div key={`sugg-${f.id}`} className="lv-lf-row">
+                <div className="lv-lf-head">
+                  <div className="lv-lf-main" aria-disabled>
+                    <span className="lv-lf-top">
+                      <span className="lv-lf-id">
+                        {PREFIX}
+                        {f.id}
+                      </span>
+                      <span className="lv-lf-label">{f.label}</span>
                     </span>
-                  )}
-                </div>
-                <div className="lv-parsers-row-act">
-                  <button
-                    type="button"
-                    className="lv-btn lv-btn-secondary"
-                    onClick={() => onToggle(f.id)}
-                  >
-                    Activate
-                  </button>
+                    <span className="lv-lf-sub">
+                      <span className="lv-lf-kind">
+                        matches: {matchedKeys.join(', ')}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="lv-lf-act">
+                    <button
+                      type="button"
+                      className="lv-btn lv-btn-secondary"
+                      onClick={() => onToggle(f.id)}
+                    >
+                      Activate
+                    </button>
+                    <button
+                      type="button"
+                      className="lv-btn lv-btn-secondary"
+                      onClick={() => startDuplicate(f.id)}
+                      title={`Duplicate ${PREFIX}${f.id} into a custom field`}
+                    >
+                      Duplicate
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -473,11 +536,11 @@ export const LvLogicalFieldsPanel = ({
         </>
       )}
 
-      {inactive.length > 0 && (
+      {shownInactive.length > 0 && (
         <div className="lv-parsers-section-hd">Catalog</div>
       )}
       <div className="lv-parsers-list">
-        {inactive.map((f) => (
+        {shownInactive.map((f) => (
           <Row
             key={f.id}
             field={f}
@@ -485,11 +548,21 @@ export const LvLogicalFieldsPanel = ({
             onToggle={onToggle}
             onEdit={isCustom(f.id) ? startEdit : undefined}
             onRemove={isCustom(f.id) ? onRemoveCustom : undefined}
+            onDuplicate={startDuplicate}
           />
         ))}
       </div>
 
-      {active.length === 0 && edit.mode === 'closed' && (
+      {query.trim() !== '' &&
+        shownActive.length === 0 &&
+        shownInactive.length === 0 &&
+        shownSuggestions.length === 0 && (
+          <div className="lv-parsers-empty">
+            Nothing matches “{query.trim()}”.
+          </div>
+        )}
+
+      {query.trim() === '' && active.length === 0 && edit.mode === 'closed' && (
         <div className="lv-parsers-empty">
           Activate a template above or create your own to make it available in
           filter / group-by / column pickers across all tabs.
