@@ -189,6 +189,9 @@ export interface LvAppProps {
   // Saved searches.
   readonly savedSearches: ReadonlyArray<LvSavedSearch>;
   onSaveSearch: () => void;
+  // Recent free-text queries (search autocomplete).
+  readonly recentSearches: ReadonlyArray<string>;
+  onSubmitQuery: (query: string) => void;
 
   // Recent files.
   readonly recentFiles: ReadonlyArray<LvAppRecentFile>;
@@ -319,6 +322,8 @@ export const LvApp = ({
   bookmarkKeyOf,
   bookmarkEntries,
   savedSearches,
+  recentSearches,
+  onSubmitQuery,
   onSaveSearch,
   recentFiles,
   liveTail,
@@ -721,6 +726,8 @@ export const LvApp = ({
           levelCounts={levelCounts}
           savedSearches={savedSearches}
           onSaveSearch={onSaveSearch}
+          recentSearches={recentSearches}
+          onSubmitQuery={onSubmitQuery}
           liveTail={liveTail}
           onToggleLiveTail={onToggleLiveTail}
           tabs={tabs}

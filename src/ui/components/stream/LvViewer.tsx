@@ -80,6 +80,8 @@ export interface LvViewerProps {
 
   readonly savedSearches: ReadonlyArray<LvSavedSearch>;
   onSaveSearch: () => void;
+  readonly recentSearches: ReadonlyArray<string>;
+  onSubmitQuery: (query: string) => void;
 
   readonly liveTail: boolean;
   onToggleLiveTail: () => void;
@@ -185,6 +187,8 @@ export const LvViewer = ({
   levelCounts,
   savedSearches,
   onSaveSearch,
+  recentSearches,
+  onSubmitQuery,
   liveTail,
   onToggleLiveTail,
   tabs,
@@ -503,6 +507,8 @@ export const LvViewer = ({
             setFilters={setFilter}
             levelCounts={levelCounts}
             savedSearches={savedSearches}
+            recentSearches={recentSearches}
+            onSubmitQuery={onSubmitQuery}
             liveTail={liveTail}
             onToggleLiveTail={onToggleLiveTail}
             onSaveSearch={onSaveSearch}

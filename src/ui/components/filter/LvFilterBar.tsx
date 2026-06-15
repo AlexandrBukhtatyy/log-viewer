@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Activity,
   Bookmark,
@@ -26,6 +32,11 @@ import type {
   LvTweaks,
 } from '../../contracts/lv-types.ts';
 import { compatOf } from '../../utils/field-compatibility.ts';
+import {
+  buildSearchSuggestions,
+  type SearchSuggestion,
+} from '../../utils/search-suggest.ts';
+import { LvSearchSuggest } from '../common/LvSearchSuggest.tsx';
 import { LvGroupBySelect } from './LvGroupBySelect.tsx';
 import { LvAddFieldFilter } from './LvAddFieldFilter.tsx';
 import { LvTableSettings } from './LvTableSettings.tsx';
@@ -59,6 +70,10 @@ export interface LvFilterBarProps {
   onToggleTimeline: () => void;
   readonly groupBy: ReadonlyArray<LvGroupBy>;
   onGroupByChange: (next: LvGroupBy[]) => void;
+  /** Recent submitted queries (autocomplete "Recent" group). */
+  readonly recentSearches: ReadonlyArray<string>;
+  /** Record a query in the recent-search history (called on submit). */
+  onSubmitQuery: (query: string) => void;
   /**
    * Per-tab rules ("apply to other tabs"). Enabled only when a real file tab
    * is active (the `__all__` aggregate owns the global defaults and has no
@@ -98,6 +113,8 @@ export const LvFilterBar = ({
   onToggleTimeline,
   groupBy,
   onGroupByChange,
+  recentSearches,
+  onSubmitQuery,
   applyRulesEnabled,
   tabsForApply,
   onApplyRulesToTabs,
@@ -113,9 +130,31 @@ export const LvFilterBar = ({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(new Set());
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(-1);
   const filtersRef = useRef<HTMLDivElement>(null);
   const savedRef = useRef<HTMLDivElement>(null);
   const applyRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  const suggestions = useMemo(
+    () =>
+      buildSearchSuggestions({
+        query: filters.query,
+        mode: filters.queryMode,
+        descriptors: fieldDescriptors,
+        saved: savedSearches,
+        recent: recentSearches,
+      }),
+    [
+      filters.query,
+      filters.queryMode,
+      fieldDescriptors,
+      savedSearches,
+      recentSearches,
+    ],
+  );
+  const showSuggest = suggestOpen && suggestions.length > 0;
 
   // Compose the active-source set for compatibility badges. `null`
   // in filters.sources means "every catalog source"; we fall back to
@@ -148,7 +187,7 @@ export const LvFilterBar = ({
   const filtersBadge = activeFieldsCount;
 
   useEffect(() => {
-    if (!filtersOpen && !savedOpen && !applyOpen) return;
+    if (!filtersOpen && !savedOpen && !applyOpen && !suggestOpen) return;
     const onDoc = (e: MouseEvent): void => {
       const t = e.target as Node;
       if (
@@ -164,6 +203,9 @@ export const LvFilterBar = ({
       if (applyOpen && applyRef.current && !applyRef.current.contains(t)) {
         setApplyOpen(false);
       }
+      if (suggestOpen && searchRef.current && !searchRef.current.contains(t)) {
+        setSuggestOpen(false);
+      }
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
@@ -178,7 +220,42 @@ export const LvFilterBar = ({
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [filtersOpen, savedOpen, applyOpen]);
+  }, [filtersOpen, savedOpen, applyOpen, suggestOpen]);
+
+  // Accept a suggestion: set the query to its `insert` and keep typing.
+  const acceptSuggestion = (item: SearchSuggestion): void => {
+    setFilters((f) => ({ ...f, query: item.insert }));
+    setHighlighted(-1);
+    setSuggestOpen(false);
+  };
+
+  const onSearchKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!showSuggest) {
+        setSuggestOpen(true);
+        setHighlighted(0);
+        return;
+      }
+      setHighlighted((h) => Math.min(suggestions.length - 1, h + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlighted((h) => Math.max(0, h - 1));
+    } else if (e.key === 'Enter') {
+      if (showSuggest && highlighted >= 0 && highlighted < suggestions.length) {
+        e.preventDefault();
+        acceptSuggestion(suggestions[highlighted]!);
+        return;
+      }
+      onSubmitQuery(filters.query);
+      setSuggestOpen(false);
+    } else if (e.key === 'Escape') {
+      if (showSuggest) {
+        e.stopPropagation();
+        setSuggestOpen(false);
+      }
+    }
+  };
 
   const toggleChecked = (id: string) =>
     setCheckedIds((prev) => {
@@ -236,7 +313,7 @@ export const LvFilterBar = ({
           </button>
         </div>
 
-        <div className="lv-search">
+        <div className="lv-search" ref={searchRef}>
           <Search
             className="lv-search-ico"
             size={13}
@@ -247,12 +324,21 @@ export const LvFilterBar = ({
             type="text"
             className="lv-search-input"
             value={filters.query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSuggestOpen(true);
+              setHighlighted(-1);
+            }}
+            onFocus={() => setSuggestOpen(true)}
+            onKeyDown={onSearchKeyDown}
+            role="combobox"
+            aria-expanded={showSuggest}
+            aria-autocomplete="list"
             placeholder={
               filters.queryMode === 'regex'
                 ? 'Regex… e.g. \\btimeout\\b'
                 : filters.queryMode === 'fts'
-                  ? 'FTS5 query… e.g. "out of memory" OR error'
+                  ? 'FTS… "out of memory" OR error -debug'
                   : 'Search logs across selected files…'
             }
             spellCheck={false}
@@ -312,6 +398,14 @@ export const LvFilterBar = ({
             >
               <X size={12} strokeWidth={2} aria-hidden="true" />
             </button>
+          )}
+          {showSuggest && (
+            <LvSearchSuggest
+              items={suggestions}
+              highlighted={highlighted}
+              onHover={setHighlighted}
+              onAccept={acceptSuggestion}
+            />
           )}
         </div>
 

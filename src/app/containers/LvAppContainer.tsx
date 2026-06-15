@@ -22,6 +22,7 @@ import { useUiPrefs } from '../../hooks/use-ui-prefs.ts';
 import { useBookmarks } from '../../hooks/use-bookmarks.ts';
 import { useRecentFiles } from '../../hooks/use-recent-files.ts';
 import { useSavedSearches } from '../../hooks/use-saved-searches.ts';
+import { useSearchHistory } from '../../hooks/use-search-history.ts';
 import { useLogicalFields } from '../../hooks/use-logical-fields.ts';
 import {
   BUILT_IN_LOGICAL_FIELDS,
@@ -605,6 +606,9 @@ export const LvAppContainer = () => {
 
   const savedSearchesStore = useSavedSearches();
   const savedSearches = savedSearchesStore.list;
+
+  const recentSearches = useSearchHistory((s) => s.recent);
+  const pushSearchHistory = useSearchHistory((s) => s.push);
 
   const exportHook = useExport();
   const onExport = useCallback(
@@ -1224,6 +1228,8 @@ export const LvAppContainer = () => {
       bookmarkEntries={bookmarkEntries}
       savedSearches={savedSearches}
       onSaveSearch={onSaveSearch}
+      recentSearches={recentSearches}
+      onSubmitQuery={pushSearchHistory}
       recentFiles={recentFiles}
       liveTail={liveTail}
       onToggleLiveTail={() => setLiveTail(!liveTail)}
