@@ -3,6 +3,7 @@ import {
   Activity,
   Bookmark,
   CaseSensitive,
+  Check,
   ChevronDown,
   Copy,
   ListFilter,
@@ -277,6 +278,15 @@ export const LvFilterBar = ({
             </button>
             <button
               type="button"
+              className={`lv-search-tog${filters.queryMode === 'regex' ? ' is-on' : ''}`}
+              onClick={() => toggleMode('regex')}
+              title="Regular Expression (Alt+R)"
+              aria-label="Regex query mode"
+            >
+              <Regex size={14} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               className={`lv-search-tog${filters.queryMode === 'fts' ? ' is-on' : ''}`}
               onClick={() => toggleMode('fts')}
               title="Full-text search (FTS5 grammar — phrases, AND, OR, NOT)"
@@ -291,15 +301,6 @@ export const LvFilterBar = ({
               >
                 FTS
               </span>
-            </button>
-            <button
-              type="button"
-              className={`lv-search-tog${filters.queryMode === 'regex' ? ' is-on' : ''}`}
-              onClick={() => toggleMode('regex')}
-              title="Regular Expression (Alt+R)"
-              aria-label="Regex query mode"
-            >
-              <Regex size={14} strokeWidth={1.75} aria-hidden="true" />
             </button>
           </div>
           {filters.query && (
@@ -446,72 +447,78 @@ export const LvFilterBar = ({
               <ChevronDown size={12} strokeWidth={1.75} aria-hidden="true" />
             </button>
             {applyOpen && (
-              <div className="lv-pop" role="menu">
-                <div className="lv-pop-hd">Apply this tab’s rules</div>
+              <div className="lv-pop lv-apply-pop" role="menu">
+                <div className="lv-pop-hd">
+                  <span>Copy filter · sort · grouping</span>
+                </div>
                 <button
                   type="button"
-                  className="lv-pop-item"
+                  className="lv-pop-item lv-pop-item-row"
                   disabled={tabsForApply.length === 0}
                   onClick={() => {
                     onApplyRulesToTabs('all');
                     closeApply();
                   }}
                 >
-                  <span className="lv-pop-name">Apply to all tabs</span>
-                  <span className="lv-pop-q">
-                    {tabsForApply.length === 0
-                      ? 'no other tabs'
-                      : `${tabsForApply.length} tab${tabsForApply.length > 1 ? 's' : ''}`}
+                  <span className="lv-pop-ico" aria-hidden="true">
+                    <Copy size={13} strokeWidth={1.75} />
                   </span>
+                  <span className="lv-pop-name">Apply to all tabs</span>
+                  <span className="lv-pop-count">{tabsForApply.length}</span>
                 </button>
+
                 {tabsForApply.length > 0 && (
                   <>
-                    <div className="lv-pop-sep" />
-                    {tabsForApply.map((t) => (
-                      <label
-                        key={t.id}
-                        className="lv-pop-item"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checkedIds.has(t.id)}
-                          onChange={() => toggleChecked(t.id)}
-                        />
-                        <span className="lv-pop-name">{t.name}</span>
-                      </label>
-                    ))}
+                    <div className="lv-pop-sub">Or pick tabs</div>
+                    {tabsForApply.map((t) => {
+                      const on = checkedIds.has(t.id);
+                      return (
+                        <button
+                          type="button"
+                          key={t.id}
+                          className={`lv-pop-item lv-pop-item-row${on ? ' is-on' : ''}`}
+                          aria-pressed={on}
+                          onClick={() => toggleChecked(t.id)}
+                        >
+                          <span className={`lv-chk${on ? ' is-on' : ''}`}>
+                            {on && (
+                              <Check
+                                size={11}
+                                strokeWidth={3}
+                                aria-hidden="true"
+                              />
+                            )}
+                          </span>
+                          <span className="lv-pop-name">{t.name}</span>
+                        </button>
+                      );
+                    })}
                     <button
                       type="button"
-                      className="lv-pop-item"
+                      className="lv-btn lv-apply-go"
                       disabled={checkedIds.size === 0}
                       onClick={() => {
                         onApplyRulesToTabs({ ids: [...checkedIds] });
                         closeApply();
                       }}
                     >
-                      <span
-                        className="lv-pop-name"
-                        style={{ color: 'var(--lv-accent)' }}
-                      >
-                        Apply to selected ({checkedIds.size})
-                      </span>
+                      Apply to {checkedIds.size} selected
                     </button>
                   </>
                 )}
+
                 <div className="lv-pop-sep" />
                 <button
                   type="button"
-                  className="lv-pop-item"
+                  className="lv-pop-item lv-pop-item-row"
                   onClick={() => {
                     onResetTabRules();
                     closeApply();
                   }}
                 >
+                  <span className="lv-pop-ico" aria-hidden="true">
+                    <X size={13} strokeWidth={1.75} />
+                  </span>
                   <span className="lv-pop-name">Reset to global defaults</span>
                 </button>
               </div>

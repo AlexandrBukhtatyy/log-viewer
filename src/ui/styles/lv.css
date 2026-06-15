@@ -2605,6 +2605,60 @@ button {
   margin: 4px 0;
 }
 
+/* "Apply to other tabs" menu (per-tab view rules, ADR-0033) */
+.lv-apply-pop {
+  min-width: 248px;
+}
+.lv-pop-item-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.lv-pop-item-row .lv-chk {
+  margin-right: 0;
+  flex: 0 0 auto;
+}
+.lv-pop-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--lv-fg-3);
+}
+.lv-pop-item-row .lv-pop-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.lv-pop-count {
+  flex: 0 0 auto;
+  min-width: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-family: var(--lv-font-mono);
+  text-align: center;
+  color: var(--lv-fg-3);
+  background: var(--lv-bg);
+  border: 1px solid var(--lv-border);
+  border-radius: 999px;
+}
+.lv-pop-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.lv-apply-go {
+  width: 100%;
+  justify-content: center;
+  margin: 6px 0 2px;
+  color: var(--lv-accent);
+}
+.lv-apply-go:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--lv-fg-3);
+}
+
 /* Level pills */
 .lv-levels {
   display: flex;
