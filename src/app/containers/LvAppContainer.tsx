@@ -36,6 +36,7 @@ import {
   parseLogicalFieldsConfig,
 } from '../../core/logical-fields/io.ts';
 import type { FieldDescriptor } from '../../core/filter/field-descriptor.ts';
+import type { StructuredValue } from '../../ui/utils/search-suggest.ts';
 import { useWorkspace, useWorkspaceStore } from '../../hooks/use-workspace.ts';
 import { clearPwaCache, clearUiState } from '../clear-app-data.ts';
 import { LvApp } from '../../ui/components/layout/LvApp.tsx';
@@ -1001,6 +1002,31 @@ export const LvAppContainer = () => {
     return out;
   }, [histogramData]);
 
+  // Structured `field = value` candidates for search autocomplete (the
+  // "Fields" group). System fields are cheap/in-memory: @level from the
+  // histogram level counts, @source.name/kind from the source list. Logical
+  // field values are merged in lazily below.
+  const systemFieldValues = useMemo<ReadonlyArray<StructuredValue>>(() => {
+    const out: StructuredValue[] = [];
+    for (const [lvl, count] of Object.entries(levelCounts)) {
+      if (count > 0)
+        out.push({ key: '@level', label: 'Level', value: lvl, count });
+    }
+    const names = new Map<string, number>();
+    const kinds = new Map<string, number>();
+    for (const r of sources) {
+      names.set(r.source.name, (names.get(r.source.name) ?? 0) + 1);
+      kinds.set(r.source.kind, (kinds.get(r.source.kind) ?? 0) + 1);
+    }
+    for (const [value, count] of names)
+      out.push({ key: '@source.name', label: 'Source name', value, count });
+    for (const [value, count] of kinds)
+      out.push({ key: '@source.kind', label: 'Source kind', value, count });
+    return out;
+  }, [levelCounts, sources]);
+  // Merged with lazily-fetched logical-field values in a later step.
+  const structuredValues = systemFieldValues;
+
   const stats = useMemo(() => {
     let ingestingSources = 0;
     let ingestingEntries = 0;
@@ -1230,6 +1256,7 @@ export const LvAppContainer = () => {
       onSaveSearch={onSaveSearch}
       recentSearches={recentSearches}
       onSubmitQuery={pushSearchHistory}
+      structuredValues={structuredValues}
       recentFiles={recentFiles}
       liveTail={liveTail}
       onToggleLiveTail={() => setLiveTail(!liveTail)}

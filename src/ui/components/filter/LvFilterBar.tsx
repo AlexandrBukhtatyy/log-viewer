@@ -34,7 +34,9 @@ import type {
 import { compatOf } from '../../utils/field-compatibility.ts';
 import {
   buildSearchSuggestions,
+  splitLastToken,
   type SearchSuggestion,
+  type StructuredValue,
 } from '../../utils/search-suggest.ts';
 import { LvSearchSuggest } from '../common/LvSearchSuggest.tsx';
 import { LvGroupBySelect } from './LvGroupBySelect.tsx';
@@ -74,6 +76,8 @@ export interface LvFilterBarProps {
   readonly recentSearches: ReadonlyArray<string>;
   /** Record a query in the recent-search history (called on submit). */
   onSubmitQuery: (query: string) => void;
+  /** System/logical `field = value` candidates (autocomplete "Fields" group). */
+  readonly structuredValues: ReadonlyArray<StructuredValue>;
   /**
    * Per-tab rules ("apply to other tabs"). Enabled only when a real file tab
    * is active (the `__all__` aggregate owns the global defaults and has no
@@ -115,6 +119,7 @@ export const LvFilterBar = ({
   onGroupByChange,
   recentSearches,
   onSubmitQuery,
+  structuredValues,
   applyRulesEnabled,
   tabsForApply,
   onApplyRulesToTabs,
@@ -145,6 +150,7 @@ export const LvFilterBar = ({
         descriptors: fieldDescriptors,
         saved: savedSearches,
         recent: recentSearches,
+        structuredValues,
       }),
     [
       filters.query,
@@ -152,6 +158,7 @@ export const LvFilterBar = ({
       fieldDescriptors,
       savedSearches,
       recentSearches,
+      structuredValues,
     ],
   );
   const showSuggest = suggestOpen && suggestions.length > 0;
@@ -223,10 +230,23 @@ export const LvFilterBar = ({
   }, [filtersOpen, savedOpen, applyOpen, suggestOpen]);
 
   // Accept a suggestion. Text suggestions set the query; structured `field`
-  // ones add a field filter and strip the trigger token (wired in a later
-  // step). For now, text suggestions only.
+  // ones add a `key = value` field filter and strip the trigger token from
+  // the query (dedupes against existing filters).
   const acceptSuggestion = (item: SearchSuggestion): void => {
-    if (item.insert !== undefined) {
+    if (item.filter !== undefined) {
+      const { key, value } = item.filter;
+      setFilters((f) => {
+        const existing = f.fieldFilters ?? [];
+        const dup = existing.some(
+          (x) => x.key === key && x.op === '=' && x.value === value,
+        );
+        return {
+          ...f,
+          query: splitLastToken(f.query).head.replace(/\s+$/, ''),
+          fieldFilters: dup ? existing : [...existing, { key, op: '=', value }],
+        };
+      });
+    } else if (item.insert !== undefined) {
       setFilters((f) => ({ ...f, query: item.insert! }));
     }
     setHighlighted(-1);

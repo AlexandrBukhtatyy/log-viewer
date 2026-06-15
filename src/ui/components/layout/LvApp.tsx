@@ -10,6 +10,7 @@ import type {
   LogLevel,
 } from '../../../core/types/index.ts';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
+import type { StructuredValue } from '../../utils/search-suggest.ts';
 import type {
   LvCatalogRoot,
   LvColumnPref,
@@ -192,6 +193,8 @@ export interface LvAppProps {
   // Recent free-text queries (search autocomplete).
   readonly recentSearches: ReadonlyArray<string>;
   onSubmitQuery: (query: string) => void;
+  // Structured field=value candidates (autocomplete "Fields" group).
+  readonly structuredValues: ReadonlyArray<StructuredValue>;
 
   // Recent files.
   readonly recentFiles: ReadonlyArray<LvAppRecentFile>;
@@ -324,6 +327,7 @@ export const LvApp = ({
   savedSearches,
   recentSearches,
   onSubmitQuery,
+  structuredValues,
   onSaveSearch,
   recentFiles,
   liveTail,
@@ -731,6 +735,7 @@ export const LvApp = ({
           onSaveSearch={onSaveSearch}
           recentSearches={recentSearches}
           onSubmitQuery={onSubmitQuery}
+          structuredValues={structuredValues}
           liveTail={liveTail}
           onToggleLiveTail={onToggleLiveTail}
           tabs={tabs}

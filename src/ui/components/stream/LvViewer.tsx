@@ -20,6 +20,7 @@ import type {
   LvTweaks,
 } from '../../contracts/lv-types.ts';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
+import type { StructuredValue } from '../../utils/search-suggest.ts';
 import { builtInColumn } from '../../contracts/lv-column-registry.tsx';
 import { LvFilterBar } from '../filter/LvFilterBar.tsx';
 import { LvTimeline } from '../timeline/LvTimeline.tsx';
@@ -82,6 +83,7 @@ export interface LvViewerProps {
   onSaveSearch: () => void;
   readonly recentSearches: ReadonlyArray<string>;
   onSubmitQuery: (query: string) => void;
+  readonly structuredValues: ReadonlyArray<StructuredValue>;
 
   readonly liveTail: boolean;
   onToggleLiveTail: () => void;
@@ -189,6 +191,7 @@ export const LvViewer = ({
   onSaveSearch,
   recentSearches,
   onSubmitQuery,
+  structuredValues,
   liveTail,
   onToggleLiveTail,
   tabs,
@@ -509,6 +512,7 @@ export const LvViewer = ({
             savedSearches={savedSearches}
             recentSearches={recentSearches}
             onSubmitQuery={onSubmitQuery}
+            structuredValues={structuredValues}
             liveTail={liveTail}
             onToggleLiveTail={onToggleLiveTail}
             onSaveSearch={onSaveSearch}
