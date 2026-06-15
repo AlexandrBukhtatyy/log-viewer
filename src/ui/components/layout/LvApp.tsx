@@ -586,6 +586,19 @@ export const LvApp = ({
         fieldDescriptors={fieldDescriptors}
         recentSearches={recentSearches}
         onSubmitQuery={onSubmitQuery}
+        structuredValues={structuredValues}
+        onAddFieldFilter={(key, value) => {
+          setFilter((f) => {
+            const existing = f.fieldFilters ?? [];
+            const dup = existing.some(
+              (x) => x.key === key && x.op === '=' && x.value === value,
+            );
+            return dup
+              ? f
+              : { ...f, fieldFilters: [...existing, { key, op: '=', value }] };
+          });
+          setRail('files');
+        }}
         savedSearches={savedSearches}
         onApplyPreset={(p) => {
           setFilter((f) => ({

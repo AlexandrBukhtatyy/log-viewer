@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type { LvSavedSearch } from '../../contracts/lv-types.ts';
-import { buildSearchSuggestions } from '../../utils/search-suggest.ts';
+import {
+  buildSearchSuggestions,
+  splitLastToken,
+  type StructuredValue,
+} from '../../utils/search-suggest.ts';
 import { LvSearchInput } from '../common/LvSearchInput.tsx';
 
 export interface LvSearchPanelProps {
@@ -25,6 +29,10 @@ export interface LvSearchPanelProps {
   readonly fieldDescriptors: ReadonlyArray<FieldDescriptor>;
   readonly recentSearches: ReadonlyArray<string>;
   onSubmitQuery: (query: string) => void;
+  /** System/logical `field = value` candidates (autocomplete "Fields" group). */
+  readonly structuredValues: ReadonlyArray<StructuredValue>;
+  /** Add a structured `key = value` field filter (Fields suggestion accept). */
+  onAddFieldFilter: (key: string, value: string) => void;
 }
 
 export const LvSearchPanel = ({
@@ -34,6 +42,8 @@ export const LvSearchPanel = ({
   fieldDescriptors,
   recentSearches,
   onSubmitQuery,
+  structuredValues,
+  onAddFieldFilter,
 }: LvSearchPanelProps) => {
   const [q, setQ] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -50,8 +60,16 @@ export const LvSearchPanel = ({
         descriptors: fieldDescriptors,
         saved: savedSearches,
         recent: recentSearches,
+        structuredValues,
       }),
-    [q, mode, fieldDescriptors, savedSearches, recentSearches],
+    [
+      q,
+      mode,
+      fieldDescriptors,
+      savedSearches,
+      recentSearches,
+      structuredValues,
+    ],
   );
 
   const run = (): void => {
@@ -88,7 +106,12 @@ export const LvSearchPanel = ({
         suggest={{
           items: suggestions,
           onAccept: (item) => {
-            if (item.insert !== undefined) setQ(item.insert);
+            if (item.filter !== undefined) {
+              onAddFieldFilter(item.filter.key, item.filter.value);
+              setQ(splitLastToken(q).head.replace(/\s+$/, ''));
+            } else if (item.insert !== undefined) {
+              setQ(item.insert);
+            }
           },
         }}
         onSubmit={run}
