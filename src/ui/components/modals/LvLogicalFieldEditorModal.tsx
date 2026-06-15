@@ -235,11 +235,9 @@ export const LvLogicalFieldEditorModal = ({
 
   useEffect(() => {
     if (!open) return;
-    setForm(
-      mode === 'edit' && initial !== undefined
-        ? formFromField(initial)
-        : emptyForm(),
-    );
+    // Seed from `initial` whenever it's provided — both when editing a field
+    // and when duplicating one into a new custom (mode 'new' + a seed field).
+    setForm(initial !== undefined ? formFromField(initial) : emptyForm());
   }, [open, mode, initial]);
 
   useEffect(() => {
