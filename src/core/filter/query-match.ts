@@ -102,6 +102,10 @@ const lexFts = (q: string, caseSensitive: boolean): QTok[] => {
       toks.push({ k: 'not' });
       continue;
     }
+    // AND is the implicit conjunction — accept the explicit FTS5 keyword and
+    // drop it (the surrounding terms are AND-ed anyway). Without this it would
+    // be tokenised as the literal term "and" and poison the query.
+    if (run === 'AND' || run === '&') continue;
     let negated = false;
     if (run.startsWith('-') && run.length > 1) {
       negated = true;

@@ -66,6 +66,17 @@ describe('compileFreeTextQuery — fts mode', () => {
     expect(m('memory out of bounds')).toBe(false);
   });
 
+  it('treats explicit AND as the conjunction operator, not a term', () => {
+    const m = fts('service AND auth');
+    expect(m('service=auth here')).toBe(true); // no literal "and" needed
+    expect(m('only service')).toBe(false);
+    // AND binds tighter than OR: `a OR b AND c` = a OR (b AND c)
+    const p = fts('alpha OR beta AND gamma');
+    expect(p('just alpha line')).toBe(true);
+    expect(p('beta gamma together')).toBe(true);
+    expect(p('only beta')).toBe(false);
+  });
+
   it('OR has lower precedence than implicit AND', () => {
     const m = fts('error timeout OR warn');
     expect(m('connection timeout error')).toBe(true); // error AND timeout
