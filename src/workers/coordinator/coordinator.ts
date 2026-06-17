@@ -16,6 +16,8 @@ import type {
   EntryId,
   LogEntry,
   LogFilter,
+  LogicalField,
+  LogicalFieldsCtx,
   LogSource,
   LogSourceInput,
   LogSourceKind,
@@ -28,8 +30,20 @@ import { BUILT_IN_FIELD_DESCRIPTORS } from '../../core/filter/field-descriptor.t
 import {
   compileFreeTextQuery,
   matchesFreeText,
-  type CompiledQuery,
 } from '../../core/filter/query-match.ts';
+import { getEntryFieldValue } from '../../core/filter/field-key.ts';
+import {
+  bodyOnlyFieldFor,
+  filterTouchesBodyOnly,
+  splitFilterForBodyOnly,
+} from '../../core/logical-fields/body-only.ts';
+import {
+  aggregateBuckets,
+  aggregateHistogram,
+  makeBodyFilterPredicate,
+  sortInPlaceByBodyField,
+} from '../../core/logical-fields/read-path.ts';
+import { resolveLogicalField } from '../../core/logical-fields/resolver.ts';
 import { newSourceId } from '../../core/util/ids.ts';
 import type { CustomParserDef } from '../../core/parsers/custom-parser-def.ts';
 import { removeAllSpool, removeSpool } from '../../core/storage/opfs-spool.ts';
@@ -460,6 +474,12 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   let version = 0;
   let pendingFilteredCount: Promise<number> | null = null;
 
+  // Local mirror of the activated logical fields (also pushed to the
+  // indexer). The coordinator needs them to detect and resolve body-only
+  // `~`-fields on the read path — the indexer's copy is unreachable here.
+  let activeLogicalFields: ReadonlyArray<LogicalField> = [];
+  const logicalCtx = (): LogicalFieldsCtx => ({ activeLogicalFields });
+
   // Ingest fires `onChange` once per inserted batch (see
   // ingest-orchestrator). A large file produces dozens of batches per
   // second, and each propagation through the change pipeline (count RPC →
@@ -486,43 +506,60 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
   let lastChangeEmittedAt = 0;
   let throttledChangeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Slow-path cache for free-text query (Phase 1.1 of the multi-format
-  // roadmap). Each entry of this cache holds the array of *resolved*
-  // matching entries for a given (filter+version) tuple, so paging
-  // through the result via repeated `getRange` calls doesn't re-scan
-  // every batch. Invalidated whenever the user filter or the underlying
-  // entry set changes.
-  let freeTextCache: {
+  // Slow-path ("read-path") cache. Holds the array of *resolved* matching
+  // entries for a given (filter+version) tuple, so paging through the
+  // result via repeated `getRange` calls doesn't re-scan every batch.
+  // Two kinds of constraint resolve here, not in SQL, because both need
+  // the log body (ADR-0016 keeps it out of SQLite):
+  //   - free-text `query` (substring/regex over message/raw), and
+  //   - body-only `~`-logical fields (regex over message/raw) used as a
+  //     fieldFilter or sort key (ADR-0030 / ADR-0037).
+  // Invalidated whenever the user filter, the logical-field defs, or the
+  // underlying entry set changes.
+  let readPathCache: {
     readonly sig: string;
     readonly matches: ReadonlyArray<LogEntry>;
   } | null = null;
-  const invalidateFreeTextCache = (): void => {
-    freeTextCache = null;
+  const invalidateReadPathCache = (): void => {
+    readPathCache = null;
   };
 
-  // Batch size for the slow-path scanner. Pointers are pulled from the
+  // Batch size for the read-path scanner. Pointers are pulled from the
   // indexer in chunks of this size, each chunk goes through the lazy
   // resolver (one parser-pool RPC per source), and matches are kept.
   // Tuned to balance round-trip latency against memory pressure.
-  const FREE_TEXT_BATCH = 500;
+  const READ_PATH_BATCH = 500;
 
-  const ensureFreeTextMatches = async (
+  /**
+   * Whether `filter` needs the read path: it carries a free-text query, or
+   * a body-only logical field in its `fieldFilters` / `sortBy`. When false,
+   * the SQL path serves it directly.
+   */
+  const needsReadPath = (filter: LogFilter): boolean =>
+    compileFreeTextQuery(filter) !== null ||
+    filterTouchesBodyOnly(filter, logicalCtx());
+
+  /**
+   * Stream the indexer's SQL superset for `filter`, resolve bodies, and
+   * keep rows that also pass the free-text and body-only predicates. The
+   * body-only `fieldFilters` / `sortBy` are peeled off the SQL filter first
+   * (`splitFilterForBodyOnly`) so they don't compile to `NULL = value` and
+   * empty the superset. Returns rows in the SQL order unless a body-only
+   * sort re-orders them in memory.
+   */
+  const collectReadPathMatches = async (
     filter: LogFilter,
-    compiled: CompiledQuery,
-  ): Promise<ReadonlyArray<LogEntry>> => {
-    // Cache key includes the version counter so any ingest that adds
-    // rows blows the cache automatically — the same `filter` object
-    // shape could otherwise alias a stale result.
-    const sig = JSON.stringify({ filter, mode: compiled.mode, v: version });
-    if (freeTextCache !== null && freeTextCache.sig === sig) {
-      return freeTextCache.matches;
-    }
+  ): Promise<LogEntry[]> => {
+    const ctx = logicalCtx();
+    const compiled = compileFreeTextQuery(filter);
+    const split = splitFilterForBodyOnly(filter, ctx);
+    const bodyPred = makeBodyFilterPredicate(split.bodyFieldFilters, ctx);
     const matches: LogEntry[] = [];
     let offset = 0;
     while (true) {
       const pointers = await deps
         .getIndexer()
-        .proxy.search(filter, offset, offset + FREE_TEXT_BATCH);
+        .proxy.search(split.sqlFilter, offset, offset + READ_PATH_BATCH);
       if (pointers.length === 0) break;
       const resolved = await resolvePointersToEntries(
         pointers,
@@ -530,12 +567,34 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         deps.parserPool,
       );
       for (const e of resolved) {
-        if (matchesFreeText(e, compiled)) matches.push(e);
+        if (compiled !== null && !matchesFreeText(e, compiled)) continue;
+        if (!bodyPred(e)) continue;
+        matches.push(e);
       }
       offset += pointers.length;
-      if (pointers.length < FREE_TEXT_BATCH) break;
+      if (pointers.length < READ_PATH_BATCH) break;
     }
-    freeTextCache = { sig, matches };
+    if (split.bodySort !== null) {
+      sortInPlaceByBodyField(matches, split.bodySort, ctx);
+    }
+    return matches;
+  };
+
+  /**
+   * Cached `collectReadPathMatches` for the active filter. Cache key
+   * includes the version counter so any ingest that adds rows blows the
+   * cache automatically — the same `filter` object shape could otherwise
+   * alias a stale result.
+   */
+  const ensureReadPathMatches = async (
+    filter: LogFilter,
+  ): Promise<ReadonlyArray<LogEntry>> => {
+    const sig = JSON.stringify({ filter, v: version });
+    if (readPathCache !== null && readPathCache.sig === sig) {
+      return readPathCache.matches;
+    }
+    const matches = await collectReadPathMatches(filter);
+    readPathCache = { sig, matches };
     return matches;
   };
 
@@ -815,7 +874,7 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
   const emitChange = (): void => {
     version++;
-    invalidateFreeTextCache();
+    invalidateReadPathCache();
     const now = Date.now();
     const elapsed = now - lastChangeEmittedAt;
     const throttleMs = currentChangeThrottleMs();
@@ -1076,17 +1135,16 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
       // creating an infinite loop. Main thread is responsible for re-fetching
       // counts/range after it changes the filter.
       activeFilter = filter;
-      // Free-text matches are filter-keyed; drop the cached array so the
+      // Read-path matches are filter-keyed; drop the cached array so the
       // next `getRange`/`getCount` rescans against the new filter.
-      invalidateFreeTextCache();
+      invalidateReadPathCache();
     },
     getFilter: async () => activeFilter,
 
     getRange: async (from, to) => {
       await deps.getIndexer().opening;
-      const compiled = compileFreeTextQuery(activeFilter);
-      if (compiled !== null) {
-        const matches = await ensureFreeTextMatches(activeFilter, compiled);
+      if (needsReadPath(activeFilter)) {
+        const matches = await ensureReadPathMatches(activeFilter);
         return matches.slice(from, to);
       }
       const pointers = await deps
@@ -1101,6 +1159,13 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     getEntriesScoped: async (filter, from, to) => {
       await deps.getIndexer().opening;
+      // Bucket expansion appends a `~field=value` predicate that may be
+      // body-only; resolve those (and any free-text) on the read path.
+      // Uncached one-shot — callers cap the window (currently 500 rows).
+      if (needsReadPath(filter)) {
+        const matches = await collectReadPathMatches(filter);
+        return matches.slice(from, to);
+      }
       const pointers = await deps.getIndexer().proxy.search(filter, from, to);
       return resolvePointersToEntries(
         pointers,
@@ -1111,11 +1176,10 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     getCount: async () => {
       await deps.getIndexer().opening;
-      const compiled = compileFreeTextQuery(activeFilter);
-      if (compiled !== null) {
+      if (needsReadPath(activeFilter)) {
         const [total, matches] = await Promise.all([
           deps.getIndexer().proxy.count(EMPTY_FILTER),
-          ensureFreeTextMatches(activeFilter, compiled),
+          ensureReadPathMatches(activeFilter),
         ]);
         return { total, filtered: matches.length };
       }
@@ -1140,11 +1204,49 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     getGroupCounts: async (filter, field, limit) => {
       await deps.getIndexer().opening;
-      return deps.getIndexer().proxy.groupCounts(filter, field, limit);
+      const ctx = logicalCtx();
+      const axisField = bodyOnlyFieldFor(field, ctx);
+      // SQL path unless the group axis is body-only OR a body-only filter
+      // predicate would otherwise have NULL-ed out the SQL candidate set.
+      if (axisField === null && !filterTouchesBodyOnly(filter, ctx)) {
+        return deps.getIndexer().proxy.groupCounts(filter, field, limit);
+      }
+      const matches = await collectReadPathMatches(filter);
+      // Legacy bare axis names predate ADR-0017's `@`-namespace; map them
+      // the same way `groupFieldExpr` does for the SQL path.
+      const axisKey =
+        field === 'level'
+          ? '@level'
+          : field === 'source_id'
+            ? '@source.id'
+            : field;
+      const groupValueOf =
+        axisField !== null
+          ? (e: LogEntry): string | null => {
+              const v = resolveLogicalField(e, axisField);
+              return v === null || v === undefined ? null : String(v);
+            }
+          : (e: LogEntry): string | null => {
+              const v = getEntryFieldValue(
+                e,
+                axisKey,
+                sources.get(e.sourceId) ?? null,
+                ctx,
+              );
+              return v === null || v === undefined ? null : String(v);
+            };
+      return aggregateBuckets(matches, groupValueOf, limit);
     },
 
     getHistogram: async (filter, bucketCount) => {
       await deps.getIndexer().opening;
+      // A body-only filter predicate would compile to `NULL = value` and
+      // empty the SQL histogram; build it from the same read-path matches
+      // the list uses so the timeline stays consistent.
+      if (needsReadPath(filter)) {
+        const matches = await ensureReadPathMatches(filter);
+        return aggregateHistogram(matches, bucketCount, filter.timeRange);
+      }
       return deps.getIndexer().proxy.histogram(filter, bucketCount);
     },
 
@@ -1170,6 +1272,11 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
 
     setLogicalFields: async (fields) => {
       await deps.getIndexer().opening;
+      // Keep a local copy for the read-path resolver, and drop the cache:
+      // editing an extractor changes neither `filter` nor `version`, so the
+      // cached matches would otherwise stay stale against the new defs.
+      activeLogicalFields = fields;
+      invalidateReadPathCache();
       await deps.getIndexer().proxy.setLogicalFields(fields);
     },
 

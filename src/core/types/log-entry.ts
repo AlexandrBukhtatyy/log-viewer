@@ -7,6 +7,22 @@ export type LogLevel =
   | 'fatal'
   | 'unknown';
 
+/**
+ * Canonical level ordering shared by the level filter, the group-by /
+ * histogram level breakdown, and the read-path in-memory aggregator.
+ * Single source of truth so the SQL path (`aggregate.ts`) and the
+ * in-memory path (`logical-fields/read-path.ts`) never diverge.
+ */
+export const ALL_LEVELS: ReadonlyArray<LogLevel> = [
+  'trace',
+  'debug',
+  'info',
+  'warn',
+  'error',
+  'fatal',
+  'unknown',
+];
+
 export type EntryId = string & { readonly __brand: 'EntryId' };
 export type SourceId = string & { readonly __brand: 'SourceId' };
 

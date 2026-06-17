@@ -1,23 +1,13 @@
 import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import type {
-  FieldKey,
-  LogLevel,
-  LogicalFieldsCtx,
-} from '../../core/types/index.ts';
+import type { FieldKey, LogicalFieldsCtx } from '../../core/types/index.ts';
 import {
   fieldKeyToSql,
   type FieldKeySql,
 } from '../../core/filter/field-key.ts';
+import { ALL_LEVELS } from '../../core/types/log-entry.ts';
 
-export const ALL_LEVELS: ReadonlyArray<LogLevel> = [
-  'trace',
-  'debug',
-  'info',
-  'warn',
-  'error',
-  'fatal',
-  'unknown',
-];
+// Re-exported for existing importers; canonical definition lives in core.
+export { ALL_LEVELS };
 
 /**
  * Map legacy bare names that pre-date ADR-0017 onto the unified

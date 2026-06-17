@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LogicalField } from '../types/index.ts';
-import { logicalFieldToSql } from './sql.ts';
+import { isBodyOnlyLogicalField, logicalFieldToSql } from './sql.ts';
 
 const field = (
   id: string,
@@ -159,5 +159,46 @@ describe('logicalFieldToSql', () => {
         `regexp_extract_group('tr=(\\w+)', ` +
         `JSON_EXTRACT(entry.fields_json, '$.ctx'), '', ''))`,
     );
+  });
+});
+
+describe('isBodyOnlyLogicalField', () => {
+  it('true when every extractor is regex-on-body', () => {
+    expect(
+      isBodyOnlyLogicalField(
+        field('action', [
+          { type: 'regex', on: 'message', pattern: '^(\\w+ \\w+)' },
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  it('false when a field extractor compiles to SQL', () => {
+    expect(
+      isBodyOnlyLogicalField(
+        field('trace', [{ type: 'field', path: 'trace_id' }]),
+      ),
+    ).toBe(false);
+  });
+
+  it('false when a regex-on-json extractor compiles to SQL', () => {
+    expect(
+      isBodyOnlyLogicalField(
+        field('id', [
+          { type: 'regex-on-json', path: 'ctx', pattern: 'u=(\\w+)' },
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  it('false when at least one extractor in the chain is SQL-computable', () => {
+    expect(
+      isBodyOnlyLogicalField(
+        field('mixed', [
+          { type: 'regex', on: 'message', pattern: 'x=(\\d+)' },
+          { type: 'field', path: 'x' },
+        ]),
+      ),
+    ).toBe(false);
   });
 });

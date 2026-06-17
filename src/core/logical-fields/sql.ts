@@ -72,6 +72,18 @@ export const extractorToSqlOrNull = (ex: LogicalExtractor): string | null => {
   return null;
 };
 
+/**
+ * A logical field is "body-only" when none of its extractors compile to
+ * SQL — i.e. every extractor is a `regex` over `message`/`raw`, which
+ * after ADR-0016 are not materialised in SQLite. Such a field compiles
+ * to SQL `NULL` and can only be resolved on the read path (in memory,
+ * over already-read bodies). The column renderer already does this; the
+ * coordinator uses this predicate to route group-by / filter / sort
+ * through the read-path scanner instead of SQL.
+ */
+export const isBodyOnlyLogicalField = (field: LogicalField): boolean =>
+  field.extractors.every((ex) => extractorToSqlOrNull(ex) === null);
+
 export const logicalFieldToSql = (field: LogicalField): LogicalFieldSql => {
   const exprs: string[] = [];
   for (const ex of field.extractors) {
