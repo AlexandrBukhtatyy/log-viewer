@@ -118,3 +118,4 @@ flowchart LR
 - [0034. Read-path FTS grammar + search autocomplete](0034-read-path-fts-and-search-autocomplete.md) — proposed
 - [0035. Per-file dimension in the field_meta cache](0035-field-meta-per-file-scope.md) — proposed
 - [0036. Parsers emit canonical fields for cross-format logical fields](0036-parsers-emit-canonical-fields.md) — proposed
+- [0037. Read-path для body-only logical-полей](0037-read-path-body-only-logical-fields.md) — proposed
