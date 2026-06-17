@@ -116,3 +116,5 @@ flowchart LR
 - [0032. Quality tooling: Prettier, git-хуки, CI-gate, Dependabot](0032-quality-tooling.md) — proposed
 - [0033. Per-tab view rules (filter / sort / group-by) with apply-to-other-tabs](0033-per-tab-view-rules.md) — proposed
 - [0034. Read-path FTS grammar + search autocomplete](0034-read-path-fts-and-search-autocomplete.md) — proposed
+- [0035. Per-file dimension in the field_meta cache](0035-field-meta-per-file-scope.md) — proposed
+- [0036. Parsers emit canonical fields for cross-format logical fields](0036-parsers-emit-canonical-fields.md) — proposed

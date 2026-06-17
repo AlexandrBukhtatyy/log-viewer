@@ -2,6 +2,7 @@ import type { LogLevel, ParsedRecord } from '../types/log-entry.ts';
 import { normalizeLevel } from './lib/level.ts';
 import { parseTimestamp } from './lib/time.ts';
 import { defineMultilineParser } from './lib/multiline.ts';
+import { extractKeyValues, extractLeadingTag } from './lib/kv.ts';
 
 /**
  * Plain-text application log: `[timestamp] LEVEL message`. This is
@@ -55,6 +56,22 @@ export const appTextParser = defineMultilineParser({
     const level: LogLevel = normalizeLevel(levelRaw);
 
     const fields: Record<string, unknown> = {};
+
+    // Structure the free-form body so cross-format logical fields and the
+    // column / group-by pickers work the same as on JSON formats:
+    //   `[service] human message reqId=… latency=…`
+    // The leading `[tag]` becomes `service`; trailing `k=v` pairs become
+    // their own fields (canonical names the logical-field catalog already
+    // chains on — `service`, `reqId`, …). The k=v pairs stay in the
+    // displayed message; only the leading service tag is stripped from it.
+    let body = (message ?? '').trim();
+    const tagged = extractLeadingTag(body);
+    if (tagged !== null) {
+      fields.service = tagged.tag;
+      body = tagged.rest;
+    }
+    Object.assign(fields, extractKeyValues(body));
+
     if (lines.length > 1) {
       const stack = lines.slice(1).filter(isStackFrame);
       if (stack.length > 0) {
@@ -79,11 +96,11 @@ export const appTextParser = defineMultilineParser({
       seq: ctx.nextSeq(),
       timestamp,
       level,
-      message: (message ?? '').trim(),
+      message: body,
       raw: rawBlock,
       fields,
     };
     return { entry, confidence: 0.85 };
   },
-  defaultColumns: ['level'],
+  defaultColumns: ['level', 'service'],
 });

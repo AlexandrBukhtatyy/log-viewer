@@ -40,6 +40,31 @@ describe('appTextParser', () => {
     expect(e.fields).toEqual({});
   });
 
+  it('extracts the leading [service] tag and k=v pairs into fields', () => {
+    const result = appTextParser.parseLine(
+      '[2026-05-03T08:30:00.000Z] INFO  [search] user logged in reqId=req_000000 latency=32',
+      makeCtx(),
+    );
+    const e = result.entry!;
+    expect(e.level).toBe('info');
+    // Service tag is stripped from the message; k=v stay for readability.
+    expect(e.message).toBe('user logged in reqId=req_000000 latency=32');
+    expect(e.fields.service).toBe('search');
+    expect(e.fields.reqId).toBe('req_000000');
+    // Purely numeric values coerce to number; ids stay strings.
+    expect(e.fields.latency).toBe(32);
+  });
+
+  it('keeps a non-numeric k=v value as a string', () => {
+    const result = appTextParser.parseLine(
+      '[2026-05-03T08:30:00.000Z] WARN [api] slow latency=389ms',
+      makeCtx(),
+    );
+    const e = result.entry!;
+    expect(e.fields.service).toBe('api');
+    expect(e.fields.latency).toBe('389ms');
+  });
+
   it('folds a Python traceback into a single entry with stack[] and exception_*', () => {
     const block = [
       '[2026-05-06T14:00:18.856Z] ERROR Traceback (most recent call last):',
