@@ -4,6 +4,7 @@ import type { FieldDescriptor } from '../../../core/filter/field-descriptor.ts';
 import type {
   LvColumnPref,
   LvGutterMode,
+  LvTableView,
   LvTweakDensity,
   LvTweaks,
 } from '../../contracts/lv-types.ts';
@@ -182,6 +183,7 @@ export const LvTableSettings = ({
 
   const setDensity = (d: LvTweakDensity): void => setTweak('density', d);
   const setGutter = (m: LvGutterMode): void => setTweak('gutterMode', m);
+  const setTableView = (v: LvTableView): void => setTweak('tableView', v);
 
   // Phase 3 — preset handlers. Apply pushes columns into the active tab.
   const applyPreset = (id: string): void => {
@@ -236,66 +238,6 @@ export const LvTableSettings = ({
       </button>
       {open && (
         <div className="lv-tset-pop" role="menu">
-          <div className="lv-tset-sec">
-            <div className="lv-tset-sec-title">Display</div>
-            <div className="lv-tset-row">
-              <span className="lv-tset-lbl">Density</span>
-              <div className="lv-tset-segs">
-                <button
-                  type="button"
-                  className={`lv-tset-seg${tweaks.density === 'compact' ? ' is-on' : ''}`}
-                  onClick={() => setDensity('compact')}
-                >
-                  Compact
-                </button>
-                <button
-                  type="button"
-                  className={`lv-tset-seg${tweaks.density === 'comfortable' ? ' is-on' : ''}`}
-                  onClick={() => setDensity('comfortable')}
-                >
-                  Comfortable
-                </button>
-              </div>
-            </div>
-            <label className="lv-tset-toggle">
-              <input
-                type="checkbox"
-                checked={tweaks.showDate}
-                onChange={(e) => setTweak('showDate', e.target.checked)}
-              />
-              <span>Show date in timestamp</span>
-            </label>
-            <div className="lv-tset-row">
-              <span className="lv-tset-lbl">Gutter shows</span>
-              <div className="lv-tset-segs">
-                <button
-                  type="button"
-                  className={`lv-tset-seg${tweaks.gutterMode === 'line' ? ' is-on' : ''}`}
-                  onClick={() => setGutter('line')}
-                  title="Physical line number in the source file"
-                >
-                  Line
-                </button>
-                <button
-                  type="button"
-                  className={`lv-tset-seg${tweaks.gutterMode === 'entry' ? ' is-on' : ''}`}
-                  onClick={() => setGutter('entry')}
-                  title="Per-file log-record ordinal"
-                >
-                  Entry
-                </button>
-                <button
-                  type="button"
-                  className={`lv-tset-seg${tweaks.gutterMode === 'both' ? ' is-on' : ''}`}
-                  onClick={() => setGutter('both')}
-                  title="Line · Entry"
-                >
-                  Both
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="lv-tset-sep" role="separator" />
           <div className="lv-tset-sec">
             <div className="lv-tset-sec-title">Presets</div>
             {tweaks.presets.length === 0 && !presetFormOpen && (
@@ -376,21 +318,114 @@ export const LvTableSettings = ({
           </div>
           <div className="lv-tset-sep" role="separator" />
           <div className="lv-tset-sec">
+            <div className="lv-tset-sec-title">Display</div>
+            <div className="lv-tset-row">
+              <span className="lv-tset-lbl">Density</span>
+              <div className="lv-tset-segs">
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.density === 'compact' ? ' is-on' : ''}`}
+                  onClick={() => setDensity('compact')}
+                >
+                  Compact
+                </button>
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.density === 'comfortable' ? ' is-on' : ''}`}
+                  onClick={() => setDensity('comfortable')}
+                >
+                  Comfortable
+                </button>
+              </div>
+            </div>
+            <label className="lv-tset-toggle">
+              <input
+                type="checkbox"
+                checked={tweaks.showDate}
+                onChange={(e) => setTweak('showDate', e.target.checked)}
+              />
+              <span>Show date in timestamp</span>
+            </label>
+            <div className="lv-tset-row">
+              <span className="lv-tset-lbl">Gutter shows</span>
+              <div className="lv-tset-segs">
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.gutterMode === 'line' ? ' is-on' : ''}`}
+                  onClick={() => setGutter('line')}
+                  title="Physical line number in the source file"
+                >
+                  Line
+                </button>
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.gutterMode === 'entry' ? ' is-on' : ''}`}
+                  onClick={() => setGutter('entry')}
+                  title="Per-file log-record ordinal"
+                >
+                  Entry
+                </button>
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.gutterMode === 'both' ? ' is-on' : ''}`}
+                  onClick={() => setGutter('both')}
+                  title="Line · Entry"
+                >
+                  Both
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="lv-tset-sep" role="separator" />
+          <div className="lv-tset-sec">
             <div className="lv-tset-sec-title">Columns</div>
-            {sortedDescriptors.logical.length > 0 && (
+            <div className="lv-tset-row">
+              <span className="lv-tset-lbl">Show</span>
+              <div className="lv-tset-segs">
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.tableView === 'raw' ? ' is-on' : ''}`}
+                  onClick={() => setTableView('raw')}
+                  title="A single column with the full original log line"
+                >
+                  Raw line
+                </button>
+                <button
+                  type="button"
+                  className={`lv-tset-seg${tweaks.tableView === 'columns' ? ' is-on' : ''}`}
+                  onClick={() => setTableView('columns')}
+                  title="Structured view: picked columns + message"
+                >
+                  Columns
+                </button>
+              </div>
+            </div>
+            {tweaks.tableView === 'raw' ? (
+              <div className="lv-tset-hint">
+                Showing the raw log line. Switch to “Columns” to pick fields.
+              </div>
+            ) : (
               <>
-                <div className="lv-tset-sub">Logical fields</div>
-                {sortedDescriptors.logical.map(renderColRow)}
+                {sortedDescriptors.dynamic.length > 0 && (
+                  <>
+                    <div className="lv-tset-sub">Fields from open logs</div>
+                    {sortedDescriptors.dynamic.map(renderColRow)}
+                  </>
+                )}
+                {sortedDescriptors.logical.length > 0 && (
+                  <>
+                    <div className="lv-tset-sub">Logical fields</div>
+                    {sortedDescriptors.logical.map(renderColRow)}
+                  </>
+                )}
+                {sortedDescriptors.builtin.length > 0 && (
+                  <>
+                    <div className="lv-tset-sub">System variables</div>
+                    {sortedDescriptors.builtin.map(renderColRow)}
+                  </>
+                )}
               </>
             )}
-            {sortedDescriptors.dynamic.length > 0 && (
-              <>
-                <div className="lv-tset-sub">Fields</div>
-                {sortedDescriptors.dynamic.map(renderColRow)}
-              </>
-            )}
-            <div className="lv-tset-sub">Source / built-in</div>
-            {sortedDescriptors.builtin.map(renderColRow)}
           </div>
         </div>
       )}

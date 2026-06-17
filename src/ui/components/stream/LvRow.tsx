@@ -5,6 +5,7 @@ import type {
   LvFileNode,
   LvGutterMode,
   LvLogKind,
+  LvTableView,
   LvTweakDensity,
   LvTweakTheme,
 } from '../../contracts/lv-types.ts';
@@ -43,6 +44,13 @@ export interface LvRowProps {
    * `<line>·<entry>`.
    */
   readonly gutterMode?: LvGutterMode;
+  /**
+   * Table rendering mode. In `raw` (default) the main content column
+   * shows the full original log line (`entry.raw`); in `columns` it
+   * shows the parser-extracted message (`entry.message`) alongside the
+   * user-picked `columns`.
+   */
+  readonly tableView?: LvTableView;
   onSelect: () => void;
   onToggleExpand: () => void;
   onBookmark: () => void;
@@ -116,6 +124,7 @@ export const LvRow = ({
   resolveLogicalRows,
   renderDetailEditor,
   gutterMode = 'line',
+  tableView = 'raw',
 }: LvRowProps) => {
   const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (
@@ -234,7 +243,9 @@ export const LvRow = ({
             </span>
           );
         })}
-        <span className="lv-row-msg">{renderCell(entry.message)}</span>
+        <span className="lv-row-msg">
+          {renderCell(tableView === 'columns' ? entry.message : entry.raw)}
+        </span>
         <span className="lv-row-actions" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"

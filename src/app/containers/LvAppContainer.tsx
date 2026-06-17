@@ -1255,6 +1255,7 @@ export const LvAppContainer = () => {
         sidebarCollapsed: tweaks.sidebarCollapsed,
         columns: tweaks.columns,
         gutterMode: tweaks.gutterMode,
+        tableView: tweaks.tableView,
         presets: tweaks.presets,
       }}
       setTweak={setTweak}

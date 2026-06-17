@@ -17,6 +17,7 @@ export type {
   LvColumnPref,
   LvColumnPreset,
   LvGutterMode,
+  LvTableView,
 } from '../../hooks/use-ui-prefs.ts';
 export type { LvSavedSearch } from '../../hooks/use-saved-searches.ts';
 

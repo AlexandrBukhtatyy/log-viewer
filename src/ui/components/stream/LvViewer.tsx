@@ -229,9 +229,17 @@ export const LvViewer = ({
   resolveLogicalRows,
   renderDetailEditor,
 }: LvViewerProps) => {
+  // In `raw` view the structured columns are hidden — the table is just
+  // the gutter + the full log line. The picked `columns` are preserved
+  // (still editable in settings) and re-appear when the user switches
+  // back to the `columns` view.
+  const effectiveColumns = useMemo(
+    () => (tweaks.tableView === 'columns' ? columns : []),
+    [tweaks.tableView, columns],
+  );
   const gridTemplate = useMemo(
-    () => gridTemplateForColumns(columns),
-    [columns],
+    () => gridTemplateForColumns(effectiveColumns),
+    [effectiveColumns],
   );
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
@@ -762,7 +770,7 @@ export const LvViewer = ({
                     : 'line'}
               </span>
               <span className="lv-sh lv-sh-caret"></span>
-              {columns.map((c) => {
+              {effectiveColumns.map((c) => {
                 const d = builtInColumn(c.key);
                 const label = d?.label ?? c.label ?? c.key;
                 const extra = d?.headerClass ? ` ${d.headerClass}` : '';
@@ -805,7 +813,9 @@ export const LvViewer = ({
                   </button>
                 );
               })}
-              <span className="lv-sh lv-sh-msg">message</span>
+              <span className="lv-sh lv-sh-msg">
+                {tweaks.tableView === 'columns' ? 'message' : 'log line'}
+              </span>
               <span className="lv-sh lv-sh-act" />
             </div>
 
@@ -907,7 +917,7 @@ export const LvViewer = ({
                                 onContextMenu={openAtLine}
                                 onAddFieldFilter={addFieldFilter}
                                 theme={tweaks.theme}
-                                columns={columns}
+                                columns={effectiveColumns}
                                 gridTemplate={gridTemplate}
                                 cellValueOf={cellValueOf}
                                 parserIdOf={parserIdOf}
@@ -915,6 +925,7 @@ export const LvViewer = ({
                                 indentPx={12 + (depth + 1) * 16}
                                 renderDetailEditor={renderDetailEditor}
                                 gutterMode={tweaks.gutterMode}
+                                tableView={tweaks.tableView}
                               />
                             ))}
                         </Fragment>
@@ -976,7 +987,7 @@ export const LvViewer = ({
                               <span className="lv-skel lv-skel-num" />
                             </span>
                             <span className="lv-row-caret" />
-                            {columns.map((c) => (
+                            {effectiveColumns.map((c) => (
                               <span
                                 key={c.key}
                                 className="lv-skel lv-skel-cell"
@@ -1016,13 +1027,14 @@ export const LvViewer = ({
                             onContextMenu={openAtLine}
                             onAddFieldFilter={addFieldFilter}
                             theme={tweaks.theme}
-                            columns={columns}
+                            columns={effectiveColumns}
                             gridTemplate={gridTemplate}
                             cellValueOf={cellValueOf}
                             parserIdOf={parserIdOf}
                             resolveLogicalRows={resolveLogicalRows}
                             renderDetailEditor={renderDetailEditor}
                             gutterMode={tweaks.gutterMode}
+                            tableView={tweaks.tableView}
                           />
                         )}
                       </div>

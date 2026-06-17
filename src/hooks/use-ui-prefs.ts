@@ -10,6 +10,14 @@ export type LvTweakDensity = 'compact' | 'comfortable';
  *   - `both`  — `<line> · <entry>`
  */
 export type LvGutterMode = 'line' | 'entry' | 'both';
+/**
+ * How the table renders each row.
+ *   - `raw`     — a single column with the full original log line
+ *                 (`entry.raw`); user-added columns are hidden (default)
+ *   - `columns` — the structured view: user-picked columns plus the
+ *                 parser-extracted message (`entry.message`)
+ */
+export type LvTableView = 'raw' | 'columns';
 
 /**
  * One user-added column persisted in UI prefs (ADR-0017 Phase 5).
@@ -59,6 +67,13 @@ export interface LvTweaks {
    */
   gutterMode: LvGutterMode;
   /**
+   * Table rendering mode. `raw` (default) shows a single column with
+   * the full original log line and hides user-added `columns`;
+   * `columns` shows the structured view (picked columns + message).
+   * The `columns` list is preserved across the toggle.
+   */
+  tableView: LvTableView;
+  /**
    * User-defined column presets. Each preset bundles a `columns`
    * list and can be applied to any tab in one click. Built-in
    * presets are not stored here — they live in code and are merged
@@ -77,6 +92,7 @@ const DEFAULTS: LvTweaks = {
   sidebarCollapsed: false,
   columns: [],
   gutterMode: 'line',
+  tableView: 'raw',
   presets: [],
 };
 
@@ -168,6 +184,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         sidebarCollapsed: s.sidebarCollapsed,
         columns: s.columns,
         gutterMode: s.gutterMode,
+        tableView: s.tableView,
         presets: s.presets,
       }),
     },
