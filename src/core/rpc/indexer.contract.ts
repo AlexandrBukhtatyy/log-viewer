@@ -83,15 +83,22 @@ export interface IndexerApi {
   ) => Promise<ReadonlyArray<GroupBucket>>;
 
   /**
-   * Per-source field schema cache (ADR-0017). Returns one descriptor per
-   * dynamic key seen across `sourceIds`, with occurrences/total_seen
-   * summed and top-K values merged. Built-in `@`-attributes are NOT
-   * included — the coordinator appends them from `BUILT_IN_FIELD_DESCRIPTORS`.
+   * Per-(source, file) field schema cache (ADR-0017, file-scoped since
+   * the v6 migration). Returns one descriptor per dynamic key seen across
+   * `sourceIds`, with occurrences/total_seen summed and top-K values
+   * merged. Built-in `@`-attributes are NOT included — the coordinator
+   * appends them from `BUILT_IN_FIELD_DESCRIPTORS`.
+   *
+   * `filePaths` scopes the lookup to specific files inside the source(s):
+   * empty → the whole source(s) (union of all files); non-empty →
+   * only those files, so a single-file tab inside a directory source
+   * sees just its own fields.
    *
    * Empty `sourceIds` → empty array (caller still sees built-ins).
    */
   fieldMeta: (
     sourceIds: ReadonlyArray<SourceId>,
+    filePaths?: ReadonlyArray<string>,
   ) => Promise<ReadonlyArray<FieldDescriptor>>;
   histogram: (
     filter: LogFilter,

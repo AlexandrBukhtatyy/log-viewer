@@ -28,6 +28,42 @@ const insertSource = (db: Database, id: string, kind: string, name: string) =>
     bind: [id, kind, name],
   });
 
+/** Insert one v6 field_meta row (per source + file + key). */
+const insertFieldMeta = (
+  db: Database,
+  sourceId: string,
+  filePath: string,
+  key: string,
+  type = 'string',
+) =>
+  db.exec({
+    sql: `INSERT INTO field_meta (source_id, file_path, key, type, occurrences, total_seen)
+          VALUES (?, ?, ?, ?, 1, 1)`,
+    bind: [sourceId, filePath, key, type],
+  });
+
+/** The exact source+file scoped read used by indexerApi.fieldMeta. */
+const scopedKeys = (
+  db: Database,
+  sourceIds: ReadonlyArray<string>,
+  filePaths: ReadonlyArray<string>,
+): string[] => {
+  const srcPlaceholders = sourceIds.map(() => '?').join(', ');
+  const fileClause =
+    filePaths.length > 0
+      ? ` AND file_path IN (${filePaths.map(() => '?').join(', ')})`
+      : '';
+  const rows = db.exec({
+    sql: `SELECT DISTINCT key FROM field_meta
+           WHERE source_id IN (${srcPlaceholders})${fileClause}
+           ORDER BY key`,
+    bind: [...sourceIds, ...filePaths],
+    rowMode: 'array',
+    returnValue: 'resultRows',
+  }) as unknown as ReadonlyArray<ReadonlyArray<string>>;
+  return rows.map((r) => r[0] as string);
+};
+
 /**
  * Insert a pointer row into the v3 `entry` table. Body is no longer in
  * SQLite — tests pass `byteEnd - byteStart` to keep the values internally
@@ -131,6 +167,63 @@ describe('indexer/db', () => {
       expect(fks).toHaveLength(1);
       expect(fks[0]?.table).toBe('source');
       expect(fks[0]?.from).toBe('source_id');
+    });
+
+    it('field_meta has file_path in columns and primary key (v6)', async () => {
+      const db = await openMemoryDb();
+      const cols = db.exec({
+        sql: 'PRAGMA table_info(field_meta)',
+        rowMode: 'object',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<Record<string, unknown>>;
+      const byName = new Map(cols.map((c) => [c.name as string, c]));
+      expect(byName.has('file_path')).toBe(true);
+      // PK columns carry pk > 0; (source_id, file_path, key) form it.
+      const pkCols = cols
+        .filter((c) => Number(c.pk) > 0)
+        .sort((a, b) => Number(a.pk) - Number(b.pk))
+        .map((c) => c.name as string);
+      expect(pkCols).toEqual(['source_id', 'file_path', 'key']);
+    });
+
+    it('field_meta keys are isolated per file within one source (v6)', async () => {
+      const db = await openMemoryDb();
+      insertSource(db, 's1', 'directory', 'logs');
+      // app.log (plain text) contributes no field_meta rows; its siblings do.
+      insertFieldMeta(db, 's1', 'mixed.log', 'trace_id');
+      insertFieldMeta(db, 's1', 'mixed.log', 'level');
+      insertFieldMeta(db, 's1', 'nginx.log', 'remote_addr');
+
+      // The bug: a file tab with no own fields used to see siblings' keys.
+      expect(scopedKeys(db, ['s1'], ['app.log'])).toEqual([]);
+      // Each file sees only its own keys.
+      expect(scopedKeys(db, ['s1'], ['mixed.log'])).toEqual([
+        'level',
+        'trace_id',
+      ]);
+      expect(scopedKeys(db, ['s1'], ['nginx.log'])).toEqual(['remote_addr']);
+      // Whole-source scope (no filePaths) still unions across files.
+      expect(scopedKeys(db, ['s1'], [])).toEqual([
+        'level',
+        'remote_addr',
+        'trace_id',
+      ]);
+    });
+
+    it('field_meta PK allows same key across files, conflicts within one file (v6)', async () => {
+      const db = await openMemoryDb();
+      insertSource(db, 's1', 'directory', 'logs');
+      // Same key in two files → two distinct rows (PK includes file_path).
+      insertFieldMeta(db, 's1', 'a.log', 'trace_id');
+      insertFieldMeta(db, 's1', 'b.log', 'trace_id');
+      const count = db.exec({
+        sql: "SELECT COUNT(*) AS n FROM field_meta WHERE key = 'trace_id'",
+        rowMode: 'array',
+        returnValue: 'resultRows',
+      }) as unknown as ReadonlyArray<ReadonlyArray<number>>;
+      expect(count[0]?.[0]).toBe(2);
+      // Re-inserting the same (source, file, key) violates the PK.
+      expect(() => insertFieldMeta(db, 's1', 'a.log', 'trace_id')).toThrow();
     });
 
     it('drops entry_fts after v3 (FTS5 is retired by ADR-0016)', async () => {

@@ -43,6 +43,7 @@ import { openDb } from './db/open-db.ts';
 import {
   aggregateFieldDescriptors,
   aggregateFieldMeta,
+  type FieldMetaAccum,
   type FieldMetaRow,
   type FieldType,
   mergeFieldType,
@@ -308,16 +309,16 @@ const UPSERT_MINUTE_SQL = `
 `;
 
 /**
- * UPSERT into `field_meta` — one row per (source, key). Type and top-values
- * merging is done in JS (loaded from existing row before bind) since SQLite
- * UPSERT can't easily do a JSON-array merge with cap-K. The bind already
- * carries the merged values.
+ * UPSERT into `field_meta` — one row per (source, file, key). Type and
+ * top-values merging is done in JS (loaded from existing row before bind)
+ * since SQLite UPSERT can't easily do a JSON-array merge with cap-K. The
+ * bind already carries the merged values.
  */
 const UPSERT_FIELD_META_SQL = `
-  INSERT INTO field_meta (source_id, key, type, occurrences, total_seen,
-                          last_seen_at, top_values_json)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(source_id, key) DO UPDATE SET
+  INSERT INTO field_meta (source_id, file_path, key, type, occurrences,
+                          total_seen, last_seen_at, top_values_json)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(source_id, file_path, key) DO UPDATE SET
     type            = excluded.type,
     occurrences     = excluded.occurrences,
     total_seen      = excluded.total_seen,
@@ -328,6 +329,150 @@ const UPSERT_FIELD_META_SQL = `
 const BUMP_SOURCE_COUNT_SQL = `
   UPDATE source SET entry_count = entry_count + ?, indexed_at = ? WHERE id = ?
 `;
+
+/**
+ * Merge a batch of per-(source, file, key) field accumulators into
+ * `field_meta`. One bulk SELECT loads the existing rows touched by this
+ * batch; type and top-K values are merged in JS (SQLite UPSERT can't do
+ * a capped JSON-array merge), then UPSERTed via the prepared statement.
+ *
+ * `fileCounts` maps `"<sourceId>\x00<filePath>"` → rows seen in this
+ * batch for that file (the `total_seen` increment). Shared by the hot
+ * ingest path (`insertBatch`) and the one-time v6 rebuild-from-`entry`.
+ * Caller is responsible for the surrounding transaction.
+ */
+const writeFieldMeta = (
+  db: Database,
+  stmt: PreparedStatement,
+  fieldsBySource: Map<SourceId, Map<string, Map<string, FieldMetaAccum>>>,
+  fileCounts: Map<string, number>,
+  now: number,
+): void => {
+  const allTriples: Array<{
+    sourceId: SourceId;
+    filePath: string;
+    key: string;
+  }> = [];
+  for (const [sid, perFile] of fieldsBySource) {
+    for (const [filePath, perKey] of perFile) {
+      for (const key of perKey.keys())
+        allTriples.push({ sourceId: sid, filePath, key });
+    }
+  }
+  const existingByKey = new Map<
+    string,
+    {
+      type: FieldType;
+      occurrences: number;
+      totalSeen: number;
+      topValuesJson: string | null;
+    }
+  >();
+  // Chunk lookups to stay under SQLITE_MAX_VARIABLE_NUMBER
+  // (1000 triples × 3 params = 3000, comfortably below the 32k cap).
+  const TRIPLES_PER_LOOKUP = 1000;
+  for (let i = 0; i < allTriples.length; i += TRIPLES_PER_LOOKUP) {
+    const slice = allTriples.slice(i, i + TRIPLES_PER_LOOKUP);
+    const conds = slice
+      .map(() => '(source_id = ? AND file_path = ? AND key = ?)')
+      .join(' OR ');
+    const params: SqlValue[] = [];
+    for (const p of slice) {
+      params.push(p.sourceId);
+      params.push(p.filePath);
+      params.push(p.key);
+    }
+    const rows = runRows(
+      db,
+      `SELECT source_id, file_path, key, type, occurrences, total_seen, top_values_json
+         FROM field_meta
+        WHERE ${conds}`,
+      params,
+    );
+    for (const r of rows) {
+      const k = `${r.source_id as string}\x00${r.file_path as string}\x00${r.key as string}`;
+      existingByKey.set(k, {
+        type: r.type as FieldType,
+        occurrences: Number(r.occurrences ?? 0),
+        totalSeen: Number(r.total_seen ?? 0),
+        topValuesJson: (r.top_values_json as string | null) ?? null,
+      });
+    }
+  }
+  for (const [sid, perFile] of fieldsBySource) {
+    for (const [filePath, perKey] of perFile) {
+      if (perKey.size === 0) continue;
+      const totalSeenIncr = fileCounts.get(`${sid}\x00${filePath}`) ?? 0;
+      for (const [key, accum] of perKey) {
+        const prev = existingByKey.get(`${sid}\x00${filePath}\x00${key}`);
+        const mergedType = mergeFieldType(prev?.type ?? null, accum.types);
+        const mergedTopVals = mergeTopValues(
+          prev?.topValuesJson ?? null,
+          accum.topVals,
+        );
+        stmt
+          .bind([
+            sid,
+            filePath,
+            key,
+            mergedType,
+            accum.occurrences + (prev?.occurrences ?? 0),
+            totalSeenIncr + (prev?.totalSeen ?? 0),
+            now,
+            JSON.stringify(mergedTopVals),
+          ])
+          .step();
+        stmt.reset();
+      }
+    }
+  }
+};
+
+/**
+ * One-time rebuild of `field_meta` from the persisted `entry` table after
+ * the v6 migration recreated the cache empty with the per-file primary
+ * key. Already-indexed sources aren't re-ingested on resume, so without
+ * this their column / group-by pickers would lose every dynamic field.
+ * Streams `entry` in batches to bound memory; each batch is merged
+ * through the same `writeFieldMeta` path as live ingest, so per-file
+ * occurrences / total_seen accumulate correctly across batches.
+ */
+const REBUILD_BATCH = 5000;
+const rebuildFieldMetaFromEntries = (
+  db: Database,
+  stmt: PreparedStatement,
+): void => {
+  const now = Date.now();
+  let offset = 0;
+  for (;;) {
+    const rows = runRows(
+      db,
+      `SELECT ${ENTRY_COLS_UNQUALIFIED} FROM entry ORDER BY rowid LIMIT ? OFFSET ?`,
+      [REBUILD_BATCH, offset],
+    );
+    if (rows.length === 0) break;
+    const entries = rows.map(rowToEntry);
+    const fileCounts = new Map<string, number>();
+    for (const e of entries) {
+      const k = `${e.sourceId}\x00${e.filePath}`;
+      fileCounts.set(k, (fileCounts.get(k) ?? 0) + 1);
+    }
+    db.exec('BEGIN');
+    try {
+      writeFieldMeta(db, stmt, aggregateFieldMeta(entries), fileCounts, now);
+      db.exec('COMMIT');
+    } catch (err) {
+      try {
+        db.exec('ROLLBACK');
+      } catch {
+        /* ignore rollback errors — primary error wins */
+      }
+      throw err;
+    }
+    if (rows.length < REBUILD_BATCH) break;
+    offset += rows.length;
+  }
+};
 
 export const indexerApi: IndexerApi = {
   ping: async () => `indexer-worker:${WORKER_ID}`,
@@ -348,6 +493,13 @@ export const indexerApi: IndexerApi = {
       upsertMinuteStmt: opened.db.prepare(UPSERT_MINUTE_SQL),
       upsertFieldMetaStmt: opened.db.prepare(UPSERT_FIELD_META_SQL),
     };
+    // v6 recreated `field_meta` empty with the new per-file primary key.
+    // Resumed sources aren't re-ingested, so replay the persisted `entry`
+    // table once to repopulate the cache with per-file rows — no source
+    // files are re-parsed.
+    if (opened.migration.from < 6 && opened.migration.to >= 6) {
+      rebuildFieldMetaFromEntries(opened.db, state.upsertFieldMetaStmt);
+    }
     return {
       migrationFrom: opened.migration.from,
       migrationTo: opened.migration.to,
@@ -456,10 +608,15 @@ export const indexerApi: IndexerApi = {
         db.exec({ sql: buildBulkInsertEntrySql(remainder), bind: params });
       }
 
-      // Per-source row counters.
+      // Per-source row counters (for `source.entry_count`) and
+      // per-(source, file) counters (the `total_seen` denominator for
+      // each file's field_meta rows).
       const counts = new Map<SourceId, number>();
+      const fileCounts = new Map<string, number>();
       for (const e of entries) {
         counts.set(e.sourceId, (counts.get(e.sourceId) ?? 0) + 1);
+        const fileKey = `${e.sourceId}\x00${e.filePath ?? ''}`;
+        fileCounts.set(fileKey, (fileCounts.get(fileKey) ?? 0) + 1);
       }
       const now = Date.now();
       for (const [sid, n] of counts) {
@@ -492,74 +649,13 @@ export const indexerApi: IndexerApi = {
       // every (source, key) pair touched by this batch; merging
       // (type, top values) is done in JS; UPSERT below carries the merged
       // result.
-      const fieldsBySource = aggregateFieldMeta(entries);
-      const allPairs: Array<{ sourceId: SourceId; key: string }> = [];
-      for (const [sid, perKey] of fieldsBySource) {
-        for (const key of perKey.keys()) allPairs.push({ sourceId: sid, key });
-      }
-      const existingBySidKey = new Map<
-        string,
-        {
-          type: FieldType;
-          occurrences: number;
-          totalSeen: number;
-          topValuesJson: string | null;
-        }
-      >();
-      // Chunk pair lookups to stay under SQLITE_MAX_VARIABLE_NUMBER
-      // (1000 pairs × 2 params = 2000, comfortably below the 32k cap).
-      const PAIRS_PER_LOOKUP = 1000;
-      for (let i = 0; i < allPairs.length; i += PAIRS_PER_LOOKUP) {
-        const slice = allPairs.slice(i, i + PAIRS_PER_LOOKUP);
-        const conds = slice
-          .map(() => '(source_id = ? AND key = ?)')
-          .join(' OR ');
-        const params: SqlValue[] = [];
-        for (const p of slice) {
-          params.push(p.sourceId);
-          params.push(p.key);
-        }
-        const rows = runRows(
-          db,
-          `SELECT source_id, key, type, occurrences, total_seen, top_values_json
-             FROM field_meta
-            WHERE ${conds}`,
-          params,
-        );
-        for (const r of rows) {
-          const k = `${r.source_id as string}\x00${r.key as string}`;
-          existingBySidKey.set(k, {
-            type: r.type as FieldType,
-            occurrences: Number(r.occurrences ?? 0),
-            totalSeen: Number(r.total_seen ?? 0),
-            topValuesJson: (r.top_values_json as string | null) ?? null,
-          });
-        }
-      }
-      for (const [sid, perKey] of fieldsBySource) {
-        if (perKey.size === 0) continue;
-        const totalSeenIncr = counts.get(sid) ?? 0;
-        for (const [key, accum] of perKey) {
-          const prev = existingBySidKey.get(`${sid}\x00${key}`);
-          const mergedType = mergeFieldType(prev?.type ?? null, accum.types);
-          const mergedTopVals = mergeTopValues(
-            prev?.topValuesJson ?? null,
-            accum.topVals,
-          );
-          upsertFieldMetaStmt
-            .bind([
-              sid,
-              key,
-              mergedType,
-              accum.occurrences + (prev?.occurrences ?? 0),
-              totalSeenIncr + (prev?.totalSeen ?? 0),
-              now,
-              JSON.stringify(mergedTopVals),
-            ])
-            .step();
-          upsertFieldMetaStmt.reset();
-        }
-      }
+      writeFieldMeta(
+        db,
+        upsertFieldMetaStmt,
+        aggregateFieldMeta(entries),
+        fileCounts,
+        now,
+      );
 
       db.exec('COMMIT');
     } catch (err) {
@@ -737,16 +833,27 @@ export const indexerApi: IndexerApi = {
     return { buckets: out, range: { from, to } };
   },
 
-  fieldMeta: async (sourceIds): Promise<ReadonlyArray<FieldDescriptor>> => {
+  fieldMeta: async (
+    sourceIds,
+    filePaths,
+  ): Promise<ReadonlyArray<FieldDescriptor>> => {
     if (sourceIds.length === 0) return [];
     const { db } = requireState();
-    const placeholders = sourceIds.map(() => '?').join(', ');
+    const srcPlaceholders = sourceIds.map(() => '?').join(', ');
+    // Empty `filePaths` → whole source(s). Non-empty → scope to those
+    // files inside the source(s), so a single-file tab inside a
+    // directory source only sees its own fields.
+    const files = filePaths ?? [];
+    const fileClause =
+      files.length > 0
+        ? ` AND file_path IN (${files.map(() => '?').join(', ')})`
+        : '';
     const rows = runRows(
       db,
-      `SELECT source_id, key, type, occurrences, total_seen, top_values_json
+      `SELECT source_id, file_path, key, type, occurrences, total_seen, top_values_json
          FROM field_meta
-        WHERE source_id IN (${placeholders})`,
-      sourceIds as ReadonlyArray<SqlValue>,
+        WHERE source_id IN (${srcPlaceholders})${fileClause}`,
+      [...sourceIds, ...files] as ReadonlyArray<SqlValue>,
     );
     return aggregateFieldDescriptors(
       rows.map(

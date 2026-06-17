@@ -221,20 +221,31 @@ export const aggregateFieldDescriptors = (
 
 /**
  * Walk a batch of entries once and group dynamic fields_json keys by
- * (sourceId, key). The result feeds the per-batch UPSERT into
- * `field_meta`. `file_path` is excluded — it lives in `entry.file_path`
- * (`@file` built-in) and `getFieldSchema` returns it from the built-in
- * list, never from this cache.
+ * (sourceId, filePath, key). The result feeds the per-batch UPSERT into
+ * `field_meta` (v6+, keyed by source + file + key) so the pickers can
+ * scope available fields to the active file inside a directory source.
+ *
+ * `filePath` mirrors `entry.filePath`: the relative path inside a
+ * directory source, or '' for single-file sources. The `file_path`
+ * *field* (synthesised into `entry.fields` by some adapters) is still
+ * excluded — it lives in `entry.file_path` (`@file` built-in) and
+ * `getFieldSchema` returns it from the built-in list, never the cache.
  */
 export const aggregateFieldMeta = (
   entries: ReadonlyArray<LogEntry>,
-): Map<SourceId, Map<string, FieldMetaAccum>> => {
-  const out = new Map<SourceId, Map<string, FieldMetaAccum>>();
+): Map<SourceId, Map<string, Map<string, FieldMetaAccum>>> => {
+  const out = new Map<SourceId, Map<string, Map<string, FieldMetaAccum>>>();
   for (const e of entries) {
-    let perKey = out.get(e.sourceId);
+    let perFile = out.get(e.sourceId);
+    if (perFile === undefined) {
+      perFile = new Map<string, Map<string, FieldMetaAccum>>();
+      out.set(e.sourceId, perFile);
+    }
+    const filePath = e.filePath ?? '';
+    let perKey = perFile.get(filePath);
     if (perKey === undefined) {
       perKey = new Map<string, FieldMetaAccum>();
-      out.set(e.sourceId, perKey);
+      perFile.set(filePath, perKey);
     }
     for (const [key, value] of Object.entries(e.fields)) {
       if (key === 'file_path') continue;

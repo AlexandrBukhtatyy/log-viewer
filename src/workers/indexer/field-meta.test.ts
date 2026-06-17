@@ -21,6 +21,7 @@ const mkEntry = (
   sourceId: string,
   fields: Record<string, unknown>,
   level: LogLevel = 'info',
+  filePath = '',
 ): LogEntry => ({
   id: ('e-' + Math.random().toString(36).slice(2)) as EntryId,
   sourceId: sourceId as SourceId,
@@ -30,7 +31,7 @@ const mkEntry = (
   message: '',
   raw: '',
   fields,
-  filePath: '',
+  filePath,
   byteStart: 0,
   byteEnd: 0,
   lineNumber: 0,
@@ -148,17 +149,40 @@ describe('mergeTopValues', () => {
 });
 
 describe('aggregateFieldMeta', () => {
-  it('counts occurrences per (source, key) and skips file_path', () => {
+  // Single-file sources use filePath '' — the keys live under that bucket.
+  const keys = (
+    out: ReturnType<typeof aggregateFieldMeta>,
+    sid: string,
+    file = '',
+  ) => out.get(sid as SourceId)?.get(file);
+
+  it('counts occurrences per (source, file, key) and skips file_path', () => {
     const out = aggregateFieldMeta([
       mkEntry('s1', { trace_id: 't1', file_path: 'a.log' }),
       mkEntry('s1', { trace_id: 't2', service: 'api' }),
       mkEntry('s2', { trace_id: 't3' }),
     ]);
-    expect(out.get('s1' as SourceId)?.size).toBe(2); // trace_id + service, file_path excluded
-    expect(out.get('s1' as SourceId)?.get('trace_id')?.occurrences).toBe(2);
-    expect(out.get('s1' as SourceId)?.get('service')?.occurrences).toBe(1);
-    expect(out.get('s1' as SourceId)?.has('file_path')).toBe(false);
-    expect(out.get('s2' as SourceId)?.get('trace_id')?.occurrences).toBe(1);
+    expect(keys(out, 's1')?.size).toBe(2); // trace_id + service, file_path excluded
+    expect(keys(out, 's1')?.get('trace_id')?.occurrences).toBe(2);
+    expect(keys(out, 's1')?.get('service')?.occurrences).toBe(1);
+    expect(keys(out, 's1')?.has('file_path')).toBe(false);
+    expect(keys(out, 's2')?.get('trace_id')?.occurrences).toBe(1);
+  });
+
+  it('separates keys by file within one source', () => {
+    const out = aggregateFieldMeta([
+      mkEntry('s1', { trace_id: 't1' }, 'info', 'app.log'),
+      mkEntry('s1', { remote_addr: '127.0.0.1' }, 'info', 'nginx.log'),
+      mkEntry('s1', { trace_id: 't2' }, 'info', 'app.log'),
+    ]);
+    // app.log knows only trace_id; nginx.log only remote_addr — no leak.
+    expect([...(keys(out, 's1', 'app.log')?.keys() ?? [])]).toEqual([
+      'trace_id',
+    ]);
+    expect(keys(out, 's1', 'app.log')?.get('trace_id')?.occurrences).toBe(2);
+    expect([...(keys(out, 's1', 'nginx.log')?.keys() ?? [])]).toEqual([
+      'remote_addr',
+    ]);
   });
 
   it('aggregates types from observed values', () => {
@@ -167,7 +191,7 @@ describe('aggregateFieldMeta', () => {
       mkEntry('s1', { status: 500 }),
       mkEntry('s1', { status: 'error' }),
     ]);
-    const types = out.get('s1' as SourceId)?.get('status')?.types;
+    const types = keys(out, 's1')?.get('status')?.types;
     expect(types).toBeDefined();
     expect([...(types ?? [])].sort()).toEqual(['number', 'string']);
   });
@@ -178,7 +202,7 @@ describe('aggregateFieldMeta', () => {
       mkEntry('s1', { service: 'api' }),
       mkEntry('s1', { service: 'billing' }),
     ]);
-    const tv = out.get('s1' as SourceId)?.get('service')?.topVals;
+    const tv = keys(out, 's1')?.get('service')?.topVals;
     expect(tv?.get('api')).toBe(2);
     expect(tv?.get('billing')).toBe(1);
   });
@@ -186,10 +210,10 @@ describe('aggregateFieldMeta', () => {
   it('drops oversized values from top-list', () => {
     const big = 'x'.repeat(FIELD_META_VALUE_MAX_CHARS + 1);
     const out = aggregateFieldMeta([mkEntry('s1', { trace_id: big })]);
-    const tv = out.get('s1' as SourceId)?.get('trace_id')?.topVals;
+    const tv = keys(out, 's1')?.get('trace_id')?.topVals;
     expect(tv?.size).toBe(0);
     // occurrences still counted — only top-list excludes the long value.
-    expect(out.get('s1' as SourceId)?.get('trace_id')?.occurrences).toBe(1);
+    expect(keys(out, 's1')?.get('trace_id')?.occurrences).toBe(1);
   });
 });
 

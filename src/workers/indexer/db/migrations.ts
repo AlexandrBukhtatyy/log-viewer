@@ -4,6 +4,7 @@ import schemaV2Sql from './schema-v2-fts.sql?raw';
 import schemaV3Sql from './schema-v3-offsets.sql?raw';
 import schemaV4Sql from './schema-v4-field-meta.sql?raw';
 import schemaV5Sql from './schema-v5-line-numbers.sql?raw';
+import schemaV6Sql from './schema-v6-field-meta-file.sql?raw';
 
 interface Migration {
   readonly version: number;
@@ -50,6 +51,17 @@ const MIGRATIONS: ReadonlyArray<Migration> = [
     version: 5,
     up: (db) => {
       db.exec(schemaV5Sql);
+    },
+  },
+  {
+    // v6: widen `field_meta`'s primary key to (source_id, file_path, key)
+    // so the column / group-by pickers can scope available fields to the
+    // active file inside a directory source. Recreates the table (PK can't
+    // be altered in place); the indexer repopulates the cache on first
+    // start under v6 by replaying the persisted `entry` table.
+    version: 6,
+    up: (db) => {
+      db.exec(schemaV6Sql);
     },
   },
 ];

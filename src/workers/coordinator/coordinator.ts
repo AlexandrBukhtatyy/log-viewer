@@ -1155,7 +1155,14 @@ export const createCoordinatorApi = (deps: CoordinatorDeps): CoordinatorApi => {
         filter.sources && filter.sources.length > 0
           ? filter.sources
           : [...sources.keys()];
-      const dynamic = await deps.getIndexer().proxy.fieldMeta(sourceIds);
+      // Scope to specific files when the active tab is a file (or a
+      // file selection) inside a directory source — otherwise sibling
+      // files' keys would leak into the pickers.
+      const filePaths =
+        filter.filePaths && filter.filePaths.length > 0 ? filter.filePaths : [];
+      const dynamic = await deps
+        .getIndexer()
+        .proxy.fieldMeta(sourceIds, filePaths);
       // Built-ins are appended last — UI can re-sort by occurrences,
       // presenceRate, label, etc. without losing the @-set.
       return [...dynamic, ...BUILT_IN_FIELD_DESCRIPTORS];
