@@ -437,6 +437,10 @@ const writeFieldMeta = (
  * through the same `writeFieldMeta` path as live ingest, so per-file
  * occurrences / total_seen accumulate correctly across batches.
  */
+/** Cheap "does this table have at least one row" probe (EXISTS short-circuits). */
+const tableHasRows = (db: Database, table: string): boolean =>
+  Number(runScalar(db, `SELECT EXISTS(SELECT 1 FROM ${table})`) ?? 0) === 1;
+
 const REBUILD_BATCH = 5000;
 const rebuildFieldMetaFromEntries = (
   db: Database,
@@ -497,7 +501,24 @@ export const indexerApi: IndexerApi = {
     // Resumed sources aren't re-ingested, so replay the persisted `entry`
     // table once to repopulate the cache with per-file rows — no source
     // files are re-parsed.
-    if (opened.migration.from < 6 && opened.migration.to >= 6) {
+    //
+    // Gated on "`field_meta` empty while `entry` has rows" instead of the
+    // one-shot migration transition: that makes the rebuild self-healing.
+    // If an earlier build dropped+recreated `field_meta` without the
+    // rebuild (so `user_version` is already 6 but the cache is empty),
+    // keying off the transition would never repopulate it and every
+    // dynamic field would stay missing from the pickers. The EXISTS probes
+    // are cheap and skip both the populated-cache and fresh-DB paths.
+    //
+    // Tradeoff: a workspace whose entries carry *no* dynamic fields at all
+    // (pure plain text) leaves `field_meta` legitimately empty, so this
+    // re-scans `entry` on every open. That scan writes nothing and is
+    // bounded by the (small) entry count of such a workspace — acceptable
+    // versus the alternative of a never-healing empty cache.
+    if (
+      !tableHasRows(opened.db, 'field_meta') &&
+      tableHasRows(opened.db, 'entry')
+    ) {
       rebuildFieldMetaFromEntries(opened.db, state.upsertFieldMetaStmt);
     }
     return {
