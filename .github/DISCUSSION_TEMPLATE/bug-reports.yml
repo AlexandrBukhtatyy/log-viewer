@@ -1,0 +1,86 @@
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за репорт! Чтобы баг быстрее починили, заполните поля ниже.
+        Перед отправкой загляните в существующие [Bug Reports](https://github.com/AlexandrBukhtatyy/log-viewer/discussions/categories/bug-reports) — возможно, проблему уже обсуждают.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Что произошло
+      description: Опишите баг — что пошло не так и при каких условиях.
+      placeholder: Например, при открытии файла больше 50 МБ вкладка зависает.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      description: Пошагово, как повторить баг.
+      placeholder: |
+        1. Открыть приложение
+        2. Загрузить файл `app.log`
+        3. Включить фильтр по level=ERROR
+        4. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+      description: Что должно было произойти вместо этого.
+    validations:
+      required: true
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: Пример лога / скриншот
+      description: |
+        Приложите небольшой sample-лог, на котором воспроизводится баг, или скриншот.
+        Файл или картинку можно перетащить прямо в это поле.
+    validations:
+      required: false
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Версия приложения
+      description: Версия и build-хэш показаны в футере приложения (например `0.4.1 · a1b2c3d`).
+      placeholder: 0.4.1 · a1b2c3d
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: Браузер и ОС
+      description: Браузер с версией и операционная система.
+      placeholder: Chrome 126 / macOS 15
+    validations:
+      required: false
+
+  - type: dropdown
+    id: launch-mode
+    attributes:
+      label: Как запущено
+      description: Где воспроизводится баг.
+      options:
+        - Установленное PWA
+        - Браузер (dev / preview / прод-страница)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Перед отправкой
+      options:
+        - label: Я поискал баг в существующих обсуждениях и не нашёл дубликата.
+          required: false
+        - label: Я могу воспроизвести баг стабильно.
+          required: false

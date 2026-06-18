@@ -1,0 +1,61 @@
+title: "[Idea]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за идею! Эта категория и для идей, и для запросов фич.
+        Перед отправкой сверьтесь с [ROADMAP](https://github.com/AlexandrBukhtatyy/log-viewer/blob/main/docs/ROADMAP.md) и существующими [обсуждениями](https://github.com/AlexandrBukhtatyy/log-viewer/discussions/categories/ideas-feature-requests) — возможно, об этом уже думают.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Тип
+      description: Это общая идея или конкретный запрос фичи?
+      options:
+        - 💡 Идея
+        - 🚀 Запрос фичи
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему решаем
+      description: Опишите боль или сценарий, из-за которого возникла идея.
+      placeholder: Например, тяжело искать по нескольким полям одновременно.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+      description: Как это могло бы работать с точки зрения пользователя.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      description: Что ещё рассматривали или как обходитесь сейчас.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Дополнительный контекст
+      description: Макеты, ссылки, примеры из других инструментов — всё, что помогает понять идею.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Перед отправкой
+      options:
+        - label: Я сверился с ROADMAP — этого там ещё нет (или есть, и я дополняю).
+          required: false
+        - label: Я поискал похожие предложения в обсуждениях.
+          required: false
