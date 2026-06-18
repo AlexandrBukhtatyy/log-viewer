@@ -13,6 +13,8 @@ PWA для просмотра логов. React + TypeScript, собираетс
 
 Нашли баг? Заведите [Bug Report](https://github.com/AlexandrBukhtatyy/log-viewer/discussions/categories/bug-reports) в Discussions. Есть идея? Напишите в [Ideas & Feature Requests](https://github.com/AlexandrBukhtatyy/log-viewer/discussions/categories/ideas-feature-requests).
 
+Что в работе и что запланировано — на доске [GitHub Projects → Log Viewer](https://github.com/users/AlexandrBukhtatyy/projects/1) (обзор — [docs/ROADMAP.md](docs/ROADMAP.md)).
+
 ## Релизы
 
 История изменений — [CHANGELOG.md](CHANGELOG.md), готовые сборки — на странице [Releases](https://github.com/AlexandrBukhtatyy/log-viewer/releases). Версионирование — [semver](https://semver.org/), коммиты — [Conventional Commits](https://www.conventionalcommits.org/), релизы автоматизированы через [release-please](https://github.com/googleapis/release-please) (правила в [CONTRIBUTING.md](CONTRIBUTING.md#релизы)).

@@ -4,7 +4,9 @@
 
 ## Связаться
 
-- **Баги, идеи, вопросы** — [GitHub Issues](https://github.com/AlexandrBukhtatyy/log-viewer/issues).
+- **Баги** — категория [Bug Reports](https://github.com/AlexandrBukhtatyy/log-viewer/discussions/categories/bug-reports) в Discussions.
+- **Идеи, запросы фич, вопросы** — категория [Ideas & Feature Requests](https://github.com/AlexandrBukhtatyy/log-viewer/discussions/categories/ideas-feature-requests) в Discussions.
+- **Трекинг работы** — доска [GitHub Projects → Log Viewer](https://github.com/users/AlexandrBukhtatyy/projects/1) (созревшие обсуждения мейнтейнер конвертирует в Issue и кладёт на доску).
 - **Roadmap** — [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Запуск локально
