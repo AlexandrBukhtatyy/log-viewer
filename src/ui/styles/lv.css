@@ -2546,9 +2546,12 @@ button {
 .lv-fbtn-wrap {
   position: relative;
 }
+/* Anchored `right: 0` and kept narrow so the left edge never slides past
+   `.lv-viewer`'s left boundary (which clips overflow) and under the sidebar.
+   The field-filter chips wrap, so a wide panel isn't needed. */
 .lv-filters-pop {
-  width: min(820px, calc(100vw - 32px));
-  min-width: 520px;
+  width: min(560px, calc(100vw - 32px));
+  min-width: 320px;
 }
 .lv-filters-pop .lv-pop-hd-sub {
   margin-top: 6px;
