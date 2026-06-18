@@ -9,6 +9,10 @@
 PWA для просмотра логов. React + TypeScript, собирается на Vite, service worker
 и manifest генерируются `vite-plugin-pwa`.
 
+## Обратная связь
+
+Нашли баг? Откройте [Issue](https://github.com/AlexandrBukhtatyy/log-viewer/issues). Есть идея? Напишите в [Discussions](https://github.com/AlexandrBukhtatyy/log-viewer/discussions).
+
 ## Релизы
 
 История изменений — [CHANGELOG.md](CHANGELOG.md), готовые сборки — на странице [Releases](https://github.com/AlexandrBukhtatyy/log-viewer/releases). Версионирование — [semver](https://semver.org/), коммиты — [Conventional Commits](https://www.conventionalcommits.org/), релизы автоматизированы через [release-please](https://github.com/googleapis/release-please) (правила в [CONTRIBUTING.md](CONTRIBUTING.md#релизы)).
