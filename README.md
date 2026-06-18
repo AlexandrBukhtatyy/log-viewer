@@ -11,7 +11,7 @@ PWA для просмотра логов. React + TypeScript, собираетс
 
 ## Обратная связь
 
-Нашли баг? Откройте [Issue](https://github.com/AlexandrBukhtatyy/log-viewer/issues). Есть идея? Напишите в [Discussions](https://github.com/AlexandrBukhtatyy/log-viewer/discussions).
+Нашли баг? Заведите [Bug Report](https://github.com/AlexandrBukhtatyy/log-viewer/discussions/categories/bug-reports) в Discussions. Есть идея? Напишите в [Ideas & Feature Requests](https://github.com/AlexandrBukhtatyy/log-viewer/discussions/categories/ideas-feature-requests).
 
 ## Релизы
 
