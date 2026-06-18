@@ -814,7 +814,9 @@ export const LvViewer = ({
                 );
               })}
               <span className="lv-sh lv-sh-msg">
-                {tweaks.tableView === 'columns' ? 'message' : 'log line'}
+                {tweaks.tableView === 'columns' && effectiveColumns.length > 0
+                  ? 'message'
+                  : 'log line'}
               </span>
               <span className="lv-sh lv-sh-act" />
             </div>

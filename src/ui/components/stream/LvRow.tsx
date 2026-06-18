@@ -48,7 +48,10 @@ export interface LvRowProps {
    * Table rendering mode. In `raw` (default) the main content column
    * shows the full original log line (`entry.raw`); in `columns` it
    * shows the parser-extracted message (`entry.message`) alongside the
-   * user-picked `columns`.
+   * user-picked `columns`. As long as no column is picked the `columns`
+   * view still falls back to the raw line — `entry.message` may be empty
+   * for parsers that don't extract one, so the raw line is the safer
+   * default until the user adds a column.
    */
   readonly tableView?: LvTableView;
   onSelect: () => void;
@@ -244,7 +247,11 @@ export const LvRow = ({
           );
         })}
         <span className="lv-row-msg">
-          {renderCell(tableView === 'columns' ? entry.message : entry.raw)}
+          {renderCell(
+            tableView === 'columns' && (columns?.length ?? 0) > 0
+              ? entry.message
+              : entry.raw,
+          )}
         </span>
         <span className="lv-row-actions" onClick={(e) => e.stopPropagation()}>
           <button
