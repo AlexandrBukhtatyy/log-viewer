@@ -102,6 +102,16 @@ ESLint: flat config ([eslint.config.js](eslint.config.js)), `dist` в globalIgno
 
 Stop-hook ([.claude/hooks/adr-reminder.sh](.claude/hooks/adr-reminder.sh)) напомнит, если в ответе модели похоже принято архитектурное решение, но `docs/adr/` в этой сессии не обновлялся.
 
+## Управление задачами
+
+Задачи ведутся в **GitHub Projects** — доска [Log Viewer](https://github.com/users/AlexandrBukhtatyy/projects/1) (owner `AlexandrBukhtatyy`, project `#1`). Это ведущий трекер: «что делаем сейчас, что следующее, что решили не делать». Работа с ней — через `gh` CLI (нужен scope `project`; `gh project …`, для редактирования опций single-select-полей — `gh api graphql`).
+
+- **Карточки — реальные GitHub Issues** (label `enhancement` для фич). Draft-задачи не используем: Issue линкуется с PR/коммитами (`closes #N`) и виден в репозитории.
+- **Lifecycle (поле Status):** `Backlog → Planned → In progress → Done / Dropped`. Доп. поля: `Area` (perf, ui, parsing, storage, dx, formats, ai) и `Priority` (low, med, high).
+- **Связь с планами:** крупная задача → детальный план в [docs/plans/](docs/plans/), ссылка из тела Issue строкой `Plan: docs/plans/<slug>.md`.
+- **Откуда задачи:** мейнтейнер заводит Issue напрямую; обсуждения из [GitHub Discussions](https://github.com/AlexandrBukhtatyy/log-viewer/discussions) (Bug Reports, Ideas & Feature Requests) при созревании конвертируются в Issue («Create issue from discussion») и кладутся на доску — Projects v2 не принимает Discussion как элемент.
+- [docs/ROADMAP.md](docs/ROADMAP.md) — тонкий указатель на доску, не дублирующий список задач; в нём не плодить плоские to-do.
+
 ## Documentation
 
 - Вся документация живёт в [docs/](docs/) и markdown-файлах в корне (`README.md`, `CLAUDE.md`, ADR).
