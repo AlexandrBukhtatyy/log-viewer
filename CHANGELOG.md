@@ -9,6 +9,13 @@ Releases after 0.1.0 are generated automatically by
 [release-please](https://github.com/googleapis/release-please) from
 Conventional Commits — do not edit entries below this line by hand.
 
+## [0.1.5](https://github.com/AlexandrBukhtatyy/log-viewer/compare/v0.1.4...v0.1.5) (2026-06-25)
+
+
+### Documentation
+
+* **conventions:** свод правил оформления задач в GitHub Projects ([3fdaa55](https://github.com/AlexandrBukhtatyy/log-viewer/commit/3fdaa554b0fa02a410524ee2fe4a684536ccc62d))
+
 ## [0.1.4](https://github.com/AlexandrBukhtatyy/log-viewer/compare/v0.1.3...v0.1.4) (2026-06-25)
 
 
