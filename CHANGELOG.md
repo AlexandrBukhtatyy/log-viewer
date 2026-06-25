@@ -9,6 +9,13 @@ Releases after 0.1.0 are generated automatically by
 [release-please](https://github.com/googleapis/release-please) from
 Conventional Commits — do not edit entries below this line by hand.
 
+## [0.1.4](https://github.com/AlexandrBukhtatyy/log-viewer/compare/v0.1.3...v0.1.4) (2026-06-25)
+
+
+### Dependencies
+
+* Bump lint-staged from 15.5.2 to 17.0.7 ([#19](https://github.com/AlexandrBukhtatyy/log-viewer/issues/19)) ([704edac](https://github.com/AlexandrBukhtatyy/log-viewer/commit/704edacf71187cac336781f88832fbdb3a209a6a))
+
 ## [0.1.3](https://github.com/AlexandrBukhtatyy/log-viewer/compare/v0.1.2...v0.1.3) (2026-06-20)
 
 
