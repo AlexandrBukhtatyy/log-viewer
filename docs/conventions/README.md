@@ -18,6 +18,7 @@
 | **Эти conventions**                      | Как писать код единообразно: стиль, типы, React, CSS, тесты, тулинг |
 | [docs/adr/](../adr/)                     | _Почему_ выбран подход — архитектурные решения с обоснованием       |
 | [CONTRIBUTING.md](../../CONTRIBUTING.md) | Процесс: коммиты, ветки, релизы (источник истины)                   |
+| [task-management.md](task-management.md) | Оформление задач в GitHub Projects (формат Issue, поля доски)       |
 
 Не дублируем — ссылаемся. Решение архитектурное → ADR; визуальное → ui-conventions.
 
@@ -57,4 +58,5 @@ flowchart LR
 - [ui-conventions.md](ui-conventions.md) — визуал/поведение UI: раскладка форм, компоненты
 - [testing.md](testing.md) — Vitest, что покрываем
 - [git-and-releases.md](git-and-releases.md) — коммиты, ветки, релизы
+- [task-management.md](task-management.md) — оформление задач в GitHub Projects: формат Issue, поля доски, связь с планами
 - [tooling.md](tooling.md) — ESLint, Prettier, хуки, CI, Dependabot
