@@ -1,0 +1,39 @@
+name: Publish to npm
+
+# Публикует @log-viewer/app в npm-реестр.
+#   - на каждый опубликованный GitHub-релиз (release-please мёржит Release PR → release published);
+#   - вручную (workflow_dispatch) — чтобы догнать текущую версию из package.json.
+# Требует secret NPM_TOKEN (npm Automation/Granular token с правом publish на scope @log-viewer).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # для npm provenance (publishConfig.provenance = true)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # On-prem сборка (BUILD_TARGET=onprem) — это и есть npm-дистрибутив CLI,
+      # а обычный `build` (base /log-viewer/) уезжает на GitHub Pages.
+      - run: pnpm build:onprem
+
+      - run: pnpm publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
